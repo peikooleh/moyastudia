@@ -53,9 +53,37 @@ def list_channels(db: Session = Depends(get_db)):
             "id": row.id,
             "youtube_channel_id": row.youtube_channel_id,
             "title": row.title,
+            "has_token": bool(row.refresh_token),
         }
         for row in rows
     ]
+
+
+def _channel_or_404(db: Session, channel_id: int) -> Channel:
+    row = db.query(Channel).filter(Channel.id == channel_id).one_or_none()
+    if row is None:
+        raise HTTPException(404, "channel not found")
+    if not row.refresh_token:
+        raise HTTPException(400, "channel has no refresh token — connect again")
+    return row
+
+
+@app.get("/channels/{channel_id}/videos")
+def channel_videos(channel_id: int, db: Session = Depends(get_db)):
+    row = _channel_or_404(db, channel_id)
+    try:
+        return yt.list_videos(row.refresh_token)
+    except Exception as exc:
+        raise HTTPException(502, f"YouTube read failed: {exc}") from exc
+
+
+@app.get("/channels/{channel_id}/playlists")
+def channel_playlists(channel_id: int, db: Session = Depends(get_db)):
+    row = _channel_or_404(db, channel_id)
+    try:
+        return yt.list_playlists(row.refresh_token)
+    except Exception as exc:
+        raise HTTPException(502, f"YouTube read failed: {exc}") from exc
 
 
 @app.get("/auth/youtube/login")
