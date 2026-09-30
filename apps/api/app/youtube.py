@@ -1,3 +1,4 @@
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -7,6 +8,9 @@ from .settings import settings
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.force-ssl",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "openid",
 ]
 
 
@@ -43,27 +47,77 @@ def exchange_code(code: str) -> Credentials:
 
 
 def creds_from_refresh(refresh_token: str) -> Credentials:
-    return Credentials(
+    creds = Credentials(
         token=None,
         refresh_token=refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
-        scopes=SCOPES,
     )
+    creds.refresh(Request())
+    return creds
 
 
 def service_for(refresh_token: str):
     return build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
 
 
-def fetch_channel(creds: Credentials) -> dict:
+def _pick_thumb(thumbs: dict) -> str:
+    for key in ("high", "medium", "default", "standard", "maxres"):
+        url = (thumbs.get(key) or {}).get("url")
+        if url:
+            return url
+    return ""
+
+
+def _pick_banner(image: dict) -> str:
+    if not image:
+        return ""
+    for key in (
+        "bannerExternalUrl",
+        "bannerTvHighImageUrl",
+        "bannerTvImageUrl",
+        "bannerTvMediumImageUrl",
+        "bannerMobileExtraHdImageUrl",
+        "bannerMobileHdImageUrl",
+        "bannerMobileLowImageUrl",
+        "bannerTabletHdImageUrl",
+        "bannerImageUrl",
+    ):
+        val = image.get(key)
+        if val:
+            return val
+    for val in image.values():
+        if isinstance(val, str) and val.startswith("http"):
+            return val
+    return ""
+
+
+def fetch_channel(creds: Credentials, youtube_channel_id: str = "") -> dict:
     service = build("youtube", "v3", credentials=creds)
-    resp = service.channels().list(part="snippet,contentDetails", mine=True).execute()
+    kwargs = {"part": "snippet,contentDetails,brandingSettings,statistics"}
+    if youtube_channel_id:
+        kwargs["id"] = youtube_channel_id
+    else:
+        kwargs["mine"] = True
+    resp = service.channels().list(**kwargs).execute()
     items = resp.get("items") or []
     if not items:
-        return {"youtube_channel_id": "", "title": "", "uploads": ""}
+        return {
+            "youtube_channel_id": "",
+            "title": "",
+            "uploads": "",
+            "thumbnail_url": "",
+            "banner_url": "",
+            "description": "",
+            "yt_published_at": "",
+            "subscriber_count": 0,
+            "video_count": 0,
+            "hidden_subscribers": False,
+        }
     item = items[0]
+    snippet = item.get("snippet") or {}
+    stats = item.get("statistics") or {}
     uploads = (
         item.get("contentDetails", {})
         .get("relatedPlaylists", {})
@@ -71,8 +125,36 @@ def fetch_channel(creds: Credentials) -> dict:
     )
     return {
         "youtube_channel_id": item["id"],
-        "title": item["snippet"]["title"],
+        "title": snippet.get("title") or "",
         "uploads": uploads,
+        "thumbnail_url": _pick_thumb(snippet.get("thumbnails") or {}),
+        "banner_url": _pick_banner((item.get("brandingSettings") or {}).get("image") or {}),
+        "description": snippet.get("description") or "",
+        "yt_published_at": (snippet.get("publishedAt") or "")[:10],
+        "subscriber_count": int(stats.get("subscriberCount") or 0),
+        "video_count": int(stats.get("videoCount") or 0),
+        "hidden_subscribers": bool(stats.get("hiddenSubscriberCount")),
+    }
+
+
+def fetch_owner(creds: Credentials) -> dict:
+    import httpx
+
+    token = creds.token
+    if not token:
+        return {"owner_name": "", "owner_email": ""}
+    try:
+        resp = httpx.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        data = resp.json() if resp.status_code == 200 else {}
+    except Exception:
+        data = {}
+    return {
+        "owner_name": data.get("name") or "",
+        "owner_email": data.get("email") or "",
     }
 
 
@@ -100,7 +182,7 @@ def list_playlists(refresh_token: str) -> list[dict]:
     return out
 
 
-def list_videos(refresh_token: str) -> list[dict]:
+def list_videos(refresh_token: str, limit: int = 500) -> list[dict]:
     service = service_for(refresh_token)
     ch = service.channels().list(part="contentDetails", mine=True).execute()
     items = ch.get("items") or []
@@ -122,8 +204,9 @@ def list_videos(refresh_token: str) -> list[dict]:
             if vid:
                 video_ids.append(vid)
         token = resp.get("nextPageToken")
-        if not token or len(video_ids) >= 150:
+        if not token or len(video_ids) >= limit:
             break
+    video_ids = video_ids[:limit]
 
     videos = []
     for i in range(0, len(video_ids), 50):
@@ -157,8 +240,8 @@ def list_videos(refresh_token: str) -> list[dict]:
                     "privacy": privacy,
                     "slot": publish_at,
                     "status": "scheduled" if publish_at else privacy,
-                    "thumb": (snippet.get("thumbnails") or {}).get("medium", {}).get("url")
-                    or "",
+                    "thumb": (snippet.get("thumbnails") or {}).get("medium", {}).get("url") or "",
+                    "publishedAt": (snippet.get("publishedAt") or "")[:16],
                 }
             )
     return videos

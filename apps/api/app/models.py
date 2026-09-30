@@ -13,6 +13,13 @@ class Channel(Base):
     youtube_channel_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
     refresh_token: Mapped[str] = mapped_column(Text, default="")
+    thumbnail_url: Mapped[str] = mapped_column(Text, default="")
+    banner_url: Mapped[str] = mapped_column(Text, default="")
+    owner_name: Mapped[str] = mapped_column(String(255), default="")
+    owner_email: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    yt_published_at: Mapped[str] = mapped_column(String(32), default="")
+    subscriber_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     videos: Mapped[list["Video"]] = relationship(back_populates="channel")

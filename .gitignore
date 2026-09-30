@@ -12,3 +12,7 @@ apps/web/out/
 .DS_Store
 .idea/
 .vscode/
+
+# Local credentials and generated development state
+apps/api/.env
+apps/api/.venv/
