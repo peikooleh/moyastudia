@@ -151,6 +151,60 @@ def test_list_videos_resolves_selected_channel_and_returns_one_page(monkeypatch)
     assert result["videos"][0]["youtube_video_id"] == "selected-video"
 
 
+def test_channel_playlists_are_scoped_to_selected_channel(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id)
+    authorized_client(client, token)
+    calls = []
+    responses = [
+        {
+            "items": [
+                {
+                    "id": "selected-playlist",
+                    "snippet": {"channelId": youtube_channel_id, "title": "Selected"},
+                },
+                {
+                    "id": "other-playlist",
+                    "snippet": {"channelId": "another-channel", "title": "Other"},
+                },
+            ],
+            "nextPageToken": "next-page",
+        },
+        {
+            "items": [
+                {
+                    "id": "selected-playlist-2",
+                    "snippet": {"channelId": youtube_channel_id, "title": "Selected 2"},
+                }
+            ]
+        },
+    ]
+
+    class FakeResource:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(execute=lambda: responses.pop(0))
+
+    class FakeService:
+        def playlists(self):
+            return FakeResource()
+
+    monkeypatch.setattr(youtube, "service_for", lambda refresh_token: FakeService())
+    response = client.get(f"/channels/{channel_id}/playlists")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": "selected-playlist", "title": "Selected"},
+        {"id": "selected-playlist-2", "title": "Selected 2"},
+    ]
+    assert len(calls) == 2
+    assert all(call["channelId"] == youtube_channel_id for call in calls)
+    assert all("mine" not in call for call in calls)
+    assert calls[1]["pageToken"] == "next-page"
+
+
 @pytest.mark.parametrize(
     ("video_count", "next_token", "expected_state"),
     [
@@ -395,12 +449,31 @@ def test_foreign_channel_and_inactive_connection_rules(client, test_database, mo
         raise AssertionError("ownership and active-connection checks precede YouTube calls")
 
     monkeypatch.setattr(main.yt, "list_videos", fail_if_called)
+    monkeypatch.setattr(main.yt, "list_playlists", fail_if_called)
     assert client.get(f"/channels/{foreign_channel_id}/videos").status_code == 404
+    assert client.get(f"/channels/{foreign_channel_id}/playlists").status_code == 404
     assert client.get(f"/channels/{foreign_channel_id}/catalog/status").status_code == 404
     assert start_sync(client, foreign_channel_id).status_code == 404
+    assert continue_sync(client, foreign_channel_id).status_code == 404
     assert client.get(f"/channels/{inactive_channel_id}/videos").status_code == 200
+    assert client.get(f"/channels/{inactive_channel_id}/playlists").status_code == 400
     assert client.get(f"/channels/{inactive_channel_id}/catalog/status").status_code == 200
     assert start_sync(client, inactive_channel_id).status_code == 400
+
+
+def test_catalog_routes_require_authentication(client):
+    headers = post_headers()
+    assert client.get("/channels/1/videos").status_code == 401
+    assert client.get("/channels/1/catalog/status").status_code == 401
+    assert client.post(
+        "/channels/1/catalog/sync",
+        json={"mode": "initial"},
+        headers=headers,
+    ).status_code == 401
+    assert client.post(
+        "/channels/1/catalog/sync/continue",
+        headers=headers,
+    ).status_code == 401
 
 
 def test_video_cache_endpoint_paginates_and_never_calls_youtube(

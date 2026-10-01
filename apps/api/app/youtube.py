@@ -184,22 +184,25 @@ def list_available_channels(creds: Credentials) -> list[dict]:
     return channels
 
 
-def list_playlists(refresh_token: str) -> list[dict]:
+def list_playlists(refresh_token: str, youtube_channel_id: str) -> list[dict]:
     service = service_for(refresh_token)
     out = []
     token = None
     while True:
         resp = service.playlists().list(
             part="snippet",
-            mine=True,
+            channelId=youtube_channel_id,
             maxResults=50,
             pageToken=token,
         ).execute()
         for item in resp.get("items") or []:
+            snippet = item.get("snippet") or {}
+            if snippet.get("channelId") != youtube_channel_id:
+                continue
             out.append(
                 {
                     "id": item["id"],
-                    "title": item["snippet"]["title"],
+                    "title": snippet.get("title") or "",
                 }
             )
         token = resp.get("nextPageToken")

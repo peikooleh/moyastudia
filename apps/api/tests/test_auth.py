@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app import main
-from app.models import Channel, GoogleConnection, Identity, User
+from app.models import Channel, GoogleConnection, Identity, User, UserSession
 from app.security import create_oauth_state
 from app.settings import settings
 from app.tokens import decrypt_refresh_token, encrypt_refresh_token
@@ -93,6 +94,17 @@ def test_session_logout_revokes_server_session_and_checks_origin(client, test_da
     response = client.post("/auth/logout", headers={"Origin": settings.frontend_origin})
     assert response.status_code == 200
     assert client.get("/auth/session").json() == {"authenticated": False}
+
+
+def test_expired_session_is_rejected_for_protected_endpoint(client, test_database):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    with test_database() as db:
+        session = db.query(UserSession).one()
+        session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+
+    assert client.get("/channels").status_code == 401
 
 
 def test_youtube_connection_persists_only_encrypted_token(
@@ -410,6 +422,44 @@ def test_youtube_oauth_state_is_bound_to_authenticated_user(client, test_databas
     )
     assert response.status_code == 400
     assert first_token != second_token
+
+
+def test_youtube_oauth_cannot_claim_connection_owned_by_another_user(
+    client, test_database, monkeypatch
+):
+    owner_id, _ = create_account(test_database, subject="connection-owner")
+    other_id, other_token = create_account(test_database, subject="connection-claimant")
+    connection_id = _add_google_connection(test_database, owner_id, "shared-google-subject")
+    client.cookies.set(settings.session_cookie_name, other_token)
+    monkeypatch.setattr(
+        main.yt, "youtube_authorization_url", lambda: ("https://accounts.test/youtube", "collision-state")
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "exchange_youtube_code",
+        lambda code, state: SimpleNamespace(
+            id_token="collision-id-token", refresh_token="claimant-refresh-token"
+        ),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "verify_identity_token",
+        lambda value: {"sub": "shared-google-subject", "email": "shared@example.test"},
+    )
+
+    assert client.get("/auth/youtube/login").status_code == 307
+    response = client.get(
+        "/auth/youtube/callback",
+        params={"code": "authorization-code", "state": "collision-state"},
+    )
+
+    assert response.status_code == 409
+    with test_database() as db:
+        connection = db.get(GoogleConnection, connection_id)
+        assert connection.user_id == owner_id
+        assert connection.user_id != other_id
+        assert decrypt_refresh_token(connection.encrypted_refresh_token) == "refresh-token"
+        assert db.query(GoogleConnection).count() == 1
 
 
 def test_refresh_token_encryption_uses_configured_key(monkeypatch):

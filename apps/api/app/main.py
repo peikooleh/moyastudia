@@ -1020,7 +1020,7 @@ def channel_playlists(
     row = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
-        return yt.list_playlists(token)
+        return yt.list_playlists(token, row.youtube_channel_id)
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
