@@ -1,420 +1,242 @@
-Задача: привести MoyaStudia в состояние, удобное для передачи другому AI-агенту или разработчику.
+Работаем над MoyaStudia.
 
-Это НЕ новый функциональный Stage.
-Ничего нового в продукт не реализуем.
+Текущий проект уже имеет:
+- Google login и server-side sessions;
+- подключение Google/YouTube;
+- выбор каналов;
+- owner-scoped access;
+- read-only каталог видео;
+- catalog sync с resume/lease;
+- channel-scoped playlists;
+- актуальную документацию и CI;
+- security regression tests.
 
-Цель:
-после этой задачи другой разработчик/агент должен получить репозиторий, открыть README/документацию и без нашего текущего чата понять:
+Последний security/playlist patch ещё не коммитить и не push-ить в рамках этого задания.
 
-- что такое MoyaStudia;
-- какая архитектура уже реализована;
-- что реально работает;
-- как запустить проект;
-- как устроена авторизация;
-- как устроен YouTube channel selection;
-- как работает Stage 3 catalog;
-- какие API существуют;
-- какие ограничения есть;
-- что ещё НЕ реализовано;
-- где находится текущая точка продолжения;
-- какие следующие задачи запланированы;
-- какие известные технические проблемы остаются.
+## Задача
 
-ВАЖНО:
-Сначала только исследование.
-Не изменяй файлы, пока не составишь фактический отчёт.
+Проведи **архитектурный аудит и подготовку Stage 4**.
 
-==================================================
-1. ИССЛЕДОВАНИЕ
-==================================================
+Это DESIGN/AUDIT ONLY.
 
-Изучи фактическое состояние репозитория:
+### Нельзя
 
-- git status
-- git log --oneline --decorate -10
-- README.md
-- все существующие HOWTO / docs / STATUS.md
-- backend structure
-- frontend structure
-- API routes
-- database models
-- migrations
-- YouTube integration
-- OAuth/Google connection
-- channel selection
-- catalog sync
-- tests
-- package.json
-- environment/config files
-- существующие scripts
-- Docker/dev setup, если есть
+- не менять код;
+- не создавать миграции;
+- не менять БД;
+- не менять API;
+- не менять frontend;
+- не менять документацию;
+- не делать commit/push;
+- не читать `.env` и `.env.local`;
+- не начинать реализацию Stage 4.
 
-Не доверяй старому STATUS.md, если код ему противоречит.
-Источник истины для текущего состояния:
-1. код;
-2. tests;
-3. git history;
-4. документация.
+### Нужно изучить
 
-Отдельно найди:
-- TODO
-- FIXME
-- временные workaround
-- устаревшие инструкции
-- ссылки на уже несуществующие файлы/команды
-- документацию, противоречащую текущему коду.
+Фактическую текущую реализацию:
 
-==================================================
-2. ПРОВЕРКА ЗАПУСКА
-==================================================
+- `Video` model и catalog schema;
+- catalog sync;
+- `GET /channels/{id}/videos`;
+- Studio UI;
+- существующие API/helpers;
+- ownership/session model;
+- YouTube snapshot fields;
+- playlists;
+- текущую документацию и STATUS.
 
-Определи фактический способ запуска проекта с чистого checkout.
+Затем спроектировать, что именно должно стать **Stage 4 — Working Content / Editing**.
 
-Проверь существующие scripts и зависимости.
+## Главный вопрос
 
-Если возможно безопасно:
-- backend tests;
-- frontend tests;
-- frontend build;
-- git diff --check.
+MoyaStudia должна постепенно позволить пользователю управлять YouTube-контентом без постоянного использования YouTube Studio.
 
-Не меняй код на этом этапе.
+Нужно определить правильную границу:
 
-Отдельно выясни:
-- какая DB используется локально;
-- как запускаются migrations;
-- какие env variables обязательны;
-- какие env variables нужны только для OAuth/YouTube;
-- можно ли запустить frontend/backend без реального Google OAuth.
+**YouTube = внешний source of truth для опубликованного контента**
 
-Не публикуй значения секретов и токенов.
+**MoyaStudia = рабочее пространство пользователя для подготовки и управления контентом**
 
-==================================================
-3. СОСТАВЬ ФАКТИЧЕСКУЮ КАРТУ ПРОЕКТА
-==================================================
+Не надо пока реализовывать это. Нужно определить архитектуру.
 
-Сформируй краткую карту:
+## Обязательно разобрать
 
-MoyaStudia
-├── apps/web
-├── apps/api
-├── database/migrations
-├── tests
-└── ...
+### 1. Video data model
 
-Используй реальные директории проекта, а не предполагаемую структуру.
+Раздели существующие поля на:
 
-Для каждого важного слоя укажи назначение.
+- YouTube snapshot;
+- MoyaStudia working fields;
+- поля, которые должны быть вычисляемыми;
+- поля, которые нельзя редактировать локально;
+- поля, которые в будущем будут синхронизироваться обратно в YouTube.
 
-==================================================
-4. ЗАФИКСИРУЙ ТЕКУЩУЮ АРХИТЕКТУРУ
-==================================================
+Особенно рассмотри:
 
-Особенно документируй:
+- title;
+- description;
+- tags;
+- visibility;
+- publish date;
+- thumbnail;
+- category;
+- language;
+- playlists;
+- captions;
+- duration;
+- statistics;
+- YouTube IDs/status;
+- будущие scheduling/publishing fields.
 
-Identity
-Google connection
-YouTube channel selection
-Video catalog
-Catalog sync
-Catalog status
-Pagination
-Resume/continue
-Reconcile
-Ownership/security
-Frontend Studio
-Cabinet
-Onboarding
+Не придумывай лишние поля без необходимости.
 
-Обязательно зафиксируй архитектурные решения Stage 3:
+### 2. Snapshot vs working copy
 
-- Video остаётся единственной catalog table.
-- unique (channel_id, youtube_video_id).
-- YouTube является source of truth.
-- MoyaStudia хранит metadata/cache.
-- youtube_* snapshot fields отделены от будущих working fields.
-- list_videos работает для выбранного channel.
-- uploads playlist используется для catalog sync.
-- initial sync page-based/resumable.
-- максимум 50 видео на YouTube page.
-- sync не требует Celery/Redis/background worker.
-- Studio не делает полный live fetch при каждом открытии.
-- local cache является основным источником после initial import.
-- reconcile удаляет отсутствующие локальные videos только после полного успешного прохода.
-- partial/failed reconcile не уничтожает существующий cache.
-- unavailable video не должен автоматически считаться deleted.
-- API /channels/{id}/videos отдаёт только локальный cache.
-- YouTube page tokens не должны попадать во frontend.
-- /catalog/sync/continue продолжает одну страницу.
-- initial import может быть PARTIAL до COMPLETE.
-- LOADING recovery теперь использует существующий /continue.
-- server-side lease/concurrency protection остаётся источником истины.
+Определи, нужна ли отдельная модель/таблица для working state или достаточно расширить `Video`.
 
-Не меняй эти архитектурные решения.
+Рассмотри варианты и выбери один.
 
-==================================================
-5. API DOCUMENTATION
-==================================================
+Объясни:
 
-Найди реальные endpoints и документируй:
+- почему;
+- какие проблемы решает;
+- как избежать потери YouTube snapshot;
+- как обнаруживать изменения на YouTube;
+- как определить `dirty`;
+- как хранить draft;
+- как впоследствии делать push изменений обратно в YouTube.
 
-- method
-- path
-- назначение
-- основные параметры
-- основные response states
-- authentication/ownership requirements
+### 3. Ownership
 
-Особенно:
+Проверь, как новые working records должны быть связаны:
 
-GET /channels/{id}/videos
-GET /channels/{id}/catalog/status
-POST /channels/{id}/catalog/sync
-POST /channels/{id}/catalog/sync/continue
+`User → GoogleConnection → Channel → Video → Working data`
 
-Не придумывай endpoints.
+или иначе.
 
-Если существующий API отличается от этого списка — документируй фактический API и явно отметь отличие.
+Новые данные не должны нарушать существующую owner isolation.
 
-==================================================
-6. CURRENT STATUS
-==================================================
+### 4. Sync model
 
-Создай/обнови STATUS.md так, чтобы он был главным handoff-документом.
+Определи поведение:
 
-Он должен содержать:
+YouTube → MoyaStudia
 
-# MoyaStudia — Current Status
+MoyaStudia → YouTube
 
-## Project purpose
+и что происходит при конфликте:
 
-Краткое описание продукта.
+- пользователь изменил видео в MoyaStudia;
+- видео одновременно изменилось в YouTube;
+- выполнен новый catalog sync.
 
-## Current stage
+Не реализовывать conflict resolution сейчас, только определить правильную модель.
 
-Точно указать текущий Stage.
+### 5. API
 
-## Completed
-
-Перечень реально реализованных частей.
-
-## Current architecture
-
-Краткая архитектурная схема.
-
-## Working flows
+Спроектируй минимальный будущий API для Stage 4.
 
 Например:
 
-Landing
-→ Google OAuth
-→ Identity
-→ Connection
-→ Channel selection
-→ Studio
-→ NOT_IMPORTED
-→ Initial sync
-→ PARTIAL
-→ COMPLETE
-→ cached catalog
+- получить video;
+- изменить working fields;
+- сохранить draft;
+- определить dirty state;
+- позже push changes.
 
-## Current catalog states
+Не создавать endpoints сейчас.
 
-NOT_IMPORTED
-LOADING
-PARTIAL
-COMPLETE
-STALE
-ERROR
-EMPTY
+Отдельно укажи, какие endpoints нужны **сразу для первого Stage 4 increment**, а какие можно отложить.
 
-И что каждый означает.
+### 6. Frontend
 
-## API
+Посмотри текущий Studio и предложи минимальный первый UI increment.
 
-Список фактических catalog endpoints.
+Нужно определить:
 
-## Tests
+- что пользователь увидит при выборе видео;
+- где редактировать title/description/tags;
+- как показывать `saved / modified / synced`;
+- как отличать YouTube snapshot от локальных изменений;
+- где разместить будущую кнопку Publish/Sync to YouTube.
 
-Фактически выполненные проверки.
-Не писать "tested", если тест реально не запускался.
+Пока только архитектура и UI plan.
 
-## Known limitations
+### 7. Playlists
 
-Например:
-- read-only YouTube catalog;
-- no YouTube write operations;
-- playlist membership sync out of scope;
-- production OAuth/quota not fully verified;
-- реальные DB migration deployment constraints, если подтверждены;
-- другие найденные ограничения.
+Учти уже исправленный channel-scoped playlist behavior.
 
-## Known issues
+Определи:
 
-Только реально существующие проблемы.
+- playlist membership хранить локально или получать live;
+- как связать video ↔ playlist;
+- что нужно для будущего добавления/удаления видео из playlist;
+- что относится к Stage 4, а что позже.
 
-## Next recommended work
+### 8. Минимальный первый increment
 
-Не превращать это в абстрактный roadmap.
-Сформировать конкретный список следующих технических задач.
+После анализа предложи **самый маленький полезный Stage 4 increment**, который:
 
-## Handoff instructions
+- не ломает текущий read-only catalog;
+- даёт пользователю реальную новую возможность;
+- не требует сразу полной YouTube write-back системы;
+- создаёт правильный фундамент для следующих этапов.
 
-Что должен сделать новый агент/разработчик перед началом работы.
+## Важное ограничение
 
-==================================================
-7. README
-==================================================
+Не надо превращать Stage 4 сразу в полноценный YouTube Studio clone.
 
-Приведи README.md в соответствие с реальным проектом.
+Нужна последовательная архитектура:
 
-README должен позволять новому разработчику быстро ответить:
+1. read-only catalog уже есть;
+2. теперь добавить рабочее состояние;
+3. затем редактирование;
+4. затем безопасный write-back в YouTube;
+5. затем более сложные функции.
 
-1. Что это?
-2. Как устроено?
-3. Как установить зависимости?
-4. Как запустить frontend?
-5. Как запустить backend?
-6. Как настроить env?
-7. Как применить migrations?
-8. Как запустить tests?
-9. Как сделать build?
-10. Где находится текущая реализация Stage 3?
-11. Что сейчас не реализовано?
+## В конце отчёта
 
-Не превращай README в огромную техническую энциклопедию.
+Дай:
 
-README = быстрый вход.
-STATUS.md = текущее состояние и handoff.
+### A. Current architecture assessment
+Что уже хорошо подготовлено для Stage 4.
 
-==================================================
-8. HOWTO / DEVELOPMENT DOCS
-==================================================
+### B. Recommended architecture
+Как должна выглядеть модель данных.
 
-Если HOWTOSTART.md или другие developer docs существуют:
+### C. Data flow
+YouTube → catalog → working state → future YouTube write-back.
 
-- проверить актуальность;
-- исправить устаревшие команды;
-- убрать инструкции, которые больше не соответствуют проекту;
-- не дублировать README без необходимости.
+### D. API plan
+Минимальные будущие endpoints по этапам.
 
-Если документации недостаточно — можно создать небольшой:
+### E. UI plan
+Как должен развиваться Studio.
 
-docs/DEVELOPMENT.md
+### F. Stage 4 roadmap
+Разбей на небольшие последовательные increments.
 
-только если это действительно улучшает структуру.
+### G. First implementation task
+Сформулируй конкретный следующий coding task, который можно будет отдать отдельному агенту.
 
-В нём можно разместить:
-- dev setup;
-- migrations;
-- tests;
-- build;
-- OAuth setup;
-- troubleshooting.
+### H. Risks
+Укажи места, где неправильное решение сейчас приведёт к переделке позже.
 
-Не создавай много документов без необходимости.
+После аудита обязательно выполнить:
 
-==================================================
-9. PACKAGE-LOCK
-==================================================
+- backend pytest;
+- frontend catalog tests;
+- `git diff --check`;
+- `git status --short`;
+- `git diff --stat`;
+- `git diff --name-only`.
 
-Есть известное незакоммиченное изменение:
+В финале явно укажи:
 
-apps/web/package-lock.json
+- что изменено;
+- какие файлы изменены;
+- что НЕ изменено;
+- результаты тестов;
+- commit/push не выполнять.
 
-В нём появилась строка:
-
-"peer": true
-
-Происхождение по Git history определить не удалось.
-
-НЕ угадывай её происхождение.
-
-Проверь:
-- действительно ли это единственное изменение;
-- связано ли оно с package.json;
-- есть ли способ безопасно определить, является ли это результатом npm install/npm version.
-
-После анализа:
-
-если изменение не требуется проекту и его происхождение неизвестно —
-НЕ включай его автоматически в документационный commit.
-
-Если считаешь, что его нужно сохранить, сначала объясни почему и НЕ коммить без отдельного подтверждения.
-
-==================================================
-10. STATUS.md
-==================================================
-
-Сейчас STATUS.md уже имеет незакоммиченные изменения.
-
-Не просто перезаписывай его вслепую.
-
-Сначала сравни:
-- HEAD version;
-- текущую рабочую версию;
-- фактический код.
-
-После этого сформируй одну согласованную актуальную версию.
-
-==================================================
-11. НЕ ДЕЛАТЬ
-==================================================
-
-В этой задаче запрещено:
-
-- менять backend logic;
-- менять frontend behavior;
-- менять API;
-- менять DB schema;
-- создавать migration;
-- менять OAuth;
-- менять catalog sync;
-- менять tests ради "улучшения";
-- рефакторить код;
-- обновлять зависимости без необходимости;
-- менять package-lock без отдельной причины;
-- добавлять новые product features.
-
-Это documentation / handoff task.
-
-==================================================
-12. ПОСЛЕ АУДИТА
-==================================================
-
-Сначала выдай мне отчёт:
-
-## Repository state
-...
-
-## Actual architecture
-...
-
-## Documentation currently present
-...
-
-## Outdated / inconsistent documentation
-...
-
-## Known technical issues
-...
-
-## Files that should be updated
-...
-
-## Proposed documentation structure
-...
-
-НЕ ИЗМЕНЯЙ ФАЙЛЫ до этого отчёта.
-
-После отчёта остановись и жди подтверждения.
-
-==================================================
-ВАЖНО
-==================================================
-
-На этом этапе мне нужен именно анализ фактического проекта.
-
-Не начинай автоматически переписывать README/STATUS.
-
-Сначала покажи, что ты обнаружил.
+Главный принцип: **сначала понять и спроектировать Stage 4, потом отдельно дать задачу на реализацию.**
