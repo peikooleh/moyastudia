@@ -32,6 +32,8 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
         working-directory: apps/web
+      - run: node --test tests/studio-catalog.test.mjs
+        working-directory: apps/web
       - run: npm run lint
         working-directory: apps/web
       - run: npm run build

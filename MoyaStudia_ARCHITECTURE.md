@@ -2,7 +2,9 @@
 
 Version: 1.0
 Status: Architecture baseline
-Purpose: authoritative reference for implementation agents.
+Purpose: product/domain reference for implementation agents.
+
+> **Важно:** этот документ описывает архитектурный baseline и целевую модель; он не является источником истины о текущем implementation status. Проверяйте реализованные функции и ограничения в [STATUS.md](STATUS.md).
 
 ## 1. Product goal
 
@@ -583,6 +585,7 @@ GitHub CI on Pull Requests:
 Critical failures must block merging.
 
 ## 31. Implementation stages
+Эти этапы — продуктовый roadmap, а не отчёт о завершённой реализации. Текущий статус реализации см. в `STATUS.md`.
 
 ### Stage 1 — Foundation
 Identity, ownership, secure sessions, Google connections, OAuth security, Alembic, core DB model, tests, CI.
@@ -646,9 +649,9 @@ Completion report:
 - Out of scope
 - Remaining risks
 
-## 33. Current prototype known blockers
+## 33. Historical prototype blockers
 
-The existing prototype is read-only and has known production blockers:
+The following list describes the pre-foundation prototype. It is historical context, not a list of current blockers:
 1. mock/local authentication;
 2. missing OAuth state validation;
 3. insecure refresh-token storage;

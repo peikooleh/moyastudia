@@ -1,4 +1,6 @@
-# MoyaStudia — Patch 01
+# MoyaStudia — Patch 01 (Historical)
+
+> Historical patch note based on the project state from 2026-09-30. This is not a current setup guide or implementation status; use `README.md`, `HOWTOSTART.md`, and `STATUS.md` for the current project.
 
 Патч основан на переданном состоянии проекта на 30.09.2026.
 

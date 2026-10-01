@@ -7,7 +7,7 @@ Windows, PowerShell. Два терминала: API на `:8000`, кабинет
 - Python 3.12 (не 3.14 — с ним ломалась сборка драйвера Postgres).
 - Node.js 20+.
 - Git (если `git` не находится: `& "C:\Program Files\Git\cmd\git.exe"`).
-- Проект Neon и Google Cloud (OAuth Web + YouTube Data API v3).
+- PostgreSQL database (документация проекта использует Neon) и Google Cloud OAuth Web / YouTube Data API v3 для реальных login/YouTube flows.
 - В OAuth consent добавлен тестовый пользователь для Google identity и YouTube connection.
 
 ## 1. Секреты
@@ -43,13 +43,13 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ## 2. База
 
-Из `apps\api` примените начальную миграцию:
+Из `apps\api` примените все текущие migrations до `head`:
 
 ```powershell
 alembic upgrade head
 ```
 
-Начальная миграция удаляет старые prototype-таблицы `channels` и `videos` без переноса записей. После этого schema управляется Alembic; API не меняет структуру БД при запуске.
+Важно: `0001_foundation` удаляет старые prototype-таблицы `channels` и `videos` без переноса записей. Используйте новую/проверенную базу и сделайте backup перед migration существующей базы. Schema далее управляется Alembic; API не меняет её при старте.
 
 Проверка после запуска API: в `apps\api` при активном venv
 
@@ -84,7 +84,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ```powershell
 cd D:\GITHUB\moyastudia\apps\web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -94,11 +94,28 @@ npm run dev
 
 После смены CSS: Ctrl+F5. Next кэширует стили.
 
-## 5. Подключить канал
+## 5. Подключить канал и загрузить каталог
 
 1. На лендинге войдите через Google. Это MoyaStudia identity и устанавливает серверную HttpOnly session cookie.
-2. При первом входе выберите «Подключить YouTube-канал» для отдельного Google/YouTube OAuth consent.
-3. После Foundation connection будет сохранено зашифрованно; обнаружение и выбор каналов появятся на следующем этапе.
+2. Подключите Google/YouTube account отдельным OAuth flow.
+3. После callback откроется Cabinet. Загрузите список доступных каналов и сохраните только явно выбранные каналы.
+4. Откройте Studio и нажмите загрузку каталога. Initial sync выполняется страницами; импорт можно продолжить после повторного открытия Studio.
+
+## 6. Tests и build
+
+Backend, из `apps\api` с активным virtualenv:
+
+```powershell
+python -m pytest
+```
+
+Frontend, из `apps\web`:
+
+```powershell
+node --test tests\studio-catalog.test.mjs
+npm run lint
+npm run build
+```
 
 ## Частые поломки
 
@@ -110,7 +127,7 @@ npm run dev
 | 401 на API | войдите через Google; локальные preferences не являются сессией |
 | Ошибка TOKEN_ENCRYPTION_KEY | задайте Fernet key в secret manager или локальном `.env` |
 | Ошибка миграции | проверьте `DATABASE_URL`, затем запустите `alembic upgrade head` из `apps\api` |
-| 502 на чтении YouTube | проверьте scopes connection и доступность Google API |
+| 502 на чтении YouTube | проверьте активность Google connection, read-only scope и доступность Google API |
 | `pg_config not found` | ставить `psycopg[binary]`, не собирать `psycopg2` из исходников |
 | Сайт без лого/баннера | перезапуск API + refresh-profile, не путать venv |
 

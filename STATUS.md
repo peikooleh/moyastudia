@@ -1,4 +1,123 @@
-# Статус MoyaStudia
+# MoyaStudia — Current Status
+
+Snapshot: 2026-10-01. This is the current implementation handoff; architecture and product roadmap details live in [MoyaStudia_ARCHITECTURE.md](MoyaStudia_ARCHITECTURE.md).
+
+## Project purpose
+
+MoyaStudia is a SaaS workspace for managing YouTube channels and content. YouTube remains the source of truth for published state and media files. The implemented product is currently read-only: it stores selected channels and a local metadata cache, not video files, and does not write content to YouTube.
+
+## Current stage
+
+Foundation, Stage 2A/2B channel discovery/selection, and Stage 3 read-only video catalog/sync are implemented. The broader Stage 2 connection lifecycle (disconnect, revoke, reconnect retention) is incomplete. Stage 4 drafts/readiness and all YouTube write stages have not started.
+
+## Current git baseline
+
+Implementation baseline: `fa9c884` (`Fix catalog sync recovery`), on `main`; at this snapshot `main` matched `origin/main`. The documentation pass is separate from that implementation baseline. The temporary root file `промпт.txt` is not part of the repository handoff and must not be added to Git.
+
+## Actual architecture
+
+- `apps/web`: Next.js 15.5.27 App Router, React 19.3.0. `app/` contains landing, onboarding, Cabinet, Studio and shared UI; `lib/` contains API/preferences/localization/catalog helpers.
+- `apps/api`: FastAPI, SQLAlchemy and Google OAuth/YouTube client. `app/main.py` owns routes and authorization; `app/youtube.py` owns Google/YouTube API calls; `security.py` owns sessions/OAuth state; `tokens.py` encrypts refresh tokens.
+- `apps/api/migrations/versions`: Alembic revisions `0001_foundation` and `0002_video_catalog`.
+- Tests: `apps/api/tests`; `apps/web/tests/studio-catalog.test.mjs`.
+- CI: `.github/workflows/ci.yml` runs backend pytest and frontend catalog tests, lint and build on pull requests.
+
+Identity is Google-only in the running product. A MoyaStudia user has server-side sessions and may own Google connections; a Google connection may expose multiple YouTube channels. OAuth state is one-time, expiry-checked and browser-bound. The session cookie is HttpOnly; only its hash is stored in the database. YouTube refresh tokens are Fernet-encrypted at rest. Protected channel operations check session ownership server-side.
+
+Channel discovery does not persist unselected channels. Cabinet submits explicitly selected channel IDs; the API rechecks that they are available through the owned connection. The schema permits provider values beyond Google, but Apple OAuth is not implemented.
+
+`Video` is the only catalog table, with unique `(channel_id, youtube_video_id)`. YouTube metadata is stored in `youtube_*` snapshot columns, separate from MoyaStudia working fields. YouTube is the external source of truth; local DB cache is the Studio catalog source after import. Catalog fetching resolves the selected YouTube channel's uploads playlist, processes at most 50 video IDs per page, and keeps YouTube page tokens on the backend.
+
+Initial import, incremental sync and full reconcile are page-based and resumed through browser requests; there is no Celery, Redis or background worker. Reconcile deletes absent cached videos only after the complete successful scan. Partial/failed reconcile preserves cache. IDs without returned video details are marked unavailable, not deleted. The video list endpoint is DB-only. Studio does not trigger initial import on open; LOADING recovery continues through the existing endpoint, with server-side lease/concurrency protection authoritative.
+
+## Current user flows
+
+`Landing → Google identity OAuth → server session → onboarding → YouTube connection OAuth → Cabinet channel discovery/selection → Studio`.
+
+For catalog use: `NOT_IMPORTED → explicit initial sync → LOADING/PARTIAL → COMPLETE or EMPTY`; reopening Studio reads status/cache without automatically starting a live sync. Users can continue resumable sync, run incremental refresh, or request full reconcile. UI preferences (language/theme/selected channel) are browser-local, not authentication state.
+
+## Catalog states
+
+| State | Meaning |
+|---|---|
+| `NOT_IMPORTED` | No sync record exists; cache may contain zero rows. Initial import is user-started. |
+| `LOADING` | A sync mode has started and can be continued. A page lease may be active; the server may return 409. |
+| `PARTIAL` | At least one page was saved and another page token remains. |
+| `COMPLETE` | Initial import/reconcile completed, or incremental sync reached its stopping point. |
+| `EMPTY` | A successful scan found no video IDs. |
+| `STALE` | Successful cache is older than 15 minutes, or a sync error occurred while cache exists. |
+| `ERROR` | Sync failed and there is no cached video data. |
+
+Status derives `can_continue` for `LOADING`, `PARTIAL`, `STALE` and `ERROR`; without a sync row it is false. Error states with existing videos are presented as `STALE`.
+
+## Catalog API
+
+All protected routes require a valid MoyaStudia session and channel ownership. `GET /channels/{id}/videos` and `GET /channels/{id}/catalog/status` permit reading cache for an inactive connection. Sync routes require an active connection and same-origin request.
+
+| Method and path | Purpose / contract |
+|---|---|
+| `GET /channels/{id}/videos` | DB-only pages. Query: `limit` 1–50, DB `cursor`, `q`, `visibility`, `sort`, `date_from`, `date_to`. Returns `items`, `next_cursor`, `total`, `status_counts`, and `summary`. No YouTube page token is exposed. |
+| `GET /channels/{id}/catalog/status` | Returns state, mode, cache/scanned counts, last success/error and `can_continue`. |
+| `POST /channels/{id}/catalog/sync` | JSON `{ "mode": "initial" | "incremental" | "reconcile" }`; starts or resumes the selected mode and returns status. May return 409 for lease/mode conflicts. |
+| `POST /channels/{id}/catalog/sync/continue` | Fetches and saves at most one YouTube page (maximum 50 IDs), then returns updated status. 409 means the sync is not continuable or a page lease is held; YouTube failures return 502. |
+
+Other implemented connection routes include `GET /google-connections/{connection_id}/available-channels` and `POST /google-connections/{connection_id}/channels`. `DELETE /channels/{id}` exists but currently returns 409; it does not disconnect a channel.
+
+## What is implemented
+
+- Google identity login/logout, server-side sessions and browser-bound OAuth state.
+- Encrypted Google/YouTube refresh-token storage and owner-scoped API access.
+- Google connection reuse, paginated channel discovery and explicit channel selection.
+- Read-only video cache, catalog status, DB pagination/filtering, initial/incremental/reconcile sync and LOADING resume.
+- Studio catalog/calendar cache views, onboarding, Cabinet settings and en/ru/uk UI localization.
+- Alembic-managed schema and PR CI for backend/frontend checks.
+
+## What is not implemented
+
+- Apple OAuth/login; channel disconnect/revoke/reconnect retention and automatic data cleanup.
+- YouTube write operations: video upload/edit/publish/schedule, metadata/branding mutation or playlist mutation.
+- Playlist membership synchronization/cache; the playlist API currently returns only playlist ID/title.
+- Draft lifecycle/TTL, readiness rules, templates, media storage, comments, analytics, billing, teams/roles.
+- Background workers, continuous polling, and permanent video/media-file storage.
+
+## Known technical issues
+
+- `DELETE /channels/{id}` is a placeholder that returns 409; the planned connection lifecycle is unfinished.
+- Playlist listing uses the connected Google account (`mine=True`) and returns only ID/title; it is not a selected-channel playlist membership cache. Studio fields beyond those returned may be empty.
+- `0001_foundation` drops pre-existing prototype `channels` and `videos` tables without migrating their data. Use a fresh/verified database and backup before applying migrations to any existing database.
+- `next lint` is deprecated for Next.js 16; current lint/build report existing `<img>` and custom-font warnings. Backend tests report FastAPI/Starlette deprecation warnings.
+- Production Google OAuth, real YouTube quota behavior, and migration deployment against the configured production PostgreSQL database have not been verified.
+
+## Tests / verification
+
+Verified on 2026-10-01:
+
+- Backend: `apps/api/.venv/Scripts/python.exe -m pytest` from `apps/api` — **34 passed** (3 deprecation warnings).
+- Frontend catalog: `node --test tests/studio-catalog.test.mjs` from `apps/web` — **5 passed**.
+- `npm run lint` from `apps/web` — passed with the warnings listed above.
+- `npm run build` from `apps/web` — passed with the same existing frontend warnings.
+- `git diff --check` — passed.
+
+Migration tests use SQLite fixtures; these results do not establish that a production migration was applied. OAuth and live YouTube API/quota were not exercised.
+
+## Current limitations
+
+The application is read-only with respect to YouTube. Full Cabinet/Studio flows require a reachable PostgreSQL database, Google OAuth configuration and an authorized test user. Without OAuth, only anonymous frontend/health checks are available. The documented database target is PostgreSQL/Neon; the actual local `DATABASE_URL` was not inspected as it is secret configuration.
+
+## Next development steps
+
+1. Define and implement the remaining Stage 2 channel disconnect/revoke/reconnect-retention lifecycle; start with API behavior and ownership/retention tests because the current delete route is deliberately unavailable.
+2. Decide whether Stage 3 needs a read-only playlist membership/cache model; if approved, define its channel scope and API contract before UI work.
+3. Only after those scopes are agreed, begin Stage 4 draft/readiness work from the product architecture, with tests for lifecycle and readiness rules.
+4. Before production rollout, validate Alembic upgrade on a disposable PostgreSQL database and perform a real OAuth/YouTube smoke test without exposing credentials.
+
+## Handoff instructions
+
+- Read `AGENTS.md` first, then this file for implementation status. Treat `MoyaStudia_ARCHITECTURE.md` as product baseline/target architecture, not a completion checklist.
+- Inspect `git status`, the owning code and nearby tests before work. Never add the temporary `промпт.txt` file.
+- Do not read or print `.env`, `.env.local`, OAuth secrets, tokens or database credentials. Use `.env.example` for variable names.
+- Run Alembic only against a known safe database; the foundation migration removes legacy prototype tables.
+- Keep changes incremental. Do not add YouTube write scopes/operations, dependencies, workers or architectural layers without explicit task scope. Do not commit/push unless asked.# Статус MoyaStudia
 
 Дата среза: 2026-09-30. Обкатка на каналах MoyaMova (несколько брендов DE/UK/EN на одном Google).
 
