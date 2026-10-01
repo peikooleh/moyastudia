@@ -163,20 +163,39 @@ def test_channel_playlists_are_scoped_to_selected_channel(
             "items": [
                 {
                     "id": "selected-playlist",
-                    "snippet": {"channelId": youtube_channel_id, "title": "Selected"},
+                    "snippet": {
+                        "channelId": youtube_channel_id,
+                        "title": "Selected",
+                        "description": "Playlist description",
+                        "publishedAt": "2026-01-02T03:04:05Z",
+                        "thumbnails": {"high": {"url": "https://img.example.test/selected.jpg"}},
+                    },
+                    "status": {"privacyStatus": "private"},
+                    "contentDetails": {"itemCount": 12},
                 },
                 {
                     "id": "other-playlist",
                     "snippet": {"channelId": "another-channel", "title": "Other"},
                 },
             ],
-            "nextPageToken": "next-page",
+            "nextPageToken": "page-two",
         },
         {
             "items": [
                 {
                     "id": "selected-playlist-2",
-                    "snippet": {"channelId": youtube_channel_id, "title": "Selected 2"},
+                    "snippet": {"channelId": youtube_channel_id, "title": "Second"},
+                }
+            ],
+            "nextPageToken": "page-three",
+        },
+        {
+            "items": [
+                {
+                    "id": "selected-playlist-3",
+                    "snippet": {"channelId": youtube_channel_id, "title": "Third"},
+                    "status": {"privacyStatus": "unlisted"},
+                    "contentDetails": {"itemCount": 0},
                 }
             ]
         },
@@ -196,13 +215,144 @@ def test_channel_playlists_are_scoped_to_selected_channel(
 
     assert response.status_code == 200
     assert response.json() == [
-        {"id": "selected-playlist", "title": "Selected"},
-        {"id": "selected-playlist-2", "title": "Selected 2"},
+        {
+            "id": "selected-playlist",
+            "title": "Selected",
+            "description": "Playlist description",
+            "thumb": "https://img.example.test/selected.jpg",
+            "publishedAt": "2026-01-02T03:04:05Z",
+            "privacy": "private",
+            "itemCount": 12,
+        },
+        {
+            "id": "selected-playlist-2",
+            "title": "Second",
+            "description": "",
+            "thumb": "",
+            "publishedAt": "",
+            "privacy": "",
+            "itemCount": None,
+        },
+        {
+            "id": "selected-playlist-3",
+            "title": "Third",
+            "description": "",
+            "thumb": "",
+            "publishedAt": "",
+            "privacy": "unlisted",
+            "itemCount": 0,
+        },
     ]
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert all(call["channelId"] == youtube_channel_id for call in calls)
     assert all("mine" not in call for call in calls)
-    assert calls[1]["pageToken"] == "next-page"
+    assert all(call["part"] == "snippet,status,contentDetails" for call in calls)
+    assert all(call["maxResults"] == 50 for call in calls)
+    assert [call["pageToken"] for call in calls] == [None, "page-two", "page-three"]
+
+
+def test_channel_playlists_have_no_200_item_cap(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database)
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id)
+    authorized_client(client, token)
+    responses = []
+    for page_number in range(5):
+        first_id = page_number * 50
+        last_id = min(first_id + 50, 205)
+        responses.append(
+            {
+                "items": [
+                    {
+                        "id": f"playlist-{item_id}",
+                        "snippet": {
+                            "channelId": youtube_channel_id,
+                            "title": f"Playlist {item_id}",
+                        },
+                    }
+                    for item_id in range(first_id, last_id)
+                ],
+                **({"nextPageToken": f"page-{page_number + 2}"} if page_number < 4 else {}),
+            }
+        )
+    calls = []
+
+    class FakeResource:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(execute=lambda: responses.pop(0))
+
+    class FakeService:
+        def playlists(self):
+            return FakeResource()
+
+    monkeypatch.setattr(youtube, "service_for", lambda refresh_token: FakeService())
+
+    response = client.get(f"/channels/{channel_id}/playlists")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 205
+    assert len(calls) == 5
+
+
+def test_channel_playlists_empty_and_api_error_responses(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database)
+    channel_id, _, _ = create_channel(test_database, user_id)
+    authorized_client(client, token)
+
+    class EmptyService:
+        def playlists(self):
+            return SimpleNamespace(list=lambda **kwargs: SimpleNamespace(execute=lambda: {}))
+
+    monkeypatch.setattr(youtube, "service_for", lambda refresh_token: EmptyService())
+    assert client.get(f"/channels/{channel_id}/playlists").json() == []
+
+    class FailedService:
+        def playlists(self):
+            def fail(**kwargs):
+                return SimpleNamespace(
+                    execute=lambda: (_ for _ in ()).throw(RuntimeError("playlist API failed"))
+                )
+
+            return SimpleNamespace(list=fail)
+
+    monkeypatch.setattr(youtube, "service_for", lambda refresh_token: FailedService())
+    response = client.get(f"/channels/{channel_id}/playlists")
+    assert response.status_code == 502
+    assert response.json() == {"detail": "RuntimeError: playlist API failed"}
+
+
+def test_channel_playlists_repeated_page_token_fails_instead_of_looping(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id)
+    authorized_client(client, token)
+    page_tokens = []
+    responses = iter(
+        [
+            {"items": [], "nextPageToken": "repeat"},
+            {"items": [], "nextPageToken": "repeat"},
+        ]
+    )
+
+    class FakeResource:
+        def list(self, **kwargs):
+            page_tokens.append(kwargs["pageToken"])
+            return SimpleNamespace(execute=lambda: next(responses))
+
+    class FakeService:
+        def playlists(self):
+            return FakeResource()
+
+    monkeypatch.setattr(youtube, "service_for", lambda refresh_token: FakeService())
+
+    response = client.get(f"/channels/{channel_id}/playlists")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "RuntimeError: YouTube playlists pagination token repeated"
+    }
+    assert page_tokens == [None, "repeat"]
 
 
 @pytest.mark.parametrize(

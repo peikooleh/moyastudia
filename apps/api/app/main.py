@@ -103,41 +103,6 @@ def _require_google_configuration() -> None:
         raise HTTPException(503, "Google OAuth is not configured")
 
 
-def _safe_oauth_diagnostic_message(exc: Exception, sensitive_values: list[str]) -> str:
-    message = str(exc)
-    lowered_message = message.lower()
-    sensitive_markers = (
-        "access_token",
-        "access token",
-        "refresh_token",
-        "refresh token",
-        "id_token",
-        "id token",
-        "client_secret",
-        "client secret",
-        "authorization code",
-        "authorization_code",
-        "cookie",
-        "bearer ",
-        "eyj",
-    )
-    token_data = getattr(exc, "token", None)
-    if isinstance(token_data, dict):
-        sensitive_values.extend(
-            str(value)
-            for name, value in token_data.items()
-            if any(marker in name.lower() for marker in ("token", "secret", "code"))
-        )
-    if (
-        any(value and value in message for value in sensitive_values)
-        or any(marker in lowered_message for marker in sensitive_markers)
-        or getattr(exc, "content", None) is not None
-        or getattr(exc, "response", None) is not None
-    ):
-        return "Exception message suppressed to protect OAuth credentials"
-    return " ".join(message.split())[:500]
-
-
 @app.get("/auth/session")
 def auth_session(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
@@ -189,40 +154,9 @@ def google_callback(
         raise HTTPException(400, "invalid or expired OAuth state")
     try:
         credentials = yt.exchange_identity_code(code, state)
-    except Exception as exc:
-        detail = {
-            "step": "yt.exchange_identity_code",
-            "exception_type": type(exc).__name__,
-            "message": "Exception message suppressed to protect OAuth credentials",
-        }
-        if type(exc) is Warning:
-            detail = {
-                "step": "yt.exchange_identity_code",
-                "exception_type": "Warning",
-                "scope_diagnostic": str(exc),
-            }
-        raise HTTPException(
-            400,
-            detail,
-        ) from None
-    try:
         claims = yt.verify_identity_token(credentials.id_token or "")
     except Exception as exc:
-        detail = {
-            "step": "yt.verify_identity_token",
-            "exception_type": type(exc).__name__,
-            "message": "Exception message suppressed to protect OAuth credentials",
-        }
-        if type(exc).__name__ == "InvalidValue":
-            detail = {
-                "step": "yt.verify_identity_token",
-                "exception_type": "InvalidValue",
-                "message": str(exc),
-            }
-        raise HTTPException(
-            400,
-            detail,
-        ) from None
+        raise HTTPException(400, "Google authentication failed") from exc
 
     subject = claims.get("sub")
     if not subject:
@@ -306,49 +240,9 @@ def youtube_callback(
         raise HTTPException(400, "invalid or expired OAuth state")
     try:
         credentials = yt.exchange_youtube_code(code, state)
-    except Exception as exc:
-        raise HTTPException(
-            502,
-            {
-                "step": "yt.exchange_youtube_code",
-                "exception_type": type(exc).__name__,
-                "message": _safe_oauth_diagnostic_message(
-                    exc,
-                    [
-                        code,
-                        state,
-                        *request.cookies.values(),
-                        settings.google_client_id,
-                        settings.google_client_secret,
-                        settings.token_encryption_key,
-                    ],
-                ),
-            },
-        ) from None
-    try:
         claims = yt.verify_identity_token(credentials.id_token or "")
     except Exception as exc:
-        raise HTTPException(
-            502,
-            {
-                "step": "yt.verify_identity_token",
-                "exception_type": type(exc).__name__,
-                "message": _safe_oauth_diagnostic_message(
-                    exc,
-                    [
-                        code,
-                        state,
-                        *request.cookies.values(),
-                        settings.google_client_id,
-                        settings.google_client_secret,
-                        settings.token_encryption_key,
-                        credentials.token,
-                        credentials.refresh_token,
-                        credentials.id_token,
-                    ],
-                ),
-            },
-        ) from None
+        raise HTTPException(502, "YouTube connection failed") from exc
 
     google_subject = claims.get("sub")
     if not google_subject:

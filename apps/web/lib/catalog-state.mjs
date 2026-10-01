@@ -18,6 +18,23 @@ export function catalogVideoWorkingUrl(channelId, videoId) {
   return `${catalogVideoDetailUrl(channelId, videoId)}/working`;
 }
 
+export function mapPlaylistForStudio(playlist) {
+  return {
+    id: typeof playlist?.id === "string" ? playlist.id : "",
+    title: playlist?.title || "",
+    description: playlist?.description || "",
+    thumb: playlist?.thumb || "",
+    publishedAt: playlist?.publishedAt || "",
+    privacy: playlist?.privacy || "",
+    itemCount: Number.isInteger(playlist?.itemCount) ? playlist.itemCount : null,
+  };
+}
+
+export function playlistsForChannel(state, channelId) {
+  if (!channelId || state?.channelId !== String(channelId)) return [];
+  return state.items || [];
+}
+
 export function catalogVideoDisplayTitle(video) {
   return video?.effectiveTitle ?? video?.title ?? "";
 }

@@ -200,9 +200,14 @@ def list_playlists(refresh_token: str, youtube_channel_id: str) -> list[dict]:
     service = service_for(refresh_token)
     out = []
     token = None
+    seen_page_tokens = set()
     while True:
+        if token:
+            if token in seen_page_tokens:
+                raise RuntimeError("YouTube playlists pagination token repeated")
+            seen_page_tokens.add(token)
         resp = service.playlists().list(
-            part="snippet",
+            part="snippet,status,contentDetails",
             channelId=youtube_channel_id,
             maxResults=50,
             pageToken=token,
@@ -215,10 +220,18 @@ def list_playlists(refresh_token: str, youtube_channel_id: str) -> list[dict]:
                 {
                     "id": item["id"],
                     "title": snippet.get("title") or "",
+                    "description": snippet.get("description") or "",
+                    "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
+                    "publishedAt": snippet.get("publishedAt") or "",
+                    "privacy": (item.get("status") or {}).get("privacyStatus") or "",
+                    "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
                 }
             )
-        token = resp.get("nextPageToken")
-        if not token or len(out) >= 200:
+        next_token = resp.get("nextPageToken")
+        if next_token and next_token in seen_page_tokens:
+            raise RuntimeError("YouTube playlists pagination token repeated")
+        token = next_token
+        if not token:
             break
     return out
 

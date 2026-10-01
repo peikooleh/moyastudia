@@ -10,6 +10,8 @@ import {
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
+  mapPlaylistForStudio,
+  playlistsForChannel,
   resetWorkingVideoPatch,
   shouldResumeCatalogSync,
   shouldShowCatalogContinue,
@@ -89,7 +91,13 @@ export function Studio() {
   const [view, setView] = useState("catalog");
   const [videos, setVideos] = useState([]);
   const [calendarVideos, setCalendarVideos] = useState([]);
-  const [playlists, setPlaylists] = useState([]);
+  const [playlistState, setPlaylistState] = useState({
+    channelId: "",
+    items: [],
+    loading: false,
+    error: "",
+  });
+  const [playlistRetry, setPlaylistRetry] = useState(0);
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("date");
   const [query, setQuery] = useState("");
@@ -125,6 +133,14 @@ export function Studio() {
   const uiLangRef = useRef(uiLang);
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
+  const playlists = playlistsForChannel(playlistState, channelId);
+  const currentPlaylistState = playlistState.channelId === channelId ? playlistState : null;
+  const playlistsLoading = Boolean(
+    view === "playlists"
+    && channelId
+    && (!currentPlaylistState || currentPlaylistState.loading),
+  );
+  const playlistsError = currentPlaylistState?.error || "";
 
   useEffect(() => {
     const requestId = ++channelRequestId.current;
@@ -136,7 +152,7 @@ export function Studio() {
     setCalendarVideos([]);
     setCalendarCursor(null);
     setLoadingCalendar(false);
-    setPlaylists([]);
+    setPlaylistState({ channelId, items: [], loading: false, error: "" });
     setPickedPl("");
     if (!channelId) return undefined;
 
@@ -251,20 +267,43 @@ export function Studio() {
   }, [channelId, selectedId, workingDetailReload]);
 
   useEffect(() => {
-    if (view !== "playlists" || !channelId) return undefined;
+    if (view !== "playlists" || !channelId) {
+      setPlaylistState({ channelId, items: [], loading: false, error: "" });
+      setPickedPl("");
+      return undefined;
+    }
     const controller = new AbortController();
+    setPlaylistState({ channelId, items: [], loading: true, error: "" });
+    setPickedPl("");
     apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : []))
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            (typeof data?.detail === "string" && data.detail)
+              || t(uiLangRef.current, "playlistsLoadError"),
+          );
+        }
+        return data;
+      })
       .then((rows) => {
         if (controller.signal.aborted) return;
-        setPlaylists(rows);
-        setPickedPl(rows[0]?.id || "");
+        const items = Array.isArray(rows) ? rows.map(mapPlaylistForStudio) : [];
+        setPlaylistState({ channelId, items, loading: false, error: "" });
+        setPickedPl(items[0]?.id || "");
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setPlaylists([]);
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setPlaylistState({
+            channelId,
+            items: [],
+            loading: false,
+            error: error.message || t(uiLangRef.current, "playlistsLoadError"),
+          });
+        }
       });
     return () => controller.abort();
-  }, [channelId, view]);
+  }, [channelId, view, playlistRetry]);
 
   useEffect(() => {
     if (view !== "grid" || !channelId) return undefined;
@@ -825,7 +864,18 @@ export function Studio() {
               </button>
             </div>
             <div className="list">
-              {playlists.map((p) => (
+              {playlistsLoading ? (
+                <div className="empty" role="status">{t(uiLang, "playlistsLoading")}</div>
+              ) : null}
+              {playlistsError ? (
+                <div className="empty" role="alert">
+                  <p>{playlistsError}</p>
+                  <button className="btn ghost" type="button" onClick={() => setPlaylistRetry((n) => n + 1)}>
+                    {t(uiLang, "playlistsRetry")}
+                  </button>
+                </div>
+              ) : null}
+              {!playlistsLoading && !playlistsError ? playlists.map((p) => (
                 <button
                   key={p.id}
                   type="button"
@@ -834,12 +884,18 @@ export function Studio() {
                 >
                   <div className="item-title">{p.title}</div>
                 </button>
-              ))}
-              {!playlists.length ? <div className="empty">{t(uiLang, "emptyPlaylists")}</div> : null}
+              )) : null}
+              {!playlistsLoading && !playlistsError && !playlists.length ? (
+                <div className="empty">{t(uiLang, "emptyPlaylists")}</div>
+              ) : null}
             </div>
           </aside>
           <section className="studio-card">
-            {!playlist ? (
+            {playlistsLoading ? (
+              <div className="empty" role="status">{t(uiLang, "playlistsLoading")}</div>
+            ) : playlistsError ? (
+              <div className="empty" role="alert">{playlistsError}</div>
+            ) : !playlist ? (
               <div className="empty">{t(uiLang, "selectPlaylist")}</div>
             ) : (
               <>
@@ -847,7 +903,7 @@ export function Studio() {
                 <h2>{playlist.title}</h2>
                 <div className="meta-grid">
                   <label>{t(uiLang, "videoTitle")}<input value={playlist.title} readOnly /></label>
-                  <label>{t(uiLang, "playlistVideoCount")}<input value={playlist.itemCount ?? 0} readOnly /></label>
+                  <label>{t(uiLang, "playlistVideoCount")}<input value={playlist.itemCount ?? "—"} readOnly /></label>
                   <label className="wide">{t(uiLang, "videoDescription")}<textarea value={playlist.description || ""} readOnly /></label>
                   <label>{t(uiLang, "channelCreated")}<input value={playlist.publishedAt || "—"} readOnly /></label>
                   <label>{t(uiLang, "videoVisibility")}<input value={playlist.privacy || "—"} readOnly /></label>

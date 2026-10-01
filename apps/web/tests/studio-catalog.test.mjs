@@ -10,6 +10,8 @@ import {
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
+  mapPlaylistForStudio,
+  playlistsForChannel,
   resetWorkingVideoPatch,
   shouldResumeCatalogSync,
   shouldShowCatalogContinue,
@@ -71,6 +73,49 @@ test("removing the last channel clears its selected ID and language preference",
 test("working video routes stay under the selected channel", () => {
   assert.equal(catalogVideoDetailUrl(12, 34), "/channels/12/videos/34");
   assert.equal(catalogVideoWorkingUrl(12, 34), "/channels/12/videos/34/working");
+});
+
+test("playlist mapping preserves all available fields for the Studio view", () => {
+  assert.deepEqual(
+    mapPlaylistForStudio({
+      id: "playlist-1",
+      title: "Playlist title",
+      description: "Playlist description",
+      thumb: "https://img.example.test/playlist.jpg",
+      publishedAt: "2026-01-02T03:04:05Z",
+      privacy: "private",
+      itemCount: 7,
+    }),
+    {
+      id: "playlist-1",
+      title: "Playlist title",
+      description: "Playlist description",
+      thumb: "https://img.example.test/playlist.jpg",
+      publishedAt: "2026-01-02T03:04:05Z",
+      privacy: "private",
+      itemCount: 7,
+    },
+  );
+});
+
+test("playlist mapping handles absent optional fields and empty responses", () => {
+  assert.deepEqual(mapPlaylistForStudio({ id: "playlist-2" }), {
+    id: "playlist-2",
+    title: "",
+    description: "",
+    thumb: "",
+    publishedAt: "",
+    privacy: "",
+    itemCount: null,
+  });
+  assert.deepEqual([].map(mapPlaylistForStudio), []);
+});
+
+test("playlist rows from the previous channel are hidden immediately on channel change", () => {
+  const state = { channelId: "channel-a", items: [{ id: "playlist-a" }] };
+  assert.deepEqual(playlistsForChannel(state, "channel-a"), [{ id: "playlist-a" }]);
+  assert.deepEqual(playlistsForChannel(state, "channel-b"), []);
+  assert.deepEqual(playlistsForChannel(state, ""), []);
 });
 
 test("catalog list prefers the effective local title and preserves explicit empty values", () => {

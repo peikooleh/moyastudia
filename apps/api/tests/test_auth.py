@@ -172,19 +172,70 @@ def test_google_callback_rejects_unknown_state_without_exchanging_code(client, m
     assert response.status_code == 400
 
 
-@pytest.mark.parametrize(
-    ("failure_step", "expected_message"),
-    [
-        ("exchange", "safe exchange diagnostic"),
-        ("verify", "Exception message suppressed to protect OAuth credentials"),
-    ],
-)
-def test_youtube_callback_diagnostics_are_step_specific_and_suppress_secrets(
-    client, test_database, monkeypatch, failure_step, expected_message
+@pytest.mark.parametrize("failure_step", ["exchange", "verify"])
+def test_google_callback_failures_use_generic_error_without_echoing_credentials(
+    client, monkeypatch, failure_step
+):
+    state = f"identity-failure-state-{failure_step}"
+    monkeypatch.setattr(
+        main.yt,
+        "identity_authorization_url",
+        lambda: ("https://accounts.test", state),
+    )
+    if failure_step == "exchange":
+        def fail_exchange(*args):
+            raise ValueError(
+                "authorization_code=fixture-authorization-code "
+                "client_secret=fixture-client-secret access_token=fixture-access-token "
+                "refresh_token=fixture-refresh-token id_token=fixture-id-token"
+            )
+
+        monkeypatch.setattr(main.yt, "exchange_identity_code", fail_exchange)
+    else:
+        monkeypatch.setattr(
+            main.yt,
+            "exchange_identity_code",
+            lambda *args: SimpleNamespace(
+                id_token="fixture-id-token",
+                token="fixture-access-token",
+                refresh_token="fixture-refresh-token",
+            ),
+        )
+
+        def fail_verification(token):
+            raise ValueError(
+                "authorization_code=fixture-authorization-code "
+                "client_secret=fixture-client-secret access_token=fixture-access-token "
+                "refresh_token=fixture-refresh-token id_token=fixture-id-token"
+            )
+
+        monkeypatch.setattr(main.yt, "verify_identity_token", fail_verification)
+
+    assert client.get("/auth/google/login").status_code == 307
+    response = client.get(
+        "/auth/google/callback",
+        params={"code": "fixture-authorization-code", "state": state},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Google authentication failed"}
+    for secret in (
+        "fixture-authorization-code",
+        "fixture-client-secret",
+        "fixture-access-token",
+        "fixture-refresh-token",
+        "fixture-id-token",
+    ):
+        assert secret not in response.text
+
+
+@pytest.mark.parametrize("failure_step", ["exchange", "verify"])
+def test_youtube_callback_failures_use_generic_error_without_echoing_credentials(
+    client, test_database, monkeypatch, failure_step
 ):
     _, session_token = create_account(test_database)
     client.cookies.set(settings.session_cookie_name, session_token)
-    state = f"diagnostic-state-{failure_step}"
+    state = f"youtube-failure-state-{failure_step}"
     monkeypatch.setattr(
         main.yt,
         "youtube_authorization_url",
@@ -192,10 +243,13 @@ def test_youtube_callback_diagnostics_are_step_specific_and_suppress_secrets(
     )
     if failure_step == "exchange":
         def fail_exchange(*args):
-            raise ValueError("safe exchange diagnostic")
+            raise ValueError(
+                "authorization_code=fixture-authorization-code "
+                "client_secret=fixture-client-secret access_token=fixture-access-token "
+                "refresh_token=fixture-refresh-token id_token=fixture-id-token"
+            )
 
         monkeypatch.setattr(main.yt, "exchange_youtube_code", fail_exchange)
-        expected_step = "yt.exchange_youtube_code"
     else:
         monkeypatch.setattr(
             main.yt,
@@ -209,11 +263,12 @@ def test_youtube_callback_diagnostics_are_step_specific_and_suppress_secrets(
 
         def fail_verification(token):
             raise ValueError(
-                "client_secret=test-client-secret access_token=fixture-access-token"
+                "authorization_code=fixture-authorization-code "
+                "client_secret=fixture-client-secret access_token=fixture-access-token "
+                "refresh_token=fixture-refresh-token id_token=fixture-id-token"
             )
 
         monkeypatch.setattr(main.yt, "verify_identity_token", fail_verification)
-        expected_step = "yt.verify_identity_token"
 
     assert client.get("/auth/youtube/login").status_code == 307
     response = client.get(
@@ -222,12 +277,15 @@ def test_youtube_callback_diagnostics_are_step_specific_and_suppress_secrets(
     )
 
     assert response.status_code == 502
-    detail = response.json()["detail"]
-    assert detail["step"] == expected_step
-    assert detail["exception_type"] == "ValueError"
-    assert detail["message"] == expected_message
-    assert "test-client-secret" not in response.text
-    assert "fixture-access-token" not in response.text
+    assert response.json() == {"detail": "YouTube connection failed"}
+    for secret in (
+        "fixture-authorization-code",
+        "fixture-client-secret",
+        "fixture-access-token",
+        "fixture-refresh-token",
+        "fixture-id-token",
+    ):
+        assert secret not in response.text
 
 
 def test_session_logout_revokes_server_session_and_checks_origin(client, test_database):
