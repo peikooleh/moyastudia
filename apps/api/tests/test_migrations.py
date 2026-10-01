@@ -120,6 +120,7 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
     assert "working_base_title" in video_columns
     assert "working_base_description" in video_columns
     assert "working_base_tags" in video_columns
+    assert video_columns["working_ready"]["nullable"] is False
     assert "working_revision" in video_columns
     assert "availability_status" in video_columns
     assert "channel_catalog_syncs" in inspector.get_table_names()
@@ -145,7 +146,7 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
         assert connection.execute(
             text(
                 "SELECT title, description, tags, working_base_title, "
-                "working_base_description, working_base_tags, working_revision "
+                "working_base_description, working_base_tags, working_ready, working_revision "
                 "FROM videos WHERE id = 7"
             )
         ).one() == (
@@ -155,12 +156,33 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
             "Snapshot title",
             "Snapshot description",
             "snapshot, tags",
+            False,
             0,
         )
         assert connection.execute(
-            text("SELECT title, description, tags, working_revision FROM videos WHERE id = 8")
-        ).one() == (None, None, None, 0)
+            text("SELECT title, description, tags, working_ready, working_revision FROM videos WHERE id = 8")
+        ).one() == (None, None, None, False, 0)
     command.check(config)
+    migrated_engine.dispose()
+
+    command.downgrade(config, "0003_video_working_state")
+    downgraded_readiness_engine = create_engine(database_url)
+    assert "working_ready" not in {
+        column["name"] for column in inspect(downgraded_readiness_engine).get_columns("videos")
+    }
+    downgraded_readiness_engine.dispose()
+
+    command.upgrade(config, "head")
+    reupgraded_engine = create_engine(database_url)
+    assert "working_ready" in {
+        column["name"] for column in inspect(reupgraded_engine).get_columns("videos")
+    }
+    with reupgraded_engine.connect() as connection:
+        assert bool(connection.execute(
+            text("SELECT working_ready FROM videos WHERE id = 7")
+        ).scalar_one()) is False
+    reupgraded_engine.dispose()
+
     command.downgrade(config, "0001_foundation")
     downgraded_engine = create_engine(database_url)
     downgraded_inspector = inspect(downgraded_engine)
@@ -175,5 +197,4 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
             text("SELECT internal_status FROM videos WHERE id = 7")
         ).scalar_one() == "DRAFT"
     downgraded_engine.dispose()
-    migrated_engine.dispose()
     legacy_engine.dispose()

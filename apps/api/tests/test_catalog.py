@@ -467,7 +467,12 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "description": "Snapshot description",
         "tags": "snapshot, tags",
     }
-    assert detail.json()["working"] == {"title": None, "description": None, "tags": None}
+    assert detail.json()["working"] == {
+        "title": None,
+        "description": None,
+        "tags": None,
+        "ready": False,
+    }
     assert detail.json()["effective"] == detail.json()["snapshot"]
     assert detail.json()["dirty"] is False
 
@@ -490,6 +495,7 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "",
         "description": "Local description",
         "tags": "local, tags",
+        "ready": False,
     }
     assert saved_item["effective"]["title"] == ""
     assert saved_item["base"] == saved_item["snapshot"]
@@ -562,6 +568,72 @@ def test_working_video_revision_prevents_lost_updates(client, test_database):
     assert stale.json()["detail"]["current"]["working"]["title"] == "First"
     with test_database() as db:
         assert db.get(Video, video_id).title == "First"
+
+
+def test_working_readiness_is_owner_scoped_and_revision_protected(client, test_database):
+    owner_id, owner_token = create_account(test_database, subject="readiness-owner")
+    other_id, _ = create_account(test_database, subject="readiness-other")
+    owner_channel_id, _, _ = create_channel(test_database, owner_id, "readiness-owner")
+    other_channel_id, _, _ = create_channel(test_database, other_id, "readiness-other")
+    with test_database() as db:
+        video = Video(
+            channel_id=owner_channel_id,
+            youtube_video_id="readiness-video",
+            internal_status=None,
+            youtube_title="YouTube title",
+            youtube_description="YouTube description",
+        )
+        foreign_video = Video(
+            channel_id=other_channel_id,
+            youtube_video_id="foreign-readiness-video",
+            internal_status=None,
+        )
+        db.add_all([video, foreign_video])
+        db.commit()
+        video_id = video.id
+        foreign_video_id = foreign_video.id
+
+    authorized_client(client, owner_token)
+    detail_url = f"/channels/{owner_channel_id}/videos/{video_id}"
+    initial = client.get(detail_url)
+    assert initial.status_code == 200
+    assert initial.json()["working"]["ready"] is False
+    assert initial.json()["snapshot"]["title"] == "YouTube title"
+
+    patch_url = f"{detail_url}/working"
+    headers = post_headers()
+    marked_ready = client.patch(
+        patch_url,
+        json={"revision": 0, "ready": True},
+        headers=headers,
+    )
+    assert marked_ready.status_code == 200
+    assert marked_ready.json()["working"]["ready"] is True
+    assert marked_ready.json()["revision"] == 1
+    assert marked_ready.json()["snapshot"] == initial.json()["snapshot"]
+    assert marked_ready.json()["dirty"] is False
+    assert marked_ready.json()["conflict"] is False
+
+    stale = client.patch(
+        patch_url,
+        json={"revision": 0, "ready": False},
+        headers=headers,
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["current"]["working"]["ready"] is True
+
+    foreign = client.patch(
+        f"/channels/{other_channel_id}/videos/{foreign_video_id}/working",
+        json={"revision": 0, "ready": True},
+        headers=headers,
+    )
+    assert foreign.status_code == 404
+
+    with test_database() as db:
+        persisted = db.get(Video, video_id)
+        assert persisted.working_ready is True
+        assert persisted.youtube_title == "YouTube title"
+        assert persisted.youtube_description == "YouTube description"
 
 
 def test_catalog_sync_after_local_edit_reports_snapshot_conflict(

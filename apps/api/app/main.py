@@ -64,6 +64,7 @@ class VideoWorkingPatch(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     description: str | None = None
     tags: str | None = None
+    ready: bool = False
 
 
 app.add_middleware(
@@ -709,6 +710,7 @@ def _video_working_item(video: Video) -> dict:
         "title": video.title,
         "description": video.description,
         "tags": video.tags,
+        "ready": video.working_ready,
     }
     base = {
         "title": video.working_base_title,
@@ -946,6 +948,9 @@ def patch_channel_video_working(
     values = {}
     for field in changed_fields:
         value = getattr(patch, field)
+        if field == "ready":
+            values["working_ready"] = value
+            continue
         values[field] = value
         base_field = f"working_base_{field}"
         if value is None:

@@ -116,6 +116,7 @@ class Video(Base):
     working_base_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     working_base_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     working_base_tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    working_ready: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     working_revision: Mapped[int] = mapped_column(default=0, server_default="0")
     youtube_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     youtube_description: Mapped[str | None] = mapped_column(Text, nullable=True)
