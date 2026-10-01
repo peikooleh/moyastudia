@@ -83,13 +83,44 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
                 "VALUES (7, 1, 'existing-video', 'DRAFT', 'Working title', 'Working description', 'tag')"
             )
         )
+        connection.execute(
+            text(
+                "INSERT INTO videos "
+                "(id, channel_id, youtube_video_id, internal_status, title, description, tags) "
+                "VALUES (8, 1, 'imported-video', 'DRAFT', '', '', '')"
+            )
+        )
+
+    command.upgrade(config, "0002_video_catalog")
+    with legacy_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE videos SET youtube_title = 'Snapshot title', "
+                "youtube_description = 'Snapshot description', "
+                "youtube_tags = '[\"snapshot\", \"tags\"]' WHERE id = 7"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE videos SET youtube_title = 'Imported title', "
+                "youtube_description = 'Imported description', "
+                "youtube_tags = '[\"imported\"]' WHERE id = 8"
+            )
+        )
 
     command.upgrade(config, "head")
     migrated_engine = create_engine(database_url)
     inspector = inspect(migrated_engine)
     video_columns = {column["name"]: column for column in inspector.get_columns("videos")}
     assert video_columns["internal_status"]["nullable"] is True
+    assert video_columns["title"]["nullable"] is True
+    assert video_columns["description"]["nullable"] is True
+    assert video_columns["tags"]["nullable"] is True
     assert "youtube_title" in video_columns
+    assert "working_base_title" in video_columns
+    assert "working_base_description" in video_columns
+    assert "working_base_tags" in video_columns
+    assert "working_revision" in video_columns
     assert "availability_status" in video_columns
     assert "channel_catalog_syncs" in inspector.get_table_names()
     with migrated_engine.connect() as connection:
@@ -111,6 +142,24 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
         assert connection.execute(
             text("SELECT COUNT(*) FROM channel_catalog_syncs")
         ).scalar_one() == 0
+        assert connection.execute(
+            text(
+                "SELECT title, description, tags, working_base_title, "
+                "working_base_description, working_base_tags, working_revision "
+                "FROM videos WHERE id = 7"
+            )
+        ).one() == (
+            "Working title",
+            "Working description",
+            "tag",
+            "Snapshot title",
+            "Snapshot description",
+            "snapshot, tags",
+            0,
+        )
+        assert connection.execute(
+            text("SELECT title, description, tags, working_revision FROM videos WHERE id = 8")
+        ).one() == (None, None, None, 0)
     command.check(config)
     command.downgrade(config, "0001_foundation")
     downgraded_engine = create_engine(database_url)

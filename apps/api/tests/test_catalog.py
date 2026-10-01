@@ -294,7 +294,7 @@ def test_reconcile_is_upserted_and_repeat_sync_does_not_duplicate(client, test_d
         assert len(rows) == 1
         assert rows[0].youtube_video_id == "same-video"
         assert rows[0].internal_status is None
-        assert rows[0].title == ""
+        assert rows[0].title is None
         assert rows[0].youtube_title == "same-video"
 
 
@@ -375,6 +375,14 @@ def test_successful_reconcile_deletes_only_absent_videos(client, test_database, 
             [
                 Video(channel_id=channel_id, youtube_video_id="present", internal_status=None),
                 Video(channel_id=channel_id, youtube_video_id="deleted", internal_status=None),
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="local-work",
+                    internal_status=None,
+                    youtube_title="Remote title",
+                    title="Local title",
+                    working_base_title="Remote title",
+                ),
             ]
         )
         db.commit()
@@ -389,9 +397,238 @@ def test_successful_reconcile_deletes_only_absent_videos(client, test_database, 
     assert response.json()["state"] == "COMPLETE"
 
     with test_database() as db:
-        assert [
-            video.youtube_video_id for video in db.query(Video).filter_by(channel_id=channel_id)
-        ] == ["present"]
+        rows = db.query(Video).filter_by(channel_id=channel_id).order_by(Video.id).all()
+        assert [video.youtube_video_id for video in rows] == ["present", "local-work"]
+        local_work = rows[1]
+        assert local_work.title == "Local title"
+        assert local_work.availability_status == "remote_missing"
+
+    missing = client.get(f"/channels/{channel_id}/videos?visibility=remote_missing")
+    assert missing.status_code == 200
+    assert missing.json()["items"][0]["status"] == "remote_missing"
+    assert missing.json()["items"][0]["remoteMissing"] is True
+
+
+def test_catalog_video_working_routes_require_authentication(
+    client, test_database
+):
+    user_id, _ = create_account(test_database)
+    channel_id, _, _ = create_channel(test_database, user_id)
+    with test_database() as db:
+        video = Video(
+            channel_id=channel_id,
+            youtube_video_id="private-video",
+            internal_status=None,
+        )
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    assert client.get(f"/channels/{channel_id}/videos/{video_id}").status_code == 401
+    assert client.patch(
+        f"/channels/{channel_id}/videos/{video_id}/working",
+        json={"revision": 0, "title": "Unauthorized"},
+        headers=post_headers(),
+    ).status_code == 401
+
+
+def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
+    client, test_database
+):
+    owner_id, owner_token = create_account(test_database, subject="working-owner")
+    other_id, _ = create_account(test_database, subject="working-other")
+    owner_channel_id, _, _ = create_channel(test_database, owner_id, "working-owner")
+    other_channel_id, _, _ = create_channel(test_database, other_id, "working-other")
+    with test_database() as db:
+        video = Video(
+            channel_id=owner_channel_id,
+            youtube_video_id="owned-video",
+            internal_status=None,
+            youtube_title="Snapshot title",
+            youtube_description="Snapshot description",
+            youtube_tags=["snapshot", "tags"],
+        )
+        foreign_video = Video(
+            channel_id=other_channel_id,
+            youtube_video_id="foreign-video",
+            internal_status=None,
+        )
+        db.add_all([video, foreign_video])
+        db.commit()
+        video_id = video.id
+        foreign_video_id = foreign_video.id
+
+    authorized_client(client, owner_token)
+    detail_url = f"/channels/{owner_channel_id}/videos/{video_id}"
+    detail = client.get(detail_url)
+    assert detail.status_code == 200
+    assert detail.json()["snapshot"] == {
+        "title": "Snapshot title",
+        "description": "Snapshot description",
+        "tags": "snapshot, tags",
+    }
+    assert detail.json()["working"] == {"title": None, "description": None, "tags": None}
+    assert detail.json()["effective"] == detail.json()["snapshot"]
+    assert detail.json()["dirty"] is False
+
+    headers = post_headers()
+    patch_url = f"{detail_url}/working"
+    saved = client.patch(
+        patch_url,
+        json={
+            "revision": 0,
+            "title": "",
+            "description": "Local description",
+            "tags": "local, tags",
+        },
+        headers=headers,
+    )
+    assert saved.status_code == 200
+    saved_item = saved.json()
+    assert saved_item["snapshot"]["title"] == "Snapshot title"
+    assert saved_item["working"] == {
+        "title": "",
+        "description": "Local description",
+        "tags": "local, tags",
+    }
+    assert saved_item["effective"]["title"] == ""
+    assert saved_item["base"] == saved_item["snapshot"]
+    assert saved_item["dirty"] is True
+    assert saved_item["revision"] == 1
+
+    with test_database() as db:
+        persisted = db.get(Video, video_id)
+        assert persisted.youtube_title == "Snapshot title"
+        assert persisted.youtube_description == "Snapshot description"
+        assert persisted.youtube_tags == ["snapshot", "tags"]
+
+    assert client.get(
+        f"/channels/{other_channel_id}/videos/{foreign_video_id}"
+    ).status_code == 404
+    assert client.get(
+        f"/channels/{owner_channel_id}/videos/{foreign_video_id}"
+    ).status_code == 404
+    assert client.patch(
+        f"/channels/{other_channel_id}/videos/{foreign_video_id}/working",
+        json={"revision": 0, "title": "Takeover"},
+        headers=headers,
+    ).status_code == 404
+    assert client.patch(
+        f"/channels/{owner_channel_id}/videos/{foreign_video_id}/working",
+        json={"revision": 0, "title": "Cross-channel"},
+        headers=headers,
+    ).status_code == 404
+
+    inherited = client.patch(
+        patch_url,
+        json={"revision": 1, "title": None},
+        headers=headers,
+    )
+    assert inherited.status_code == 200
+    assert inherited.json()["working"]["title"] is None
+    assert inherited.json()["effective"]["title"] == "Snapshot title"
+
+
+def test_working_video_revision_prevents_lost_updates(client, test_database):
+    user_id, token = create_account(test_database)
+    channel_id, _, _ = create_channel(test_database, user_id, "revision")
+    authorized_client(client, token)
+    with test_database() as db:
+        video = Video(
+            channel_id=channel_id,
+            youtube_video_id="revision-video",
+            internal_status=None,
+            youtube_title="Snapshot",
+        )
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    url = f"/channels/{channel_id}/videos/{video_id}/working"
+    headers = post_headers()
+    first = client.patch(url, json={"revision": 0, "title": "First"}, headers=headers)
+    stale = client.patch(url, json={"revision": 0, "title": "Stale overwrite"}, headers=headers)
+
+    assert first.status_code == 200
+    assert first.json()["revision"] == 1
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["current"]["working"]["title"] == "First"
+    with test_database() as db:
+        assert db.get(Video, video_id).title == "First"
+
+
+def test_catalog_sync_after_local_edit_reports_snapshot_conflict(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id, "conflict")
+    authorized_client(client, token)
+    with test_database() as db:
+        video = Video(
+            channel_id=channel_id,
+            youtube_video_id="conflict-video",
+            internal_status=None,
+            youtube_title="Original title",
+            youtube_description="Description",
+            youtube_tags=["one"],
+        )
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    detail_url = f"/channels/{channel_id}/videos/{video_id}"
+    edited = client.patch(
+        f"{detail_url}/working",
+        json={"revision": 0, "title": "Local title"},
+        headers=post_headers(),
+    )
+    assert edited.status_code == 200
+    monkeypatch.setattr(
+        main.yt,
+        "list_videos",
+        lambda refresh_token, selected_id, **kwargs: page(
+            selected_id,
+            ["conflict-video"],
+            details=[remote_video("conflict-video", selected_id, "Updated remotely")],
+        ),
+    )
+
+    assert start_sync(client, channel_id, "incremental").status_code == 200
+    assert continue_sync(client, channel_id).json()["state"] == "COMPLETE"
+    refreshed = client.get(detail_url).json()
+
+    assert refreshed["snapshot"]["title"] == "Updated remotely"
+    assert refreshed["working"]["title"] == "Local title"
+    assert refreshed["base"]["title"] == "Original title"
+    assert refreshed["dirtyFields"]["title"] is True
+    assert refreshed["conflictFields"]["title"] is True
+
+
+def test_video_detail_and_working_patch_require_the_owned_channel(
+    client, test_database
+):
+    owner_id, token = create_account(test_database, subject="inactive-video-owner")
+    channel_id, _, _ = create_channel(test_database, owner_id, "inactive-video", active=False)
+    with test_database() as db:
+        video = Video(
+            channel_id=channel_id,
+            youtube_video_id="inactive-video",
+            internal_status=None,
+            youtube_title="Snapshot",
+        )
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    authorized_client(client, token)
+    assert client.get(f"/channels/{channel_id}/videos/{video_id}").status_code == 200
+    patched = client.patch(
+        f"/channels/{channel_id}/videos/{video_id}/working",
+        json={"revision": 0, "title": "Local while offline"},
+        headers=post_headers(),
+    )
+    assert patched.status_code == 200
+    assert patched.json()["working"]["title"] == "Local while offline"
 
 
 def test_missing_video_details_mark_unavailable_not_deleted(client, test_database, monkeypatch):
@@ -472,6 +709,12 @@ def test_catalog_routes_require_authentication(client):
     ).status_code == 401
     assert client.post(
         "/channels/1/catalog/sync/continue",
+        headers=headers,
+    ).status_code == 401
+    assert client.get("/channels/1/videos/1").status_code == 401
+    assert client.patch(
+        "/channels/1/videos/1/working",
+        json={"revision": 0, "title": "Unauthorized"},
         headers=headers,
     ).status_code == 401
 

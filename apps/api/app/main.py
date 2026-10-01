@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -55,6 +55,15 @@ class ChannelSelection(BaseModel):
 
 class CatalogSyncRequest(BaseModel):
     mode: Literal["initial", "incremental", "reconcile"]
+
+
+class VideoWorkingPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    revision: int = Field(ge=0)
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    tags: str | None = None
 
 
 app.add_middleware(
@@ -653,6 +662,7 @@ def _video_catalog_item(video: Video) -> dict:
         "id": video.id,
         "youtubeId": video.youtube_video_id,
         "title": video.youtube_title or "",
+        "effectiveTitle": video.title if video.title is not None else video.youtube_title or "",
         "description": video.youtube_description or "",
         "tags": ", ".join(video.youtube_tags or []),
         "category": video.youtube_category_id or "",
@@ -663,6 +673,9 @@ def _video_catalog_item(video: Video) -> dict:
         "privacy": video.youtube_visibility or "",
         "slot": scheduled_at.isoformat(timespec="minutes") if scheduled_at else "",
         "status": (
+            "remote_missing"
+            if video.availability_status == "remote_missing"
+            else
             "unavailable"
             if video.availability_status == "unavailable"
             else "scheduled"
@@ -670,6 +683,7 @@ def _video_catalog_item(video: Video) -> dict:
             else video.youtube_visibility or "unknown"
         ),
         "availability": video.availability_status,
+        "remoteMissing": video.availability_status == "remote_missing",
         "thumb": video.youtube_thumbnail_url or "",
         "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
         "duration": video.youtube_duration or "",
@@ -681,13 +695,86 @@ def _video_catalog_item(video: Video) -> dict:
     }
 
 
+def _working_video_snapshot(video: Video) -> dict[str, str]:
+    return {
+        "title": video.youtube_title or "",
+        "description": video.youtube_description or "",
+        "tags": ", ".join(video.youtube_tags or []),
+    }
+
+
+def _video_working_item(video: Video) -> dict:
+    snapshot = _working_video_snapshot(video)
+    working = {
+        "title": video.title,
+        "description": video.description,
+        "tags": video.tags,
+    }
+    base = {
+        "title": video.working_base_title,
+        "description": video.working_base_description,
+        "tags": video.working_base_tags,
+    }
+    effective = {
+        field: working[field] if working[field] is not None else snapshot[field]
+        for field in ("title", "description", "tags")
+    }
+    dirty_fields = {
+        field: working[field] is not None and working[field] != snapshot[field]
+        for field in ("title", "description", "tags")
+    }
+    conflict_fields = {
+        field: (
+            working[field] is not None
+            and (base[field] or "") != snapshot[field]
+            and working[field] != snapshot[field]
+        )
+        for field in ("title", "description", "tags")
+    }
+    return {
+        "id": video.id,
+        "youtubeId": video.youtube_video_id,
+        "snapshot": snapshot,
+        "working": working,
+        "effective": effective,
+        "base": base,
+        "dirtyFields": dirty_fields,
+        "conflictFields": conflict_fields,
+        "dirty": any(dirty_fields.values()),
+        "conflict": any(conflict_fields.values()),
+        "revision": video.working_revision,
+        "availabilityStatus": video.availability_status,
+        "remoteMissing": video.availability_status == "remote_missing",
+    }
+
+
+def _catalog_video_or_404(
+    db: Session, user: User, channel_id: int, video_id: int
+) -> Video:
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    video = (
+        db.query(Video)
+        .filter(
+            Video.id == video_id,
+            Video.channel_id == channel.id,
+            Video.youtube_video_id.is_not(None),
+        )
+        .one_or_none()
+    )
+    if video is None:
+        raise HTTPException(404, "video not found")
+    return video
+
+
 @app.get("/channels/{channel_id}/videos")
 def channel_videos(
     channel_id: int,
     limit: int = Query(50, ge=1, le=50),
     cursor: str | None = None,
     q: str = Query("", max_length=200),
-    visibility: Literal["public", "private", "unlisted", "scheduled", "unavailable"] | None = None,
+    visibility: Literal[
+        "public", "private", "unlisted", "scheduled", "unavailable", "remote_missing"
+    ] | None = None,
     sort: Literal["date", "title", "status"] = "date",
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -715,6 +802,8 @@ def channel_videos(
         )
     elif visibility == "unavailable":
         query = query.filter(Video.availability_status == "unavailable")
+    elif visibility == "remote_missing":
+        query = query.filter(Video.availability_status == "remote_missing")
     elif visibility is not None:
         query = query.filter(
             Video.availability_status == "available",
@@ -724,6 +813,7 @@ def channel_videos(
     total = query.count()
     status_expression = case(
         (Video.availability_status == "unavailable", "unavailable"),
+        (Video.availability_status == "remote_missing", "remote_missing"),
         (Video.youtube_scheduled_at.is_not(None), "scheduled"),
         else_=func.coalesce(Video.youtube_visibility, Video.availability_status, "unknown"),
     )
@@ -817,6 +907,73 @@ def channel_videos(
             "latest": _video_catalog_item(latest) if latest else None,
         },
     }
+
+
+@app.get("/channels/{channel_id}/videos/{video_id}")
+def channel_video_detail(
+    channel_id: int,
+    video_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    video = _catalog_video_or_404(db, user, channel_id, video_id)
+    return _video_working_item(video)
+
+
+@app.patch(
+    "/channels/{channel_id}/videos/{video_id}/working",
+    dependencies=[Depends(require_same_origin)],
+)
+def patch_channel_video_working(
+    channel_id: int,
+    video_id: int,
+    patch: VideoWorkingPatch,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    video = _catalog_video_or_404(db, user, channel_id, video_id)
+    if video.working_revision != patch.revision:
+        raise HTTPException(
+            409,
+            detail={"code": "stale_revision", "current": _video_working_item(video)},
+        )
+
+    changed_fields = patch.model_fields_set - {"revision"}
+    if not changed_fields:
+        raise HTTPException(422, "provide at least one working field")
+
+    snapshot = _working_video_snapshot(video)
+    values = {}
+    for field in changed_fields:
+        value = getattr(patch, field)
+        values[field] = value
+        base_field = f"working_base_{field}"
+        if value is None:
+            values[base_field] = None
+        elif getattr(video, field) is None:
+            values[base_field] = snapshot[field]
+
+    values["working_revision"] = Video.working_revision + 1
+    updated = (
+        db.query(Video)
+        .filter(
+            Video.id == video.id,
+            Video.channel_id == video.channel_id,
+            Video.working_revision == patch.revision,
+        )
+        .update(values, synchronize_session=False)
+    )
+    if updated != 1:
+        db.rollback()
+        current = _catalog_video_or_404(db, user, channel_id, video_id)
+        raise HTTPException(
+            409,
+            detail={"code": "stale_revision", "current": _video_working_item(current)},
+        )
+
+    db.commit()
+    db.refresh(video)
+    return _video_working_item(video)
 
 
 @app.get("/channels/{channel_id}/catalog/status")
@@ -967,18 +1124,30 @@ def continue_catalog_sync(
         if incremental_overlap or not sync.next_page_token:
             if sync.mode == "reconcile":
                 db.flush()
-                (
-                    db.query(Video)
-                    .filter(
-                        Video.channel_id == channel.id,
-                        Video.youtube_video_id.is_not(None),
-                        or_(
-                            Video.last_seen_generation.is_(None),
-                            Video.last_seen_generation != sync.generation,
-                        ),
-                    )
-                    .delete(synchronize_session=False)
+                missing = db.query(Video).filter(
+                    Video.channel_id == channel.id,
+                    Video.youtube_video_id.is_not(None),
+                    or_(
+                        Video.last_seen_generation.is_(None),
+                        Video.last_seen_generation != sync.generation,
+                    ),
                 )
+                has_work = or_(
+                    Video.title.is_not(None),
+                    Video.description.is_not(None),
+                    Video.tags.is_not(None),
+                )
+                missing.filter(has_work).update(
+                    {Video.availability_status: "remote_missing"},
+                    synchronize_session=False,
+                )
+                missing.filter(
+                    and_(
+                        Video.title.is_(None),
+                        Video.description.is_(None),
+                        Video.tags.is_(None),
+                    )
+                ).delete(synchronize_session=False)
             sync.state = "EMPTY" if sync.scanned_count == 0 else "COMPLETE"
             sync.next_page_token = None
             sync.last_finished_at = now

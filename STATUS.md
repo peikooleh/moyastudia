@@ -4,21 +4,21 @@ Snapshot: 2026-10-01. This is the current implementation handoff; architecture a
 
 ## Project purpose
 
-MoyaStudia is a SaaS workspace for managing YouTube channels and content. YouTube remains the source of truth for published state and media files. The implemented product is currently read-only: it stores selected channels and a local metadata cache, not video files, and does not write content to YouTube.
+MoyaStudia is a SaaS workspace for managing YouTube channels and content. YouTube remains the source of truth for published state and media files. The product can now store local working title/description/tags for catalog videos; it still does not write content to YouTube or store video files.
 
 ## Current stage
 
-Foundation, Stage 2A/2B channel discovery/selection, and Stage 3 read-only video catalog/sync are implemented. The broader Stage 2 connection lifecycle (disconnect, revoke, reconnect retention) is incomplete. Stage 4 drafts/readiness and all YouTube write stages have not started.
+Foundation, Stage 2A/2B channel discovery/selection, Stage 3 read-only video catalog/sync, and Stage 4 local working metadata increment are in progress. Backend schema/API/reconcile protection are implemented; Studio editor integration is in progress. No YouTube write-back is implemented.
 
 ## Current git baseline
 
-Implementation baseline: `fa9c884` (`Fix catalog sync recovery`), on `main`; at this snapshot `main` matched `origin/main`. The documentation pass is separate from that implementation baseline. The temporary root file `промпт.txt` is not part of the repository handoff and must not be added to Git.
+Implementation baseline before Stage 4: `e4c1356` (`Harden playlist scope and ownership regression tests`), on `main`. The temporary root file `промпт.txt` is modified in the working tree; do not stage, rewrite, or restore it.
 
 ## Actual architecture
 
 - `apps/web`: Next.js 15.5.27 App Router, React 19.3.0. `app/` contains landing, onboarding, Cabinet, Studio and shared UI; `lib/` contains API/preferences/localization/catalog helpers.
 - `apps/api`: FastAPI, SQLAlchemy and Google OAuth/YouTube client. `app/main.py` owns routes and authorization; `app/youtube.py` owns Google/YouTube API calls; `security.py` owns sessions/OAuth state; `tokens.py` encrypts refresh tokens.
-- `apps/api/migrations/versions`: Alembic revisions `0001_foundation` and `0002_video_catalog`.
+- `apps/api/migrations/versions`: Alembic revisions `0001_foundation` and `0002_video_catalog`; Stage 4 migration is pending.
 - Tests: `apps/api/tests`; `apps/web/tests/studio-catalog.test.mjs`.
 - CI: `.github/workflows/ci.yml` runs backend pytest and frontend catalog tests, lint and build on pull requests.
 
@@ -69,6 +69,8 @@ Other implemented connection routes include `GET /google-connections/{connection
 - Encrypted Google/YouTube refresh-token storage and owner-scoped API access.
 - Google connection reuse, paginated channel discovery and explicit channel selection.
 - Read-only video cache, catalog status, DB pagination/filtering, initial/incremental/reconcile sync and LOADING resume.
+- Stage 4 backend local overrides/bases/revision for title/description/tags, owner-scoped video detail/PATCH, and reconcile protection for local work.
+- Local title/description/tags overrides for existing catalog videos, base snapshot tracking, revision-checked save and reconcile retention for locally edited remote-missing videos.
 - Studio catalog/calendar cache views, onboarding, Cabinet settings and en/ru/uk UI localization.
 - Alembic-managed schema and PR CI for backend/frontend checks.
 
@@ -77,13 +79,13 @@ Other implemented connection routes include `GET /google-connections/{connection
 - Apple OAuth/login; channel disconnect/revoke/reconnect retention and automatic data cleanup.
 - YouTube write operations: video upload/edit/publish/schedule, metadata/branding mutation or playlist mutation.
 - Playlist membership synchronization/cache; the playlist API currently returns only playlist ID/title.
-- Draft lifecycle/TTL, readiness rules, templates, media storage, comments, analytics, billing, teams/roles.
+- Local working edit state for catalog Video is in progress; draft lifecycle/TTL, readiness rules, templates, media storage, comments, analytics, billing, teams/roles remain unimplemented.
 - Background workers, continuous polling, and permanent video/media-file storage.
 
 ## Known technical issues
 
 - `DELETE /channels/{id}` is a placeholder that returns 409; the planned connection lifecycle is unfinished.
-- Playlist listing uses the connected Google account (`mine=True`) and returns only ID/title; it is not a selected-channel playlist membership cache. Studio fields beyond those returned may be empty.
+- Playlist listing is channel-scoped in the current worktree and returns only ID/title; it is not a playlist membership cache. Studio fields beyond those returned may be empty.
 - `0001_foundation` drops pre-existing prototype `channels` and `videos` tables without migrating their data. Use a fresh/verified database and backup before applying migrations to any existing database.
 - `next lint` is deprecated for Next.js 16; current lint/build report existing `<img>` and custom-font warnings. Backend tests report FastAPI/Starlette deprecation warnings.
 - Production Google OAuth, real YouTube quota behavior, and migration deployment against the configured production PostgreSQL database have not been verified.
@@ -92,7 +94,7 @@ Other implemented connection routes include `GET /google-connections/{connection
 
 Verified on 2026-10-01:
 
-- Backend: `apps/api/.venv/Scripts/python.exe -m pytest` from `apps/api` — **34 passed** (3 deprecation warnings).
+- Backend: `apps/api/.venv/Scripts/python.exe -m pytest` from `apps/api` — **38 passed** (3 deprecation warnings) after security/playlist hardening; Stage 4 tests pending.
 - Frontend catalog: `node --test tests/studio-catalog.test.mjs` from `apps/web` — **5 passed**.
 - `npm run lint` from `apps/web` — passed with the warnings listed above.
 - `npm run build` from `apps/web` — passed with the same existing frontend warnings.
@@ -106,10 +108,9 @@ The application is read-only with respect to YouTube. Full Cabinet/Studio flows 
 
 ## Next development steps
 
-1. Define and implement the remaining Stage 2 channel disconnect/revoke/reconnect-retention lifecycle; start with API behavior and ownership/retention tests because the current delete route is deliberately unavailable.
-2. Decide whether Stage 3 needs a read-only playlist membership/cache model; if approved, define its channel scope and API contract before UI work.
-3. Only after those scopes are agreed, begin Stage 4 draft/readiness work from the product architecture, with tests for lifecycle and readiness rules.
-4. Before production rollout, validate Alembic upgrade on a disposable PostgreSQL database and perform a real OAuth/YouTube smoke test without exposing credentials.
+1. Complete the Stage 4 first increment: local title/description/tags overrides, base snapshot/revision, owner-scoped detail/PATCH, Studio local save, and reconcile protection for dirty remote-missing videos. No YouTube writes.
+2. Decide later whether to implement channel disconnect/revoke/reconnect retention and playlist membership caching.
+3. Before production rollout, validate Alembic upgrade on a disposable PostgreSQL database and perform a real OAuth/YouTube smoke test without exposing credentials.
 
 ## Handoff instructions
 
@@ -117,7 +118,11 @@ The application is read-only with respect to YouTube. Full Cabinet/Studio flows 
 - Inspect `git status`, the owning code and nearby tests before work. Never add the temporary `промпт.txt` file.
 - Do not read or print `.env`, `.env.local`, OAuth secrets, tokens or database credentials. Use `.env.example` for variable names.
 - Run Alembic only against a known safe database; the foundation migration removes legacy prototype tables.
-- Keep changes incremental. Do not add YouTube write scopes/operations, dependencies, workers or architectural layers without explicit task scope. Do not commit/push unless asked.# Статус MoyaStudia
+- Keep changes incremental. Do not add YouTube write scopes/operations, dependencies, workers or architectural layers without explicit task scope. Do not commit/push unless asked.
+
+## Historical status notes (superseded by the handoff above)
+
+The following older entries are retained only as project history. Do not use their stage, environment, test-count or implementation claims as current facts.
 
 Дата среза: 2026-09-30. Обкатка на каналах MoyaMova (несколько брендов DE/UK/EN на одном Google).
 
@@ -316,3 +321,18 @@ Security:
 - Реальная проверка Google OAuth и YouTube недоступна без подключения реального API; интерфейсный smoke использовал mock responses.
 - Python dependency vulnerability audit требует отдельно добавить/запустить `pip-audit`; пакет не устанавливался в рамках косметического задания.
 - Изменения оставлены незакоммиченными; commit/push не выполнялись.
+
+## Stage 4 status — first increment in progress
+
+- Current milestone: Stage 4 backend schema, detail/PATCH API, reconcile protection and backend tests are implemented in the worktree. Studio editor integration is in progress. No Stage 4 changes are committed yet.
+- Working semantics implemented in schema: nullable `title`, `description`, `tags` are local overrides; `NULL` inherits the YouTube snapshot and `""` is an explicit local clear. Per-field base snapshot columns and monotonically increasing `working_revision` are present.
+- Reconcile requirement: after a complete successful scan, retain videos with local work and mark them remote-missing; rows without local work keep existing deletion behavior. Partial/failed reconcile remains non-destructive.
+- Migration/API: `0003_video_working_state` adds nullable overrides, base values and revision; `GET /channels/{channel_id}/videos/{video_id}` and `PATCH /channels/{channel_id}/videos/{video_id}/working` are owner-scoped. Revision mismatch returns 409 with current state. Migration upgrade/downgrade is covered on SQLite; it has not been applied to real PostgreSQL.
+- Successful full reconcile preserves any video with a non-NULL local override and marks it `remote_missing`; clean absent catalog rows retain deletion behavior.
+- Implemented fields: title, description and tags only. PATCH does not accept snapshot or any other fields. No YouTube write-back, drafts, playlist mutations or other editable fields.
+- Backend increment files: `apps/api/app/models.py`, `apps/api/app/main.py`, `apps/api/migrations/versions/0003_video_working_state.py`, `apps/api/tests/test_auth.py`, `apps/api/tests/test_catalog.py`, `apps/api/tests/test_migrations.py`.
+- Backend verification: pytest **43 passed** (3 deprecation warnings), including migration upgrade/downgrade, ownership, snapshot, revision, sync-conflict and reconcile-retention tests.
+- Frontend work in progress: `apps/web/app/studio.js`, `apps/web/app/globals.css`, `apps/web/lib/catalog-state.mjs`, `apps/web/lib/i18n.js`, `apps/web/tests/studio-catalog.test.mjs`.
+- Last frontend tests: catalog tests **9 passed**. Lint/build passed before the latest helper/style changes and must be rerun before completion.
+- Latest implementation commit: hardening commit `e4c1356`; Stage 4 changes are uncommitted.
+- Exact next task: commit the verified backend increment separately, finish Studio local save/snapshot/status UI, then run all required suites and commit the frontend/tests/status checkpoint separately.
