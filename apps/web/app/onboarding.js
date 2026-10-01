@@ -26,15 +26,25 @@ export function Onboarding({ youtubeConnected = false }) {
     <div className="onb">
       <div className="onb-card">
         <div className="onb-logo">{t(uiLang, "brand")}</div>
-        <div className="onb-dots">
-          {[0, 1, 2].map((n) => (
-            <i key={n} className={n <= step ? "on" : ""} />
-          ))}
+        <div
+          className="onb-dots"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={3}
+          aria-valuenow={step + 1}
+          aria-label={t(uiLang, "onboardingStep", {
+            current: step + 1,
+            total: 3,
+            name: t(uiLang, ["stepLanguage", "stepAppearance", "stepConnect"][step]),
+          })}
+        >
+          {[0, 1, 2].map((n) => <i key={n} className={n <= step ? "on" : ""} />)}
         </div>
 
         {step === 0 && (
           <>
             <h1>{t(uiLang, "uiLangTitle")}</h1>
+            <p className="onb-hint">{t(uiLang, "languageHint")}</p>
             <div className="choices">
               {UI_LANGS.filter((l) => l.id !== "auto").map((lang) => (
                 <button
@@ -58,6 +68,7 @@ export function Onboarding({ youtubeConnected = false }) {
         {step === 1 && (
           <>
             <h1>{t(uiLang, "themeTitle")}</h1>
+            <p className="onb-hint">{t(uiLang, "appearanceHint")}</p>
             <ThemePicker />
             <div className="actions">
               <button className="btn ghost" type="button" onClick={() => setStep(0)}>
@@ -73,7 +84,15 @@ export function Onboarding({ youtubeConnected = false }) {
         {step === 2 && !main && (
           <>
             <h1>{t(uiLang, "connectTitle")}</h1>
+            <p className="onb-hint">{t(uiLang, "connectHint")}</p>
             {youtubeConnected ? <p>{t(uiLang, "connectionSaved")}</p> : null}
+            <div className="onb-readonly" title={t(uiLang, "secureReadOnlyHint")}>
+              <span aria-hidden="true">RO</span>
+              <div>
+                <strong>{t(uiLang, "secureReadOnly")}</strong>
+                <small>{t(uiLang, "secureReadOnlyHint")}</small>
+              </div>
+            </div>
             <div className="actions">
               <button className="btn ghost" type="button" onClick={() => setStep(1)}>
                 {t(uiLang, "back")}
@@ -94,6 +113,7 @@ export function Onboarding({ youtubeConnected = false }) {
         {step === 2 && main && (
           <>
             <h1>{t(uiLang, "channelLangTitle")}</h1>
+            <p className="onb-hint">{t(uiLang, "channelLanguageHint")}</p>
             <div className="onb-channel">{main.title}</div>
             <div className="choices">
               {CHANNEL_LANGS.map((lang) => (

@@ -18,11 +18,13 @@ export function PrefsProvider({ children }) {
     const loaded = loadPrefs();
     setPrefs(loaded);
     applyTheme(resolveTheme(loaded));
+    document.documentElement.lang = resolveUiLang(loaded);
   }, []);
 
   useEffect(() => {
     if (!prefs) return;
     applyTheme(resolveTheme(prefs));
+    document.documentElement.lang = resolveUiLang(prefs);
   }, [prefs]);
 
   const api = useMemo(() => {

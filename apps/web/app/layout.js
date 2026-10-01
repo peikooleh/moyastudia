@@ -3,7 +3,7 @@ import { PrefsProvider } from "./providers";
 
 export const metadata = {
   title: "MoyaStudia",
-  description: "Кабинет и студия канала",
+  description: "MoyaStudia | YouTube workspace",
 };
 
 export default function RootLayout({ children }) {

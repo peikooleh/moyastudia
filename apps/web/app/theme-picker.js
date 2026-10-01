@@ -4,9 +4,9 @@ import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 
 const ITEMS = [
-  { id: "auto", key: "themeAuto" },
-  { id: "light", key: "themeLight" },
-  { id: "dark", key: "themeDark" },
+  { id: "auto", key: "themeAuto", hint: "themeAutoHint" },
+  { id: "light", key: "themeLight", hint: "themeLightHint" },
+  { id: "dark", key: "themeDark", hint: "themeDarkHint" },
 ];
 
 export function ThemePicker() {
@@ -17,7 +17,7 @@ export function ThemePicker() {
         <button
           key={item.id}
           type="button"
-          title={t(uiLang, item.key)}
+          title={t(uiLang, item.hint)}
           className={`opt ${prefs.theme === item.id ? "on" : ""}`}
           onClick={() => update({ theme: item.id })}
         >

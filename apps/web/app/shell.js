@@ -46,6 +46,7 @@ export function Shell({ children }) {
           href="/cabinet"
           className="icon-btn"
           title={t(uiLang, "tipGear")}
+          aria-label={t(uiLang, "tipGear")}
         >
           {"\u2699"}
         </Link>

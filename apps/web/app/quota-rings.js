@@ -1,19 +1,25 @@
 "use client";
 
 import { RadialBar, RadialBarChart } from "recharts";
+import { t } from "../lib/i18n";
+import { usePrefs } from "./providers";
 
 export function QuotaRings({ editsCap, editsUsed, uploadsCap, uploadsUsed }) {
+  const { uiLang } = usePrefs();
   const editsLeft = Math.max(0, editsCap - editsUsed);
   const upLeft = Math.max(0, uploadsCap - uploadsUsed);
   const ePct = editsCap ? Math.round((editsLeft / editsCap) * 100) : 0;
   const uPct = uploadsCap ? Math.round((upLeft / uploadsCap) * 100) : 0;
   const data = [
-    { name: "uploads", value: uPct, fill: "#3b6fd6" },
-    { name: "edits", value: ePct, fill: "#ff0000" },
+    { name: "uploads", value: uPct, fill: "var(--info)" },
+    { name: "edits", value: ePct, fill: "var(--accent)" },
   ];
   return (
-    <div className="quota" title={`правки ${editsLeft}/${editsCap}, загрузки ${upLeft}/${uploadsCap}`}>
-      <div className="quota-title">Квота дня</div>
+    <div
+      className="quota"
+      title={`${t(uiLang, "quotaEdits", { left: editsLeft, cap: editsCap })}, ${t(uiLang, "quotaUploads", { left: upLeft, cap: uploadsCap })}`}
+    >
+      <div className="quota-title">{t(uiLang, "quotaTitle")}</div>
       <div className="quota-row">
         <RadialBarChart
           width={120}
@@ -38,12 +44,12 @@ export function QuotaRings({ editsCap, editsUsed, uploadsCap, uploadsUsed }) {
         </RadialBarChart>
         <ul>
           <li>
-            <i className="dot red" />
-            правки {editsLeft}/{editsCap}
+            <i className="dot edit" />
+            {t(uiLang, "quotaEdits", { left: editsLeft, cap: editsCap })}
           </li>
           <li>
-            <i className="dot blue" />
-            загрузки {upLeft}/{uploadsCap}
+            <i className="dot upload" />
+            {t(uiLang, "quotaUploads", { left: upLeft, cap: uploadsCap })}
           </li>
         </ul>
       </div>

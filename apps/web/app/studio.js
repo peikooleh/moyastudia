@@ -3,25 +3,49 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { catalogVideosUrl, isCurrentCatalogRequest } from "../lib/catalog-state.mjs";
+import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 
 const VIEWS = [
-  { id: "catalog", label: "Каталог" },
-  { id: "playlists", label: "Плейлисты" },
-  { id: "grid", label: "Сетка" },
+  { id: "catalog", key: "catalogTab" },
+  { id: "playlists", key: "playlistsTab" },
+  { id: "grid", key: "calendarTab" },
 ];
 const FILTERS = [
-  { id: "all", label: "Все" },
-  { id: "public", label: "Public" },
-  { id: "private", label: "Private" },
-  { id: "unlisted", label: "Unlisted" },
-  { id: "scheduled", label: "Сетка" },
+  { id: "all", key: "filterAll" },
+  { id: "public", key: "filterPublic" },
+  { id: "private", key: "filterPrivate" },
+  { id: "unlisted", key: "filterUnlisted" },
+  { id: "scheduled", key: "filterScheduled" },
+  { id: "unavailable", key: "filterUnavailable" },
 ];
 const SORTS = [
-  { id: "date", label: "Дата" },
-  { id: "title", label: "Название" },
-  { id: "status", label: "Статус" },
+  { id: "date", key: "sortDate" },
+  { id: "title", key: "sortTitle" },
+  { id: "status", key: "sortStatus" },
 ];
+
+const WEEKDAY_KEYS = ["dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat", "daySun"];
+
+function statusLabel(uiLang, status) {
+  const key = {
+    public: "filterPublic",
+    private: "filterPrivate",
+    unlisted: "filterUnlisted",
+    scheduled: "filterScheduled",
+    unavailable: "filterUnavailable",
+  }[status];
+  return key ? t(uiLang, key) : status || "—";
+}
+
+function readinessLabel(uiLang, light) {
+  const key = {
+    green: "readinessGood",
+    yellow: "readinessPartial",
+    red: "readinessMissing",
+  }[light];
+  return t(uiLang, key || "readinessMissing");
+}
 
 function lightOf(v) {
   if (!v) return "red";
@@ -44,7 +68,7 @@ function monthMatrix(anchor) {
 }
 
 export function Studio() {
-  const { prefs } = usePrefs();
+  const { prefs, uiLang } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
   const [view, setView] = useState("catalog");
   const [videos, setVideos] = useState([]);
@@ -72,7 +96,9 @@ export function Studio() {
   const catalogRequestId = useRef(0);
   const syncRunId = useRef(0);
   const channelIdRef = useRef(channelId);
+  const uiLangRef = useRef(uiLang);
   channelIdRef.current = channelId;
+  uiLangRef.current = uiLang;
 
   useEffect(() => {
     const requestId = ++channelRequestId.current;
@@ -94,7 +120,7 @@ export function Studio() {
     apiFetch(`/channels/${channelId}/catalog/status`)
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "Не удалось загрузить состояние каталога");
+        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioChannelLoadError"));
         return data;
       })
       .then((data) => {
@@ -130,7 +156,7 @@ export function Studio() {
     apiFetch(catalogVideosUrl(channelId, { filter, query, sort }), { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "Не удалось загрузить каталог");
+        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCatalogLoadError"));
         return data;
       })
       .then((data) => {
@@ -183,7 +209,7 @@ export function Studio() {
     )
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "Не удалось загрузить каталог месяца");
+        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
         return data;
       })
       .then((data) => {
@@ -209,7 +235,7 @@ export function Studio() {
         catalogVideosUrl(channelId, { cursor: nextCursor, filter, query, sort }),
       );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Не удалось загрузить следующую страницу");
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "studioNextPageError"));
       if (!isCurrentCatalogRequest(channelId, channelIdRef.current, requestId, catalogRequestId.current)) return;
       setVideos((current) => [...current, ...(data.items || [])]);
       setNextCursor(data.next_cursor || null);
@@ -239,7 +265,7 @@ export function Studio() {
         }),
       );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Не удалось загрузить следующую страницу");
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "studioCalendarLoadError"));
       if (!isCurrentCatalogRequest(channelId, channelIdRef.current, requestId, channelRequestId.current)) return;
       setCalendarVideos((current) => [...current, ...(data.items || [])]);
       setCalendarCursor(data.next_cursor || null);
@@ -266,7 +292,7 @@ export function Studio() {
         body: JSON.stringify({ mode }),
       });
       let status = await startResponse.json();
-      if (!startResponse.ok) throw new Error(status.detail || "Не удалось запустить синхронизацию");
+      if (!startResponse.ok) throw new Error(status.detail || t(uiLang, "studioSyncStartError"));
       if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
       setCatalogStatus(status);
 
@@ -276,24 +302,24 @@ export function Studio() {
           method: "POST",
         });
         status = await response.json();
-        if (!response.ok) throw new Error(status.detail || "Синхронизация каталога прервана");
+        if (!response.ok) throw new Error(status.detail || t(uiLang, "studioSyncFailed"));
         if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
         setCatalogStatus(status);
 
         const pageRequestId = catalogRequestId.current;
-          const pageResponse = await apiFetch(catalogVideosUrl(channelId, { filter, query, sort }));
+        const pageResponse = await apiFetch(catalogVideosUrl(channelId, { filter, query, sort }));
         const data = await pageResponse.json();
-        if (!pageResponse.ok) throw new Error(data.detail || "Не удалось загрузить каталог");
-          if (
-            !isCurrentCatalogRequest(channelId, channelIdRef.current, runId, syncRunId.current)
-            || pageRequestId !== catalogRequestId.current
-          ) return;
-          setVideos(data.items || []);
-          setNextCursor(data.next_cursor || null);
-          setCatalogTotal(data.total || 0);
-          setStatusCounts(data.status_counts || {});
-          setCatalogSummary(data.summary || {});
-          setSelectedId(data.items?.[0]?.id || "");
+        if (!pageResponse.ok) throw new Error(data.detail || t(uiLang, "studioPageReadError"));
+        if (
+          !isCurrentCatalogRequest(channelId, channelIdRef.current, runId, syncRunId.current)
+          || pageRequestId !== catalogRequestId.current
+        ) return;
+        setVideos(data.items || []);
+        setNextCursor(data.next_cursor || null);
+        setCatalogTotal(data.total || 0);
+        setStatusCounts(data.status_counts || {});
+        setCatalogSummary(data.summary || {});
+        setSelectedId(data.items?.[0]?.id || "");
       }
     } catch (error) {
       if (runId === syncRunId.current && channelIdRef.current === channelId) {
@@ -337,21 +363,36 @@ export function Studio() {
         )}
         <div className="channel-banner">
           {ch && ch.banner_url ? (
-            <img referrerPolicy="no-referrer" src={ch.banner_url} alt="" />
+            <img referrerPolicy="no-referrer" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} />
           ) : null}
         </div>
         <div className="studio-stats">
-          <div>{["public", "private", "unlisted", "scheduled"].map((k) => `${k} ${counts[k] || 0}`).join(" · ")}</div>
-          <div title={upcoming ? upcoming.title : ""}>ближайшая {upcoming ? upcoming.slot.replace("T", " ") : "—"}</div>
-          <div title={last ? last.title : ""}>последняя {last ? last.publishedAt.replace("T", " ") : "—"}</div>
-          <div>квота правок {quotaLeft}/{prefs.dailyEdits || 20}</div>
+          <div>{["public", "private", "unlisted", "scheduled", "unavailable"].map((key) =>
+            `${t(uiLang, FILTERS.find((item) => item.id === key)?.key || "filterAll")} ${counts[key] || 0}`
+          ).join(" · ")}</div>
+          <div title={upcoming ? upcoming.title : ""}>
+            {t(uiLang, "upcomingVideo")} {upcoming ? upcoming.slot.replace("T", " ") : "—"}
+          </div>
+          <div title={last ? last.title : ""}>
+            {t(uiLang, "latestVideo")} {last ? last.publishedAt.replace("T", " ") : "—"}
+          </div>
+          <div title={t(uiLang, "quotaRemaining")}>
+            {t(uiLang, "quotaEdits", { left: quotaLeft, cap: prefs.dailyEdits || 20 })}
+          </div>
         </div>
       </div>
 
       <div className="studio-tabs">
         {VIEWS.map((v) => (
-          <button key={v.id} type="button" className={view === v.id ? "on" : ""} onClick={() => setView(v.id)}>
-            {v.label}
+          <button
+            key={v.id}
+            type="button"
+            className={view === v.id ? "on" : ""}
+            title={t(uiLang, "catalogViewTitle", { view: t(uiLang, v.key) })}
+            aria-pressed={view === v.id}
+            onClick={() => setView(v.id)}
+          >
+            {t(uiLang, v.key)}
           </button>
         ))}
       </div>
@@ -362,31 +403,41 @@ export function Studio() {
           <div>
             <strong>
               {{
-                NOT_IMPORTED: "Каталог ещё не загружен",
-                LOADING: "Загружаем каталог",
-                PARTIAL: "Импорт продолжается",
-                COMPLETE: "Каталог актуален",
-                STALE: "Показан сохранённый каталог",
-                ERROR: "Не удалось загрузить каталог",
-                EMPTY: "На канале пока нет видео",
-              }[catalogStatus.state] || "Состояние каталога неизвестно"}
+                NOT_IMPORTED: "catalogNotImported",
+                LOADING: "catalogLoading",
+                PARTIAL: "catalogPartial",
+                COMPLETE: "catalogComplete",
+                STALE: "catalogStale",
+                ERROR: "catalogError",
+                EMPTY: "catalogEmpty",
+              }[catalogStatus.state]
+                ? t(uiLang, {
+                    NOT_IMPORTED: "catalogNotImported",
+                    LOADING: "catalogLoading",
+                    PARTIAL: "catalogPartial",
+                    COMPLETE: "catalogComplete",
+                    STALE: "catalogStale",
+                    ERROR: "catalogError",
+                    EMPTY: "catalogEmpty",
+                  }[catalogStatus.state])
+                : t(uiLang, "catalogUnknown")}
             </strong>
             {catalogStatus.video_count > 0 ? (
-              <span>{catalogStatus.video_count} видео в кэше</span>
+              <span>{t(uiLang, "catalogCacheCount", { count: catalogStatus.video_count })}</span>
             ) : null}
             {["LOADING", "PARTIAL"].includes(catalogStatus.state) ? (
-              <span>Обработано записей: {catalogStatus.scanned_count || 0}</span>
+              <span>{t(uiLang, "catalogScannedCount", { count: catalogStatus.scanned_count || 0 })}</span>
             ) : null}
             {catalogStatus.last_success_at ? (
-              <span>Последнее обновление: {catalogStatus.last_success_at.replace("T", " ").slice(0, 16)}</span>
+              <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
             ) : null}
             {catalogStatus.last_error_code ? (
-              <span role="alert">Последняя ошибка: {catalogStatus.last_error_code}</span>
+              <span role="alert">{t(uiLang, "catalogErrorCode", { code: catalogStatus.last_error_code })}</span>
             ) : null}
           </div>
           {catalogStatus.state === "NOT_IMPORTED" ? (
-            <button className="btn" type="button" disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
-              {syncBusy ? "Загружаем..." : "Загрузить каталог"}
+            <button className="btn" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
+              {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
             </button>
           ) : null}
           {["PARTIAL", "ERROR"].includes(catalogStatus.state) ? (
@@ -396,7 +447,7 @@ export function Studio() {
               disabled={syncBusy}
               onClick={() => runCatalogSync(catalogStatus.mode || "initial")}
             >
-              {syncBusy ? "Продолжаем..." : "Продолжить импорт"}
+              {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogContinue")}
             </button>
           ) : null}
           {["COMPLETE", "STALE", "EMPTY"].includes(catalogStatus.state) ? (
@@ -407,54 +458,56 @@ export function Studio() {
                 disabled={syncBusy}
                 onClick={() => runCatalogSync(catalogStatus.mode || "reconcile")}
               >
-                {syncBusy ? "Продолжаем..." : "Продолжить синхронизацию"}
+                {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogResume")}
               </button>
             ) : (
               <>
                 <button
                   className="btn ghost"
                   type="button"
+                  title={t(uiLang, "tipRefreshCatalog")}
                   disabled={syncBusy}
                   onClick={() => runCatalogSync("incremental")}
                 >
-                  {syncBusy ? "Проверяем..." : "Обновить каталог"}
+                  {syncBusy ? t(uiLang, "catalogRefreshing") : t(uiLang, "catalogRefresh")}
                 </button>
                 <button
                   className="btn ghost"
                   type="button"
+                  title={t(uiLang, "tipReconcileCatalog")}
                   disabled={syncBusy}
                   onClick={() => runCatalogSync("reconcile")}
                 >
-                  Полная сверка
+                  {t(uiLang, "catalogReconcile")}
                 </button>
               </>
             )
           ) : null}
-          {syncBusy ? <span role="status">Загрузка продолжается по страницам...</span> : null}
+          {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
         </section>
         <div className="studio">
           <aside className="studio-list">
             <div className="studio-tools">
               {FILTERS.map((f) => (
-                <button key={f.id} type="button" className={`chip ${filter === f.id ? "active" : ""}`} onClick={() => setFilter(f.id)}>
-                  {f.label}
+                <button key={f.id} type="button" title={t(uiLang, "tipFilterCatalog")} aria-pressed={filter === f.id} className={`chip ${filter === f.id ? "active" : ""}`} onClick={() => setFilter(f.id)}>
+                  {t(uiLang, f.key)}
                 </button>
               ))}
-              <select value={sort} onChange={(e) => setSort(e.target.value)} title="Сортировка">
+              <select value={sort} onChange={(e) => setSort(e.target.value)} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
                 {SORTS.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                  <option key={s.id} value={s.id}>{t(uiLang, s.key)}</option>
                 ))}
               </select>
-              <input className="search" placeholder="поиск" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
             <div className="list">
               {err ? <div className="empty">{err}</div> : null}
-              {loadingVideos ? <div className="empty">Загрузка кэша...</div> : null}
+              {loadingVideos ? <div className="empty">{t(uiLang, "catalogLoadCache")}</div> : null}
               {!loadingVideos && catalogStatus.state === "EMPTY" ? (
-                <div className="empty">На выбранном канале нет видео.</div>
+                <div className="empty">{t(uiLang, "catalogEmptyHint")}</div>
               ) : null}
               {!loadingVideos && catalogStatus.state === "NOT_IMPORTED" ? (
-                <div className="empty">Нажмите «Загрузить каталог», чтобы начать импорт.</div>
+                <div className="empty">{t(uiLang, "catalogImportPrompt")}</div>
               ) : null}
               {videos.map((v) => (
                 <button
@@ -465,14 +518,16 @@ export function Studio() {
                 >
                   <div className="item-title">{v.title}</div>
                   <div className="item-meta">
-                    <span>{v.status}</span>
+                    <span>{statusLabel(uiLang, v.status)}</span>
                     <span>{(v.slot || v.publishedAt || "").replace("T", " ")}</span>
                   </div>
                 </button>
               ))}
               {nextCursor ? (
                 <button className="btn ghost" type="button" disabled={loadingMore} onClick={loadMoreCatalog}>
-                  {loadingMore ? "Загружаем..." : `Загрузить ещё (${Math.max(catalogTotal - videos.length, 0)})`}
+                  {loadingMore
+                    ? t(uiLang, "catalogLoadingMore")
+                    : t(uiLang, "catalogLoadMore", { count: Math.max(catalogTotal - videos.length, 0) })}
                 </button>
               ) : null}
             </div>
@@ -481,45 +536,47 @@ export function Studio() {
             {!selected ? (
               <div className="empty">
                 {catalogStatus.state === "EMPTY"
-                  ? "На выбранном канале нет видео."
+                  ? t(uiLang, "catalogEmptyHint")
                   : catalogStatus.state === "NOT_IMPORTED"
-                    ? "Загрузите каталог, чтобы увидеть видео."
-                    : "Выберите ролик"}
+                      ? t(uiLang, "catalogSelectVideo")
+                    : t(uiLang, "catalogSelectVideo")}
               </div>
             ) : (
               <>
-                {selected.thumb ? <img className="cover" src={selected.thumb} alt="" /> : null}
-                <div className={`light ${light}`}>{light}</div>
+                {selected.thumb ? <img className="cover" src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
+                <div className={`light ${light}`} title={readinessLabel(uiLang, light)}>
+                  {readinessLabel(uiLang, light)}
+                </div>
                 <h2>{selected.title}</h2>
                 <div className="meta-grid">
-                  <label>Title<input value={selected.title} readOnly /></label>
-                  <label>Язык<input value={selected.language || "—"} readOnly /></label>
-                  <label className="wide">Description<textarea value={selected.description} readOnly /></label>
-                  <label className="wide">Tags<input value={selected.tags} readOnly /></label>
-                  <label>Плейлисты<input value={selected.playlist || "—"} readOnly /></label>
-                  <label>Категория<input value={selected.category || "—"} readOnly /></label>
-                  <label>Приватность<input value={selected.privacy || selected.status || "—"} readOnly /></label>
-                  <label>Слот<input value={selected.slot || "—"} readOnly /></label>
-                  <label>Опубликован<input value={(selected.publishedAt || "").replace("T", " ") || "—"} readOnly /></label>
-                  <label>Длительность<input value={selected.duration || "—"} readOnly /></label>
-                  <label>Просмотры<input value={selected.views ?? "—"} readOnly /></label>
-                  <label>Лайки<input value={selected.likes ?? "—"} readOnly /></label>
-                  <label>Комментарии<input value={selected.comments ?? "—"} readOnly /></label>
-                  <label>Субтитры на YouTube<input value={selected.captions ? "есть" : "нет"} readOnly /></label>
-                  <label>Для детей<input value={selected.madeForKids === true ? "да" : selected.madeForKids === false ? "нет" : "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoTitle")}<input value={selected.title} readOnly /></label>
+                  <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly /></label>
+                  <label className="wide">{t(uiLang, "videoDescription")}<textarea value={selected.description} readOnly /></label>
+                  <label className="wide">{t(uiLang, "videoTags")}<input value={selected.tags} readOnly /></label>
+                  <label>{t(uiLang, "videoPlaylist")}<input value={selected.playlist || "—"} readOnly title={t(uiLang, "noPlaylist")} /></label>
+                  <label>{t(uiLang, "videoCategory")}<input value={selected.category || "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoVisibility")}<input value={statusLabel(uiLang, selected.privacy || selected.status)} readOnly /></label>
+                  <label>{t(uiLang, "videoScheduledAt")}<input value={selected.slot || "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoPublishedAt")}<input value={(selected.publishedAt || "").replace("T", " ") || "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoDuration")}<input value={selected.duration || "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoViews")}<input value={selected.views ?? "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoLikes")}<input value={selected.likes ?? "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoComments")}<input value={selected.comments ?? "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoCaptions")}<input value={selected.captions == null ? "—" : selected.captions ? t(uiLang, "yes") : t(uiLang, "no")} readOnly /></label>
+                  <label>{t(uiLang, "videoMadeForKids")}<input value={selected.madeForKids == null ? "—" : selected.madeForKids ? t(uiLang, "yes") : t(uiLang, "no")} readOnly /></label>
                 </div>
                 <div className="studio-actions">
-                  <button type="button" className="btn ghost" onClick={() => {
+                  <button type="button" className="btn ghost" title={t(uiLang, "tipExportPage")} onClick={() => {
                     const blob = new Blob([JSON.stringify({ videos, nextCursor }, null, 2)], { type: "application/json" });
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
                     a.download = "catalog-page.json";
                     a.click();
-                  }}>Экспорт страницы каталога</button>
+                  }}>{t(uiLang, "exportCatalogPage")}</button>
                 </div>
                 <div className="previews">
                   <div>
-                    <span>Desktop</span>
+                    <span>{t(uiLang, "previewDesktop")}</span>
                     <div className="snip">
                       {selected.thumb ? <img src={selected.thumb} alt="" /> : null}
                       <b>{selected.title}</b>
@@ -527,15 +584,15 @@ export function Studio() {
                     </div>
                   </div>
                   <div>
-                    <span>Mobile</span>
+                    <span>{t(uiLang, "previewMobile")}</span>
                     <div className="snip mob">
                       {selected.thumb ? <img src={selected.thumb} alt="" /> : null}
                       <b>{selected.title}</b>
                     </div>
                   </div>
                 </div>
-                <button className="btn" type="button" disabled title="запись включим следующим шагом">
-                  Записать на YouTube
+                <button className="btn" type="button" disabled title={t(uiLang, "writeDisabled")}>
+                  {t(uiLang, "writeDisabled")}
                 </button>
               </>
             )}
@@ -548,7 +605,9 @@ export function Studio() {
         <div className="studio">
           <aside className="studio-list">
             <div className="studio-tools">
-              <button className="chip" type="button" disabled>+ полка</button>
+              <button className="chip" type="button" disabled title={t(uiLang, "playlistCreateSoon")}>
+                {t(uiLang, "playlistCreateSoon")}
+              </button>
             </div>
             <div className="list">
               {playlists.map((p) => (
@@ -561,26 +620,26 @@ export function Studio() {
                   <div className="item-title">{p.title}</div>
                 </button>
               ))}
-              {!playlists.length ? <div className="empty">Плейлистов нет или API не отдал список</div> : null}
+              {!playlists.length ? <div className="empty">{t(uiLang, "emptyPlaylists")}</div> : null}
             </div>
           </aside>
           <section className="studio-card">
             {!playlist ? (
-              <div className="empty">Выберите плейлист</div>
+              <div className="empty">{t(uiLang, "selectPlaylist")}</div>
             ) : (
               <>
                 {playlist.thumb ? <img className="cover" src={playlist.thumb} alt="" /> : null}
                 <h2>{playlist.title}</h2>
                 <div className="meta-grid">
-                  <label>Название<input value={playlist.title} readOnly /></label>
-                  <label>Роликов<input value={playlist.itemCount ?? 0} readOnly /></label>
-                  <label className="wide">Описание<textarea value={playlist.description || ""} readOnly /></label>
-                  <label>Создан<input value={playlist.publishedAt || "—"} readOnly /></label>
-                  <label>Приватность<input value={playlist.privacy || "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoTitle")}<input value={playlist.title} readOnly /></label>
+                  <label>{t(uiLang, "playlistVideoCount")}<input value={playlist.itemCount ?? 0} readOnly /></label>
+                  <label className="wide">{t(uiLang, "videoDescription")}<textarea value={playlist.description || ""} readOnly /></label>
+                  <label>{t(uiLang, "channelCreated")}<input value={playlist.publishedAt || "—"} readOnly /></label>
+                  <label>{t(uiLang, "videoVisibility")}<input value={playlist.privacy || "—"} readOnly /></label>
                 </div>
                 <div className="studio-actions">
-                  <label className="btn ghost file-btn">Обложка полки<input type="file" accept="image/*" hidden /></label>
-                  <button type="button" className="btn" disabled>Создать полку</button>
+                  <label className="btn ghost file-btn" title={t(uiLang, "playlistCreateSoon")}>{t(uiLang, "playlistThumbnailAlt")}<input type="file" accept="image/*" hidden disabled /></label>
+                  <button type="button" className="btn" disabled title={t(uiLang, "playlistCreateSoon")}>{t(uiLang, "playlistCreateSoon")}</button>
                 </div>
               </>
             )}
@@ -591,15 +650,15 @@ export function Studio() {
       {view === "grid" ? (
         <div className="studio-grid">
           <div className="cal-nav">
-            <button type="button" className="btn ghost" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
+            <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
             <strong>
-              {month.toLocaleString("ru", { month: "long", year: "numeric" })}
+              {month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}
             </strong>
-            <button type="button" className="btn ghost" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
+            <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
           </div>
           <div className="cal">
-            {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((d) => (
-              <div key={d} className="cal-h">{d}</div>
+            {WEEKDAY_KEYS.map((key) => (
+              <div key={key} className="cal-h">{t(uiLang, key)}</div>
             ))}
             {cells.map((day, i) => {
               const key = day ? day.toISOString().slice(0, 10) : `e${i}`;
@@ -614,10 +673,10 @@ export function Studio() {
               );
             })}
           </div>
-          {loadingCalendar ? <div className="empty">Загружаем события из кэша...</div> : null}
+          {loadingCalendar ? <div className="empty">{t(uiLang, "catalogLoadingCalendar")}</div> : null}
           {calendarCursor ? (
-            <button className="btn ghost" type="button" disabled={loadingCalendar} onClick={loadMoreCalendar}>
-              Загрузить ещё события
+            <button className="btn ghost" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={loadingCalendar} onClick={loadMoreCalendar}>
+              {t(uiLang, "catalogLoadCalendar")}
             </button>
           ) : null}
         </div>

@@ -170,37 +170,32 @@ export default function CabinetPage() {
         <section className="main">
           {tab === "profile" && (
             <div className="panel">
+              <p className="section-kicker">{t(uiLang, "profileSection")}</p>
               <h1>{t(uiLang, "profile")}</h1>
+              <p className="panel-lead">{t(uiLang, "profileHint")}</p>
               <div className="profile-row">
                 <div className="profile-fields">
                   <div className="field">
                     <label>{t(uiLang, "email")}</label>
-                    <input value={session.user?.email || ""} readOnly />
+                    <input value={session.user?.email || ""} readOnly title={t(uiLang, "profileHint")} />
                   </div>
                 </div>
-                <div title={t(uiLang, "tipQuota")}>
                 <QuotaRings
                   editsCap={prefs.dailyEdits || 20}
                   editsUsed={prefs.usedEdits || 0}
                   uploadsCap={prefs.dailyUploads || 10}
                   uploadsUsed={prefs.usedUploads || 0}
                 />
-                </div>
               </div>
-              <h2>ИИ-модели</h2>
+              <h2>{t(uiLang, "aiModelsTitle")}</h2>
+              <p className="hint">{t(uiLang, "comingLater")}</p>
               <div className="mock-grid">
-                <label className="field">
-                  OpenAI
-                  <input placeholder="sk-…" disabled title="скоро" />
-                </label>
-                <label className="field">
-                  Anthropic
-                  <input placeholder="ключ Claude" disabled title="скоро" />
-                </label>
-                <label className="field">
-                  Google Gemini
-                  <input placeholder="ключ Gemini" disabled title="скоро" />
-                </label>
+                {["OpenAI", "Anthropic", "Google Gemini"].map((provider) => (
+                  <div className="provider-row" key={provider} title={t(uiLang, "comingLater")}>
+                    <span>{provider}</span>
+                    <small>{t(uiLang, "comingLater")}</small>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -208,10 +203,11 @@ export default function CabinetPage() {
           {tab === "channels" && (
             <div className="panel">
               <h1>{t(uiLang, "channels")}</h1>
+              <p className="panel-lead">{t(uiLang, "channelListHint")}</p>
               {selectionNotice ? <p className="selection-notice" role="status">{selectionNotice}</p> : null}
               {selectionConnectionId ? (
                 <section className="channel-selection" aria-labelledby="channel-selection-title">
-                  <h2 id="channel-selection-title">{t(uiLang, "channelSelectionTitle")}</h2>
+                  <h2 id="channel-selection-title">{t(uiLang, "channelSelectionTitleShort")}</h2>
                   <p className="hint">{t(uiLang, "channelSelectionHint")}</p>
                   {selectionLoading ? <p role="status">{t(uiLang, "channelSelectionLoading")}</p> : null}
                   {selectionError ? (
@@ -236,6 +232,7 @@ export default function CabinetPage() {
                           <input
                             type="checkbox"
                             checked={selected}
+                            aria-label={channel.title}
                             onChange={() =>
                               setSelectedYoutubeIds((current) =>
                                 selected
@@ -270,6 +267,16 @@ export default function CabinetPage() {
                   </div>
                 </section>
               ) : null}
+              {!selectionConnectionId && channels.length === 0 ? (
+                <div className="empty-state">
+                  <span className="empty-state-mark" aria-hidden="true">+</span>
+                  <h2>{t(uiLang, "noChannelsSaved")}</h2>
+                  <p>{t(uiLang, "channelListHint")}</p>
+                  <a className="btn" href={apiUrl("/auth/youtube/login")} title={t(uiLang, "tipConnectAnother")}>
+                    {t(uiLang, "connectBtn")}
+                  </a>
+                </div>
+              ) : null}
               <div className="chan-split">
                 <div className="tiles">
                 {channels.map((item) => {
@@ -278,13 +285,13 @@ export default function CabinetPage() {
                     <div
                       key={item.id}
                       className={`tile ${on ? "on" : ""}`}
-                      title={on ? t(uiLang, "selected") : t(uiLang, "tipSelect")}
+                      title={on ? t(uiLang, "selected") : t(uiLang, "tipSelectChannel")}
                       onClick={() => {
                         if (!on) update({ selectedChannelId: String(item.id) });
                       }}
                     >
-                                            {item.thumbnail_url ? (
-                        <img className="tile-logo" referrerPolicy="no-referrer" src={item.thumbnail_url} alt="" />
+                      {item.thumbnail_url ? (
+                        <img className="tile-logo" referrerPolicy="no-referrer" src={item.thumbnail_url} alt={t(uiLang, "thumbnailAlt")} />
                       ) : (
                         <span className="avatar">{(item.title || "?").slice(0, 1)}</span>
                       )}
@@ -296,18 +303,19 @@ export default function CabinetPage() {
                           <button
                             type="button"
                             className="ico"
-                            title="Копировать ID"
+                            title={t(uiLang, "tipCopyChannelId")}
+                            aria-label={t(uiLang, "tipCopyChannelId")}
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigator.clipboard.writeText(item.youtube_channel_id || "");
+                              navigator.clipboard.writeText(item.youtube_channel_id || "").catch(() => {});
                             }}
                           >
                             ⎘
                           </button>
                         </div>
-                        <div>Создан {item.yt_published_at || "—"}</div>
+                        <div>{t(uiLang, "channelCreated")} {item.yt_published_at || "—"}</div>
                         <div>
-                          Язык{" "}
+                          {t(uiLang, "channelLanguage")}{" "}
                           {(CHANNEL_LANGS.find((l) => l.id === (prefs.channelLangs[String(item.id)] || "")) || { label: t(uiLang, "notSet") }).label}
                         </div>
                       </div>
@@ -315,7 +323,8 @@ export default function CabinetPage() {
                         <button
                           type="button"
                           className="ico"
-                          title={t(uiLang, "tipLangChannel")}
+                          title={t(uiLang, "tipSetChannelLanguage")}
+                          aria-label={t(uiLang, "tipSetChannelLanguage")}
                           onClick={(e) => {
                             e.stopPropagation();
                             setLangEdit(langEdit === String(item.id) ? "" : String(item.id));
@@ -351,34 +360,36 @@ export default function CabinetPage() {
                     </div>
                   );
                 })}
-                <a className="tile add" href={apiUrl("/auth/youtube/login")} title={t(uiLang, "connectAnother")}>
+                {selectionConnectionId || channels.length > 0 ? (
+                  <a className="tile add" href={apiUrl("/auth/youtube/login")} title={t(uiLang, "tipConnectAnother")} aria-label={t(uiLang, "tipConnectAnother")}>
                     +
-                </a>
+                  </a>
+                ) : null}
                 </div>
                 {ch ? (
                   <article className="chan-card">
                     {ch.banner_url ? (
-                      <img className="chan-card-banner" referrerPolicy="no-referrer" src={ch.banner_url} alt="" />
+                      <img className="chan-card-banner" referrerPolicy="no-referrer" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} />
                     ) : null}
                     <div className="chan-card-body">
                       <div className="chan-title-row">
                         <h2 className="chan-name">{ch.title}</h2>
                         <div className="chan-created">
-                          <span>создан</span>
+                          <span>{t(uiLang, "channelCreated")}</span>
                           <b>{ch.yt_published_at || "—"}</b>
                         </div>
                       </div>
                       <div className="chan-kpis">
                         <div>
                           <b>{ch.video_count ?? "—"}</b>
-                          <span>ролики</span>
+                          <span>{t(uiLang, "channelVideos")}</span>
                         </div>
                         <div>
-                          <b>{ch.hidden_subscribers ? "скрыто" : (ch.subscriber_count ?? 0)}</b>
-                          <span>подписчики</span>
+                          <b>{ch.hidden_subscribers ? t(uiLang, "hiddenSubscribers") : (ch.subscriber_count ?? 0)}</b>
+                          <span>{t(uiLang, "channelSubscribers")}</span>
                         </div>
                       </div>
-                      <p className="chan-desc">{ch.description || "Описание канала на YouTube пустое"}</p>
+                      <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
                     </div>
                   </article>
                 ) : null}
@@ -398,7 +409,7 @@ export default function CabinetPage() {
                         key={lang.id}
                         type="button"
                         className={`opt ${prefs.uiLang === lang.id ? "on" : ""}`}
-                        title={t(uiLang, "tipUiLang")}
+                        title={t(uiLang, "languageHint")}
                         onClick={() => update({ uiLang: lang.id })}
                       >
                         <span className="radio" />
@@ -412,14 +423,10 @@ export default function CabinetPage() {
                   <ThemePicker />
                 </div>
               </div>
-              <h2>Главная страница студии</h2>
-              <p className="hint">Макет блоков студии: какие поля видны, порядок и скрытие. Пока заглушка.</p>
-              <div className="mock-studio">
-                <div className="mock-block on">Список роликов</div>
-                <div className="mock-block on">Карточка видео</div>
-                <div className="mock-block">Календарь</div>
-                <div className="mock-block">Превью</div>
-              </div>
+              <section className="interface-note">
+                <h2>{t(uiLang, "studioLayoutTitle")}</h2>
+                <p>{t(uiLang, "studioLayoutHint")}</p>
+              </section>
             </div>
           )}
         </section>
