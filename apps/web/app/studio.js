@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { catalogVideosUrl, isCurrentCatalogRequest } from "../lib/catalog-state.mjs";
+import {
+  catalogVideosUrl,
+  continueCatalogSyncPage,
+  finishCatalogSync,
+  isCurrentCatalogRequest,
+  shouldResumeCatalogSync,
+  shouldShowCatalogContinue,
+  tryStartCatalogSync,
+} from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 
@@ -92,6 +100,7 @@ export function Studio() {
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [month, setMonth] = useState(() => new Date());
+  const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
   const syncRunId = useRef(0);
@@ -103,6 +112,7 @@ export function Studio() {
   useEffect(() => {
     const requestId = ++channelRequestId.current;
     syncRunId.current += 1;
+    finishCatalogSync(syncBusyRef);
     setSyncBusy(false);
     setCh(null);
     setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
@@ -280,31 +290,38 @@ export function Studio() {
     }
   }
 
-  async function runCatalogSync(mode) {
-    if (!channelId || syncBusy) return;
+  async function runCatalogSync(mode, resumeExisting = false) {
+    if (!channelId || !tryStartCatalogSync(syncBusyRef)) return;
     const runId = ++syncRunId.current;
     setSyncBusy(true);
     setErr("");
     try {
-      const startResponse = await apiFetch(`/channels/${channelId}/catalog/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
-      });
-      let status = await startResponse.json();
-      if (!startResponse.ok) throw new Error(status.detail || t(uiLang, "studioSyncStartError"));
+      let status = catalogStatus;
+      if (!resumeExisting) {
+        const startResponse = await apiFetch(`/channels/${channelId}/catalog/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        });
+        status = await startResponse.json();
+        if (!startResponse.ok) throw new Error(status.detail || t(uiLang, "studioSyncStartError"));
+      }
       if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
-      setCatalogStatus(status);
+      if (!resumeExisting) setCatalogStatus(status);
 
       while (["LOADING", "PARTIAL"].includes(status.state)) {
         if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
-        const response = await apiFetch(`/channels/${channelId}/catalog/sync/continue`, {
-          method: "POST",
-        });
-        status = await response.json();
-        if (!response.ok) throw new Error(status.detail || t(uiLang, "studioSyncFailed"));
+        status = await continueCatalogSyncPage(
+          channelId,
+          apiFetch,
+          t(uiLang, "studioSyncFailed"),
+          (nextStatus) => {
+            if (runId === syncRunId.current && channelIdRef.current === channelId) {
+              setCatalogStatus(nextStatus);
+            }
+          },
+        );
         if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
-        setCatalogStatus(status);
 
         const pageRequestId = catalogRequestId.current;
         const pageResponse = await apiFetch(catalogVideosUrl(channelId, { filter, query, sort }));
@@ -332,7 +349,10 @@ export function Studio() {
           .catch(() => {});
       }
     } finally {
-      if (runId === syncRunId.current) setSyncBusy(false);
+      if (runId === syncRunId.current) {
+        setSyncBusy(false);
+        finishCatalogSync(syncBusyRef);
+      }
     }
   }
 
@@ -440,12 +460,15 @@ export function Studio() {
               {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
             </button>
           ) : null}
-          {["PARTIAL", "ERROR"].includes(catalogStatus.state) ? (
+          {shouldShowCatalogContinue(catalogStatus) ? (
             <button
               className="btn"
               type="button"
               disabled={syncBusy}
-              onClick={() => runCatalogSync(catalogStatus.mode || "initial")}
+              onClick={() => runCatalogSync(
+                catalogStatus.mode || "initial",
+                shouldResumeCatalogSync(catalogStatus),
+              )}
             >
               {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogContinue")}
             </button>
