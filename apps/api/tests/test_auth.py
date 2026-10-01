@@ -1,14 +1,102 @@
+import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+
+import pytest
+from oauthlib.oauth2.rfc6749.parameters import parse_token_response
 
 from app import main
 from app.models import Channel, GoogleConnection, Identity, User, UserSession
 from app.security import create_oauth_state
 from app.settings import settings
 from app.tokens import decrypt_refresh_token, encrypt_refresh_token
-from app.youtube import YOUTUBE_SCOPES
+from app.youtube import IDENTITY_SCOPES, YOUTUBE_SCOPES
 
 from conftest import create_account
+
+
+def test_verify_identity_token_uses_one_second_clock_skew(monkeypatch):
+    captured = {}
+
+    def fake_verify_oauth2_token(
+        token, request, audience=None, clock_skew_in_seconds=0
+    ):
+        captured["clock_skew_in_seconds"] = clock_skew_in_seconds
+        return {"sub": "fixture-subject"}
+
+    monkeypatch.setattr(
+        main.yt.id_token,
+        "verify_oauth2_token",
+        fake_verify_oauth2_token,
+    )
+
+    claims = main.yt.verify_identity_token("fixture-id-token")
+
+    assert claims == {"sub": "fixture-subject"}
+    assert captured["clock_skew_in_seconds"] == 1
+
+
+def test_identity_oauth_scopes_accept_google_set_and_reject_mismatch():
+    expected_identity_scopes = [
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+    ]
+    assert IDENTITY_SCOPES == expected_identity_scopes
+    assert YOUTUBE_SCOPES == [
+        "https://www.googleapis.com/auth/youtube.readonly",
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+    ]
+    assert "email" not in YOUTUBE_SCOPES
+    assert "profile" not in YOUTUBE_SCOPES
+    assert "https://www.googleapis.com/auth/youtube.force-ssl" not in YOUTUBE_SCOPES
+
+    token_response = json.dumps(
+        {
+            "access_token": "test-access-token",
+            "token_type": "Bearer",
+            "scope": " ".join(expected_identity_scopes),
+        }
+    )
+    parsed = parse_token_response(token_response, scope=expected_identity_scopes)
+    assert set(parsed["scope"]) == set(expected_identity_scopes)
+
+    mismatched_response = json.dumps(
+        {
+            "access_token": "test-access-token",
+            "token_type": "Bearer",
+            "scope": " ".join([*expected_identity_scopes, "email", "profile"]),
+        }
+    )
+    with pytest.raises(Warning):
+        parse_token_response(mismatched_response, scope=expected_identity_scopes)
+
+
+def test_youtube_authorization_url_does_not_merge_previously_granted_scopes(monkeypatch):
+    captured = {}
+
+    class FakeFlow:
+        def authorization_url(self, **kwargs):
+            captured["authorization_kwargs"] = kwargs
+            return "https://accounts.test/youtube", "fixture-state"
+
+    def fake_flow(scopes, redirect_uri):
+        captured["scopes"] = scopes
+        captured["redirect_uri"] = redirect_uri
+        return FakeFlow()
+
+    monkeypatch.setattr(main.yt, "_flow", fake_flow)
+
+    url, state = main.yt.youtube_authorization_url()
+
+    assert url == "https://accounts.test/youtube"
+    assert state == "fixture-state"
+    assert captured["scopes"] == YOUTUBE_SCOPES
+    assert captured["authorization_kwargs"] == {
+        "access_type": "offline",
+        "prompt": "consent",
+    }
 
 
 def test_google_login_validates_one_time_state_and_issues_secure_cookie(
@@ -82,6 +170,64 @@ def test_google_callback_rejects_unknown_state_without_exchanging_code(client, m
         params={"code": "authorization-code", "state": "unrecognized"},
     )
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("failure_step", "expected_message"),
+    [
+        ("exchange", "safe exchange diagnostic"),
+        ("verify", "Exception message suppressed to protect OAuth credentials"),
+    ],
+)
+def test_youtube_callback_diagnostics_are_step_specific_and_suppress_secrets(
+    client, test_database, monkeypatch, failure_step, expected_message
+):
+    _, session_token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, session_token)
+    state = f"diagnostic-state-{failure_step}"
+    monkeypatch.setattr(
+        main.yt,
+        "youtube_authorization_url",
+        lambda: ("https://accounts.test/youtube", state),
+    )
+    if failure_step == "exchange":
+        def fail_exchange(*args):
+            raise ValueError("safe exchange diagnostic")
+
+        monkeypatch.setattr(main.yt, "exchange_youtube_code", fail_exchange)
+        expected_step = "yt.exchange_youtube_code"
+    else:
+        monkeypatch.setattr(
+            main.yt,
+            "exchange_youtube_code",
+            lambda *args: SimpleNamespace(
+                id_token="fixture-id-token",
+                token="fixture-access-token",
+                refresh_token="fixture-refresh-token",
+            ),
+        )
+
+        def fail_verification(token):
+            raise ValueError(
+                "client_secret=test-client-secret access_token=fixture-access-token"
+            )
+
+        monkeypatch.setattr(main.yt, "verify_identity_token", fail_verification)
+        expected_step = "yt.verify_identity_token"
+
+    assert client.get("/auth/youtube/login").status_code == 307
+    response = client.get(
+        "/auth/youtube/callback",
+        params={"code": "fixture-authorization-code", "state": state},
+    )
+
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert detail["step"] == expected_step
+    assert detail["exception_type"] == "ValueError"
+    assert detail["message"] == expected_message
+    assert "test-client-secret" not in response.text
+    assert "fixture-access-token" not in response.text
 
 
 def test_session_logout_revokes_server_session_and_checks_origin(client, test_database):

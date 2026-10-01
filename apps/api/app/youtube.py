@@ -6,8 +6,16 @@ from googleapiclient.discovery import build
 
 from .settings import settings
 
-IDENTITY_SCOPES = ["openid", "email", "profile"]
-YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.readonly", "openid", "email"]
+IDENTITY_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
+YOUTUBE_SCOPES = [
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+]
 
 
 def _flow(scopes: list[str], redirect_uri: str, state: str | None = None) -> Flow:
@@ -38,7 +46,6 @@ def youtube_authorization_url() -> tuple[str, str]:
     flow = _flow(YOUTUBE_SCOPES, settings.google_youtube_redirect_uri)
     url, _state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         prompt="consent",
     )
     return url, _state
@@ -57,7 +64,12 @@ def exchange_youtube_code(code: str, state: str) -> Credentials:
 
 
 def verify_identity_token(token: str) -> dict:
-    return id_token.verify_oauth2_token(token, Request(), settings.google_client_id)
+    return id_token.verify_oauth2_token(
+        token,
+        Request(),
+        settings.google_client_id,
+        clock_skew_in_seconds=1,
+    )
 
 
 def creds_from_refresh(refresh_token: str) -> Credentials:

@@ -8,11 +8,13 @@ MoyaStudia is a SaaS workspace for managing YouTube channels and content. YouTub
 
 ## Current stage
 
-Foundation, Stage 2A/2B channel discovery/selection, Stage 3 read-only video catalog/sync, and the Stage 4 local working metadata increment are implemented in the worktree. No YouTube write-back is implemented. The broader Stage 2 connection lifecycle remains incomplete.
+Google Identity and YouTube OAuth connection flows work end-to-end. Identity scopes are normalized to `openid`, `userinfo.email`, and `userinfo.profile`; Google ID-token verification allows one second of clock skew. YouTube OAuth requests the minimal read-only set `youtube.readonly`, `openid`, and `userinfo.email`, without merging previously granted scopes. A local Fernet `TOKEN_ENCRYPTION_KEY` is configured and used to encrypt YouTube refresh tokens. Channels connect successfully and their details appear in Cabinet.
+
+The Stage 2A/2B discovery and selection flow, Stage 3 read-only catalog pipeline, and Stage 4 local working state/readiness are implemented and tested. The product remains read-only with respect to YouTube; no YouTube write-back is implemented. Temporary OAuth diagnostics in `apps/api/app/main.py` intentionally remain for the next real-flow verification and must be removed in a separate step afterward.
 
 ## Current git baseline
 
-Current branch: `main`. The Stage 4 first increment is completed in the current successor commit on top of `646dcf8` (`Add local video working-state backend`). The pre-existing tracked change to `промпт.txt` is excluded from this work and remains uncommitted.
+Current branch: `main`. This handoff records the completed Google Identity and YouTube OAuth connection flow, alongside the existing catalog and Stage 4 work. Local untracked launcher scripts are outside this change.
 
 ## Actual architecture
 
@@ -65,11 +67,12 @@ Other implemented connection routes include `GET /google-connections/{connection
 
 ## What is implemented
 
-- Google identity login/logout, server-side sessions and browser-bound OAuth state.
+- Google Identity login/logout, server-side sessions and browser-bound OAuth state. Identity scopes use `openid`, `userinfo.email`, and `userinfo.profile`; ID-token verification allows one second of clock skew.
+- YouTube OAuth connection using `youtube.readonly`, `openid`, and `userinfo.email`, without `include_granted_scopes=true`; selected channels are saved and displayed in Cabinet.
 - Encrypted Google/YouTube refresh-token storage and owner-scoped API access.
 - Google connection reuse, paginated channel discovery and explicit channel selection.
 - Read-only video cache, catalog status, DB pagination/filtering, initial/incremental/reconcile sync and LOADING resume.
-- Stage 4 first increment: local title/description/tags overrides and base snapshots, revision-checked owner-scoped detail/PATCH API, Studio local editing/save/reset/status UI, and reconcile retention for locally modified videos missing remotely.
+- Stage 4 local working state/readiness: local title/description/tags overrides and base snapshots, revision-checked owner-scoped detail/PATCH API, Studio local editing/save/reset/status UI, and reconcile retention for locally modified videos missing remotely.
 - Studio catalog/calendar cache views, onboarding, Cabinet settings and en/ru/uk UI localization.
 - Alembic-managed schema and PR CI for backend/frontend checks.
 
@@ -92,15 +95,16 @@ Other implemented connection routes include `GET /google-connections/{connection
 
 ## Tests / verification
 
-Verified on 2026-10-01 against the Stage 4 completion worktree:
+Backend handoff verification on 2026-10-01:
 
-- Backend: `apps/api/.venv/Scripts/python.exe -m pytest` from `apps/api` — **44 passed**, 3 Starlette/FastAPI deprecation warnings.
-- Frontend catalog: `node --test tests/studio-catalog.test.mjs` from `apps/web` — **9 passed**.
-- `npm run lint` from `apps/web` — passed; existing `<img>` and custom-font warnings remain, and `next lint` reports deprecation.
-- `npm run build` from `apps/web` — passed; Next.js production compilation and static generation completed, with the same existing frontend warnings.
-- `git diff --check` — passed.
+- Targeted auth: `apps/api/.venv/Scripts/python.exe -m pytest tests\test_auth.py -q` from `apps/api` — **22 passed**, 3 Starlette/FastAPI deprecation warnings.
+- Full backend: `apps/api/.venv/Scripts/python.exe -m pytest -q` from `apps/api` — **50 passed**, 3 Starlette/FastAPI deprecation warnings.
+- Frontend catalog: `node --test tests/studio-catalog.test.mjs` from `apps/web` — **9 passed** (previously verified).
+- `npm run lint` from `apps/web` — passed in the prior UI pass; existing `<img>` and custom-font warnings remain, and `next lint` reports deprecation.
+- `npm run build` from `apps/web` — passed in the prior UI pass with the same existing frontend warnings.
+- `git diff --check` — passed; Git reports only LF/CRLF normalization warnings for modified files.
 
-The migration upgrade/downgrade tests use SQLite fixtures; no PostgreSQL production migration was run. Frontend tests cover helpers, not React UI integration. OAuth and live YouTube API/quota were not exercised.
+The migration upgrade/downgrade tests use SQLite fixtures; no PostgreSQL production migration was run. Frontend tests cover helpers, not React UI integration. Automated backend tests mock OAuth and do not call Google/YouTube; local Google Identity and YouTube channel connection flows were separately confirmed end-to-end. Production OAuth and live YouTube quota behavior remain unverified.
 
 ## Current limitations
 
@@ -108,8 +112,10 @@ The application is read-only with respect to YouTube. Full Cabinet/Studio flows 
 
 ## Next development steps
 
-1. Validate Alembic revision `0003_video_working_state` against a disposable PostgreSQL database before any production migration.
-2. Separately scope future work only after that migration check; YouTube write-back is not part of this increment.
+1. Remove the temporary OAuth diagnostic code from `apps/api/app/main.py` after the successful real OAuth verification.
+2. Add “Remove channel from MoyaStudia” without deleting the YouTube channel or its content; define and verify cleanup of local connection, channel, and cache data, then test reconnection.
+3. Improve the interface.
+4. Separately complete retrieval of full playlist data and membership.
 
 ## Handoff instructions
 
