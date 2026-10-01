@@ -2,13 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  catalogVideoDetailUrl,
+  catalogVideoDisplayTitle,
   catalogVideosUrl,
+  catalogVideoWorkingUrl,
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
+  resetWorkingVideoPatch,
   shouldResumeCatalogSync,
   shouldShowCatalogContinue,
   tryStartCatalogSync,
+  workingVideoPatch,
+  workingVideoStatusKey,
 } from "../lib/catalog-state.mjs";
 
 test("Studio catalog pages use the selected channel's local API route", () => {
@@ -31,6 +37,35 @@ test("late catalog responses from another channel or request are ignored", () =>
   assert.equal(isCurrentCatalogRequest("channel-old", "channel-new", 3, 4), false);
   assert.equal(isCurrentCatalogRequest("channel-new", "channel-new", 3, 4), false);
   assert.equal(isCurrentCatalogRequest("channel-new", "channel-new", 4, 4), true);
+});
+
+test("working video routes stay under the selected channel", () => {
+  assert.equal(catalogVideoDetailUrl(12, 34), "/channels/12/videos/34");
+  assert.equal(catalogVideoWorkingUrl(12, 34), "/channels/12/videos/34/working");
+});
+
+test("catalog list prefers the effective local title and preserves explicit empty values", () => {
+  assert.equal(catalogVideoDisplayTitle({ title: "Snapshot", effectiveTitle: "Local" }), "Local");
+  assert.equal(catalogVideoDisplayTitle({ title: "Snapshot", effectiveTitle: "" }), "");
+  assert.deepEqual(workingVideoPatch(3, { title: "", tags: null }), {
+    revision: 3,
+    title: "",
+    tags: null,
+  });
+});
+
+test("local editing status distinguishes modified, saved, and conflict states", () => {
+  assert.equal(workingVideoStatusKey(null, { title: "New" }, false, ""), "modified");
+  assert.equal(workingVideoStatusKey({ dirty: true }, {}, false, ""), "saved");
+  assert.equal(workingVideoStatusKey({ conflict: true }, {}, false, "saved"), "conflict");
+  assert.equal(workingVideoStatusKey(null, {}, true, ""), "saving");
+});
+
+test("reset working patch clears only active overrides with null", () => {
+  assert.deepEqual(
+    resetWorkingVideoPatch({ working: { title: "", description: null, tags: "local" } }),
+    { title: null, tags: null },
+  );
 });
 
 test("Continue is available for resumable loading and existing partial/error states", () => {

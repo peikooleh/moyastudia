@@ -4,12 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import {
   catalogVideosUrl,
+  catalogVideoDisplayTitle,
+  catalogVideoDetailUrl,
+  catalogVideoWorkingUrl,
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
+  resetWorkingVideoPatch,
   shouldResumeCatalogSync,
   shouldShowCatalogContinue,
   tryStartCatalogSync,
+  workingVideoPatch,
+  workingVideoStatusKey,
 } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
@@ -26,6 +32,7 @@ const FILTERS = [
   { id: "unlisted", key: "filterUnlisted" },
   { id: "scheduled", key: "filterScheduled" },
   { id: "unavailable", key: "filterUnavailable" },
+  { id: "remote_missing", key: "filterRemoteMissing" },
 ];
 const SORTS = [
   { id: "date", key: "sortDate" },
@@ -42,6 +49,7 @@ function statusLabel(uiLang, status) {
     unlisted: "filterUnlisted",
     scheduled: "filterScheduled",
     unavailable: "filterUnavailable",
+    remote_missing: "filterRemoteMissing",
   }[status];
   return key ? t(uiLang, key) : status || "—";
 }
@@ -99,10 +107,19 @@ export function Studio() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [workingVideo, setWorkingVideo] = useState(null);
+  const [workingDraft, setWorkingDraft] = useState(null);
+  const [workingEdits, setWorkingEdits] = useState({});
+  const [workingError, setWorkingError] = useState("");
+  const [workingSaveState, setWorkingSaveState] = useState("");
+  const [workingSaving, setWorkingSaving] = useState(false);
+  const [workingLoading, setWorkingLoading] = useState(false);
+  const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const [month, setMonth] = useState(() => new Date());
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
+  const workingRequestId = useRef(0);
   const syncRunId = useRef(0);
   const channelIdRef = useRef(channelId);
   const uiLangRef = useRef(uiLang);
@@ -188,6 +205,43 @@ export function Studio() {
       });
     return () => controller.abort();
   }, [channelId, filter, query, sort]);
+
+  useEffect(() => {
+    const requestId = ++workingRequestId.current;
+    const controller = new AbortController();
+    setWorkingVideo(null);
+    setWorkingDraft(null);
+    setWorkingEdits({});
+    setWorkingError("");
+    setWorkingSaveState("");
+    if (!channelId || !selectedId) {
+      setWorkingLoading(false);
+      return () => controller.abort();
+    }
+
+    setWorkingLoading(true);
+    apiFetch(catalogVideoDetailUrl(channelId, selectedId), { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "workingLoadError"));
+        return data;
+      })
+      .then((data) => {
+        if (requestId !== workingRequestId.current) return;
+        setWorkingVideo(data);
+        setWorkingDraft(data.effective);
+        setWorkingSaveState(data.conflict ? "conflict" : data.dirty ? "saved" : "");
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError" && requestId === workingRequestId.current) {
+          setWorkingError(String(error.message || error));
+        }
+      })
+      .finally(() => {
+        if (requestId === workingRequestId.current) setWorkingLoading(false);
+      });
+    return () => controller.abort();
+  }, [channelId, selectedId, workingDetailReload]);
 
   useEffect(() => {
     if (view !== "playlists" || !channelId) return undefined;
@@ -290,6 +344,62 @@ export function Studio() {
     }
   }
 
+  function updateWorkingField(field, value) {
+    if (!workingVideo) return;
+    setWorkingDraft((current) => ({ ...current, [field]: value }));
+    setWorkingEdits((current) => {
+      const changes = { ...current };
+      const nextValue = value;
+      if (nextValue === workingVideo.working[field]) delete changes[field];
+      else changes[field] = nextValue;
+      return changes;
+    });
+    setWorkingSaveState("modified");
+    setWorkingError("");
+  }
+
+  function resetWorkingToSnapshot() {
+    if (!workingVideo) return;
+    const changes = resetWorkingVideoPatch(workingVideo);
+    setWorkingDraft(workingVideo.snapshot);
+    setWorkingEdits(changes);
+    setWorkingSaveState(Object.keys(changes).length ? "modified" : "");
+    setWorkingError("");
+  }
+
+  async function saveWorkingVideo() {
+    if (!workingVideo || !Object.keys(workingEdits).length || workingSaving) return;
+    setWorkingSaving(true);
+    setWorkingError("");
+    try {
+      const response = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(workingVideoPatch(workingVideo.revision, workingEdits)),
+      });
+      const data = await response.json();
+      if (response.status === 409 && data.detail?.current) {
+        setWorkingVideo(data.detail.current);
+        setWorkingSaveState("conflict");
+        setWorkingError(t(uiLang, "workingRevisionError"));
+        return;
+      }
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "workingSaveError"));
+      setWorkingVideo(data);
+      setWorkingDraft(data.effective);
+      setWorkingEdits({});
+      setWorkingSaveState(data.conflict ? "conflict" : "saved");
+      setVideos((current) => current.map((video) => (
+        video.id === data.id ? { ...video, effectiveTitle: data.effective.title } : video
+      )));
+    } catch (error) {
+      setWorkingSaveState("error");
+      setWorkingError(String(error.message || error));
+    } finally {
+      setWorkingSaving(false);
+    }
+  }
+
   async function runCatalogSync(mode, resumeExisting = false) {
     if (!channelId || !tryStartCatalogSync(syncBusyRef)) return;
     const runId = ++syncRunId.current;
@@ -337,6 +447,7 @@ export function Studio() {
         setStatusCounts(data.status_counts || {});
         setCatalogSummary(data.summary || {});
         setSelectedId(data.items?.[0]?.id || "");
+        setWorkingDetailReload((current) => current + 1);
       }
     } catch (error) {
       if (runId === syncRunId.current && channelIdRef.current === channelId) {
@@ -359,7 +470,20 @@ export function Studio() {
   const selected = videos.find((v) => v.id === selectedId) || null;
   const playlist = playlists.find((p) => p.id === pickedPl) || null;
 
-  const light = lightOf(selected);
+  const workingStateKey = workingVideoStatusKey(
+    workingVideo,
+    workingEdits,
+    workingSaving,
+    workingSaveState,
+  );
+  const workingStateLabels = {
+    saved: "workingSaved",
+    modified: "workingModified",
+    conflict: "workingConflict",
+    saving: "workingSaving",
+    error: "workingSaveError",
+  };
+  const light = lightOf(workingVideo ? { ...selected, ...workingVideo.effective } : selected);
   const counts = statusCounts;
   const upcoming = catalogSummary.upcoming;
   const last = catalogSummary.latest;
@@ -387,7 +511,7 @@ export function Studio() {
           ) : null}
         </div>
         <div className="studio-stats">
-          <div>{["public", "private", "unlisted", "scheduled", "unavailable"].map((key) =>
+          <div>{["public", "private", "unlisted", "scheduled", "unavailable", "remote_missing"].map((key) =>
             `${t(uiLang, FILTERS.find((item) => item.id === key)?.key || "filterAll")} ${counts[key] || 0}`
           ).join(" · ")}</div>
           <div title={upcoming ? upcoming.title : ""}>
@@ -539,7 +663,7 @@ export function Studio() {
                   className={`item ${v.id === selectedId ? "active" : ""}`}
                   onClick={() => setSelectedId(v.id)}
                 >
-                  <div className="item-title">{v.title}</div>
+                  <div className="item-title">{catalogVideoDisplayTitle(v)}</div>
                   <div className="item-meta">
                     <span>{statusLabel(uiLang, v.status)}</span>
                     <span>{(v.slot || v.publishedAt || "").replace("T", " ")}</span>
@@ -570,12 +694,42 @@ export function Studio() {
                 <div className={`light ${light}`} title={readinessLabel(uiLang, light)}>
                   {readinessLabel(uiLang, light)}
                 </div>
-                <h2>{selected.title}</h2>
+                <h2>{workingDraft?.title ?? catalogVideoDisplayTitle(selected)}</h2>
                 <div className="meta-grid">
-                  <label>{t(uiLang, "videoTitle")}<input value={selected.title} readOnly /></label>
+                  <label>
+                    {t(uiLang, "videoTitle")}
+                    <small className="working-snapshot">
+                      {t(uiLang, "workingSnapshot")}: {workingVideo?.snapshot.title || "—"}
+                    </small>
+                    <input
+                      value={workingDraft?.title ?? selected.title}
+                      readOnly={!workingVideo || workingLoading || workingSaving}
+                      onChange={(event) => updateWorkingField("title", event.target.value)}
+                    />
+                  </label>
                   <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly /></label>
-                  <label className="wide">{t(uiLang, "videoDescription")}<textarea value={selected.description} readOnly /></label>
-                  <label className="wide">{t(uiLang, "videoTags")}<input value={selected.tags} readOnly /></label>
+                  <label className="wide">
+                    {t(uiLang, "videoDescription")}
+                    <small className="working-snapshot">
+                      {t(uiLang, "workingSnapshot")}: {workingVideo?.snapshot.description || "—"}
+                    </small>
+                    <textarea
+                      value={workingDraft?.description ?? selected.description}
+                      readOnly={!workingVideo || workingLoading || workingSaving}
+                      onChange={(event) => updateWorkingField("description", event.target.value)}
+                    />
+                  </label>
+                  <label className="wide">
+                    {t(uiLang, "videoTags")}
+                    <small className="working-snapshot">
+                      {t(uiLang, "workingSnapshot")}: {workingVideo?.snapshot.tags || "—"}
+                    </small>
+                    <input
+                      value={workingDraft?.tags ?? selected.tags}
+                      readOnly={!workingVideo || workingLoading || workingSaving}
+                      onChange={(event) => updateWorkingField("tags", event.target.value)}
+                    />
+                  </label>
                   <label>{t(uiLang, "videoPlaylist")}<input value={selected.playlist || "—"} readOnly title={t(uiLang, "noPlaylist")} /></label>
                   <label>{t(uiLang, "videoCategory")}<input value={selected.category || "—"} readOnly /></label>
                   <label>{t(uiLang, "videoVisibility")}<input value={statusLabel(uiLang, selected.privacy || selected.status)} readOnly /></label>
@@ -587,6 +741,37 @@ export function Studio() {
                   <label>{t(uiLang, "videoComments")}<input value={selected.comments ?? "—"} readOnly /></label>
                   <label>{t(uiLang, "videoCaptions")}<input value={selected.captions == null ? "—" : selected.captions ? t(uiLang, "yes") : t(uiLang, "no")} readOnly /></label>
                   <label>{t(uiLang, "videoMadeForKids")}<input value={selected.madeForKids == null ? "—" : selected.madeForKids ? t(uiLang, "yes") : t(uiLang, "no")} readOnly /></label>
+                </div>
+                <div className="working-controls" aria-live="polite">
+                  {workingLoading ? <span>{t(uiLang, "workingLoading")}</span> : null}
+                  {workingStateKey ? (
+                    <strong className={`working-state ${workingStateKey}`}>
+                      {t(uiLang, workingStateLabels[workingStateKey])}
+                    </strong>
+                  ) : null}
+                  {workingVideo?.remoteMissing ? (
+                    <span role="alert">{t(uiLang, "workingRemoteMissing")}</span>
+                  ) : null}
+                  {workingError ? <span role="alert">{workingError}</span> : null}
+                  <button
+                    className="btn ghost"
+                    type="button"
+                    disabled={!workingVideo || workingLoading || workingSaving || (
+                      !Object.keys(workingEdits).length
+                      && !Object.values(workingVideo?.working || {}).some((value) => value !== null)
+                    )}
+                    onClick={resetWorkingToSnapshot}
+                  >
+                    {t(uiLang, "workingUseSnapshot")}
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={!workingVideo || workingLoading || workingSaving || !Object.keys(workingEdits).length}
+                    onClick={saveWorkingVideo}
+                  >
+                    {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
+                  </button>
                 </div>
                 <div className="studio-actions">
                   <button type="button" className="btn ghost" title={t(uiLang, "tipExportPage")} onClick={() => {
@@ -602,15 +787,15 @@ export function Studio() {
                     <span>{t(uiLang, "previewDesktop")}</span>
                     <div className="snip">
                       {selected.thumb ? <img src={selected.thumb} alt="" /> : null}
-                      <b>{selected.title}</b>
-                      <p>{(selected.description || "").slice(0, 90)}</p>
+                      <b>{workingDraft?.title ?? catalogVideoDisplayTitle(selected)}</b>
+                      <p>{(workingDraft?.description ?? selected.description ?? "").slice(0, 90)}</p>
                     </div>
                   </div>
                   <div>
                     <span>{t(uiLang, "previewMobile")}</span>
                     <div className="snip mob">
                       {selected.thumb ? <img src={selected.thumb} alt="" /> : null}
-                      <b>{selected.title}</b>
+                      <b>{workingDraft?.title ?? catalogVideoDisplayTitle(selected)}</b>
                     </div>
                   </div>
                 </div>

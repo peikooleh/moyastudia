@@ -496,6 +496,13 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
     assert saved_item["dirty"] is True
     assert saved_item["revision"] == 1
 
+    rejected_snapshot_write = client.patch(
+        patch_url,
+        json={"revision": 1, "youtube_title": "Must not change snapshot"},
+        headers=headers,
+    )
+    assert rejected_snapshot_write.status_code == 422
+
     with test_database() as db:
         persisted = db.get(Video, video_id)
         assert persisted.youtube_title == "Snapshot title"
@@ -601,6 +608,50 @@ def test_catalog_sync_after_local_edit_reports_snapshot_conflict(
     assert refreshed["working"]["title"] == "Local title"
     assert refreshed["base"]["title"] == "Original title"
     assert refreshed["dirtyFields"]["title"] is True
+    assert refreshed["conflictFields"]["title"] is True
+
+
+def test_working_conflict_distinguishes_missing_snapshot_from_empty_string(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id, "null-conflict")
+    authorized_client(client, token)
+    with test_database() as db:
+        video = Video(
+            channel_id=channel_id,
+            youtube_video_id="null-snapshot-video",
+            internal_status=None,
+            youtube_title=None,
+        )
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    detail_url = f"/channels/{channel_id}/videos/{video_id}"
+    edited = client.patch(
+        f"{detail_url}/working",
+        json={"revision": 0, "title": "Local value"},
+        headers=post_headers(),
+    )
+    assert edited.status_code == 200
+    assert edited.json()["base"]["title"] is None
+
+    monkeypatch.setattr(
+        main.yt,
+        "list_videos",
+        lambda refresh_token, selected_id, **kwargs: page(
+            selected_id,
+            ["null-snapshot-video"],
+            details=[remote_video("null-snapshot-video", selected_id, "unused") | {"youtube_title": ""}],
+        ),
+    )
+    assert start_sync(client, channel_id, "incremental").status_code == 200
+    assert continue_sync(client, channel_id).json()["state"] == "COMPLETE"
+    refreshed = client.get(detail_url).json()
+
+    assert refreshed["snapshot"]["title"] == ""
+    assert refreshed["working"]["title"] == "Local value"
     assert refreshed["conflictFields"]["title"] is True
 
 

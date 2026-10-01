@@ -10,6 +10,41 @@ export function catalogVideosUrl(channelId, options = {}) {
   return `/channels/${channelId}/videos?${params.toString()}`;
 }
 
+export function catalogVideoDetailUrl(channelId, videoId) {
+  return `/channels/${channelId}/videos/${videoId}`;
+}
+
+export function catalogVideoWorkingUrl(channelId, videoId) {
+  return `${catalogVideoDetailUrl(channelId, videoId)}/working`;
+}
+
+export function catalogVideoDisplayTitle(video) {
+  return video?.effectiveTitle ?? video?.title ?? "";
+}
+
+export function workingVideoPatch(revision, changes) {
+  return { revision, ...changes };
+}
+
+export function resetWorkingVideoPatch(video) {
+  const changes = {};
+  for (const field of ["title", "description", "tags"]) {
+    if (video?.working?.[field] !== null && video?.working?.[field] !== undefined) {
+      changes[field] = null;
+    }
+  }
+  return changes;
+}
+
+export function workingVideoStatusKey(video, edits, saving, saveState) {
+  if (video?.conflict) return "conflict";
+  if (saving) return "saving";
+  if (Object.keys(edits || {}).length > 0) return "modified";
+  if (saveState === "error") return "error";
+  if (saveState === "saved" || video?.dirty) return "saved";
+  return "";
+}
+
 export function isCurrentCatalogRequest(
   requestChannelId,
   currentChannelId,

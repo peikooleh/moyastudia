@@ -695,11 +695,11 @@ def _video_catalog_item(video: Video) -> dict:
     }
 
 
-def _working_video_snapshot(video: Video) -> dict[str, str]:
+def _working_video_snapshot(video: Video) -> dict[str, str | None]:
     return {
-        "title": video.youtube_title or "",
-        "description": video.youtube_description or "",
-        "tags": ", ".join(video.youtube_tags or []),
+        "title": video.youtube_title,
+        "description": video.youtube_description,
+        "tags": None if video.youtube_tags is None else ", ".join(video.youtube_tags),
     }
 
 
@@ -726,7 +726,7 @@ def _video_working_item(video: Video) -> dict:
     conflict_fields = {
         field: (
             working[field] is not None
-            and (base[field] or "") != snapshot[field]
+            and base[field] != snapshot[field]
             and working[field] != snapshot[field]
         )
         for field in ("title", "description", "tags")
