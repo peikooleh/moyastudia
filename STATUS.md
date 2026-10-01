@@ -165,3 +165,35 @@ Security:
 - Импорт выполняется последовательными запросами браузера к API; Celery/Redis/background worker не добавлялись.
 - Полная playlist synchronization/membership, YouTube write operations, upload/edit, media storage и disconnect/reconnect retention остаются за рамками.
 - Изменения Stage 3 внесены поверх уже имевшихся локальных изменений worktree. Commit/push не выполнялись.
+
+## Запись 2026-10-01 — UI polish, localization, responsive pass
+
+Выполнен косметический проход по существующим экранам без перестройки приложения и без изменений backend/API/model/sync flow.
+
+### Изменения интерфейса
+
+- Landing: убраны фиктивные live-счётчики; добавлены продуктовый workspace preview и заметное сообщение о read-only подключении.
+- Onboarding: яснее оформлены этапы и подсказки; индикатор шагов доступен для screen reader; read-only notice объясняет, что подключение не изменяет YouTube.
+- Cabinet: добавлены оформленное пустое состояние и localized channel details/tooltips; AI-provider placeholders и studio-layout placeholder явно показывают, что функции пока недоступны; интерфейсные настройки сведены к реальным языку и теме.
+- Studio: весь пользовательский текст, статусы каталога, фильтры, поля видео, playlists и calendar переведены через общий словарь en/ru/uk. Добавлены подсказки для действий, фильтров, поиска, сортировки, экспорта и календарной навигации.
+- Общие стили: согласованы light/dark tokens, контрастные состояния, hover/focus-visible, размеры поверхностей, desktop/mobile раскладки и reduced-motion поведение. На mobile ширине 390 px проверено отсутствие горизонтального overflow.
+- `document.lang` синхронизируется с выбранным UI-языком; metadata больше не содержит русскоязычное описание для всех языков.
+- Google OAuth, YouTube API, catalog sync, ownership и database code не менялись. YouTube write/upload UI не включался; все существующие write controls остаются disabled.
+
+### UI проверки
+
+- Backend pytest: 34 passed.
+- Frontend Node tests: 2 passed.
+- `npm run build`: успешно. Остались warnings по `<img>` и подключению Google Fonts.
+- `npm audit`: 0 vulnerabilities.
+- `pip-audit` не выполнен: модуль отсутствует в API virtualenv. Зависимости не устанавливались и не менялись.
+- Целевой ESLint: 0 errors; только существующие `<img>` и custom-font warnings. Editor diagnostics: ошибок нет.
+- Browser smoke с mock API проверил Landing, onboarding, Cabinet, Studio, украинский/английский текст и responsive ширину 390 px. Реальные API/OAuth/YouTube вызовы не выполнялись.
+- Проверка translation keys: все статически используемые `t(uiLang, "...")` ключи присутствуют в en/ru/uk словарях.
+
+### Состояние и ограничения
+
+- Изменены только frontend presentation/localization файлы и этот STATUS.md; API/backend/migrations не затронуты.
+- Реальная проверка Google OAuth и YouTube недоступна без подключения реального API; интерфейсный smoke использовал mock responses.
+- Python dependency vulnerability audit требует отдельно добавить/запустить `pip-audit`; пакет не устанавливался в рамках косметического задания.
+- Изменения оставлены незакоммиченными; commit/push не выполнялись.
