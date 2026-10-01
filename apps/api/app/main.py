@@ -549,8 +549,10 @@ def detach_channel(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _channel_or_404(db, user, channel_id, require_token=False)
-    raise HTTPException(409, "channel disconnect is not available yet")
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    db.delete(channel)
+    db.commit()
+    return {"ok": True}
 
 
 def _channel_or_404(

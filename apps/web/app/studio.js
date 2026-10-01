@@ -133,6 +133,11 @@ export function Studio() {
     setSyncBusy(false);
     setCh(null);
     setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
+    setCalendarVideos([]);
+    setCalendarCursor(null);
+    setLoadingCalendar(false);
+    setPlaylists([]);
+    setPickedPl("");
     if (!channelId) return undefined;
 
     apiFetch("/channels")
@@ -172,8 +177,10 @@ export function Studio() {
     setNextCursor(null);
     setCatalogTotal(0);
     setStatusCounts({});
+    setCatalogSummary({});
     setSelectedId("");
     setErr("");
+    setLoadingMore(false);
     if (!channelId) {
       setLoadingVideos(false);
       return () => controller.abort();

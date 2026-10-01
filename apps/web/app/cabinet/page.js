@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, apiUrl } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import { CHANNEL_LANGS, UI_LANGS } from "../../lib/prefs";
+import { CHANNEL_LANGS, prefsAfterChannelRemoval, UI_LANGS } from "../../lib/prefs";
 import { ThemePicker } from "../theme-picker";
 import { usePrefs } from "../providers";
 import { Shell } from "../shell";
@@ -33,6 +33,8 @@ export default function CabinetPage() {
   const [selectionError, setSelectionError] = useState("");
   const [selectionNotice, setSelectionNotice] = useState("");
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
+  const [removingChannelId, setRemovingChannelId] = useState("");
+  const [removeError, setRemoveError] = useState("");
 
   useEffect(() => {
     const connectionId = new URLSearchParams(window.location.search).get("select_connection");
@@ -149,6 +151,44 @@ export default function CabinetPage() {
     router.replace("/cabinet");
   }
 
+  async function removeChannelFromMoya(channel) {
+    if (!window.confirm(t(uiLang, "removeChannelConfirm"))) return;
+    const removedId = String(channel.id);
+    setRemovingChannelId(removedId);
+    setRemoveError("");
+    setSelectionNotice("");
+    try {
+      const response = await apiFetch(`/channels/${channel.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(t(uiLang, "removeChannelError"));
+
+      let remainingChannels = channels.filter((item) => String(item.id) !== removedId);
+      let refreshFailed = false;
+      try {
+        const channelsResponse = await apiFetch("/channels");
+        if (!channelsResponse.ok) throw new Error("channel list refresh failed");
+        remainingChannels = (await channelsResponse.json()).filter(
+          (item) => String(item.id) !== removedId,
+        );
+      } catch {
+        refreshFailed = true;
+        setRemoveError(t(uiLang, "removeChannelRefreshError"));
+      }
+
+      setChannels(remainingChannels);
+      update(prefsAfterChannelRemoval(prefs, removedId, remainingChannels));
+      setLangEdit("");
+      if (remainingChannels.length === 0) {
+        router.replace("/");
+      } else if (!refreshFailed) {
+        setSelectionNotice(t(uiLang, "removeChannelSuccess"));
+      }
+    } catch (error) {
+      setRemoveError(error.message || t(uiLang, "removeChannelError"));
+    } finally {
+      setRemovingChannelId("");
+    }
+  }
+
   const ch = channels.find((c) => String(c.id) === String(prefs.selectedChannelId)) || channels[0];
 
   if (session === undefined || !session.authenticated) return null;
@@ -205,6 +245,7 @@ export default function CabinetPage() {
               <h1>{t(uiLang, "channels")}</h1>
               <p className="panel-lead">{t(uiLang, "channelListHint")}</p>
               {selectionNotice ? <p className="selection-notice" role="status">{selectionNotice}</p> : null}
+              {removeError ? <p className="selection-error" role="alert">{removeError}</p> : null}
               {selectionConnectionId ? (
                 <section className="channel-selection" aria-labelledby="channel-selection-title">
                   <h2 id="channel-selection-title">{t(uiLang, "channelSelectionTitleShort")}</h2>
@@ -390,6 +431,18 @@ export default function CabinetPage() {
                         </div>
                       </div>
                       <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
+                      <div className="actions">
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          disabled={Boolean(removingChannelId)}
+                          onClick={() => removeChannelFromMoya(ch)}
+                        >
+                          {removingChannelId === String(ch.id)
+                            ? t(uiLang, "removeChannelBusy")
+                            : t(uiLang, "removeChannelAction")}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 ) : null}

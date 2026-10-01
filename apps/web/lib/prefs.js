@@ -59,6 +59,26 @@ export function savePrefs(next) {
   return merged;
 }
 
+export function prefsAfterChannelRemoval(prefs, removedChannelId, remainingChannels) {
+  const removedId = String(removedChannelId);
+  const selectedChannelId = String(prefs.selectedChannelId || "");
+  const channelLangs = { ...prefs.channelLangs };
+  delete channelLangs[removedId];
+
+  const selectedStillExists = remainingChannels.some(
+    (channel) => String(channel.id) === selectedChannelId,
+  );
+  const nextSelectedChannelId =
+    selectedChannelId !== removedId && selectedStillExists
+      ? selectedChannelId
+      : String(remainingChannels[0]?.id || "");
+
+  return {
+    selectedChannelId: nextSelectedChannelId,
+    channelLangs,
+  };
+}
+
 export function resolveUiLang(prefs) {
   if (prefs.uiLang && prefs.uiLang !== "auto") return prefs.uiLang;
   const nav = (typeof navigator !== "undefined" && navigator.language) || "en";

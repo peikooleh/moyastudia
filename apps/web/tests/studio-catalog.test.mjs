@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { prefsAfterChannelRemoval } from "../lib/prefs.js";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -37,6 +38,34 @@ test("late catalog responses from another channel or request are ignored", () =>
   assert.equal(isCurrentCatalogRequest("channel-old", "channel-new", 3, 4), false);
   assert.equal(isCurrentCatalogRequest("channel-new", "channel-new", 3, 4), false);
   assert.equal(isCurrentCatalogRequest("channel-new", "channel-new", 4, 4), true);
+});
+
+test("removing the selected channel clears its language and selects a remaining channel", () => {
+  assert.deepEqual(
+    prefsAfterChannelRemoval(
+      {
+        selectedChannelId: "7",
+        channelLangs: { "7": "ru", "9": "uk" },
+      },
+      7,
+      [{ id: 9 }],
+    ),
+    {
+      selectedChannelId: "9",
+      channelLangs: { "9": "uk" },
+    },
+  );
+});
+
+test("removing the last channel clears its selected ID and language preference", () => {
+  assert.deepEqual(
+    prefsAfterChannelRemoval(
+      { selectedChannelId: "7", channelLangs: { "7": "ru" } },
+      "7",
+      [],
+    ),
+    { selectedChannelId: "", channelLangs: {} },
+  );
 });
 
 test("working video routes stay under the selected channel", () => {
