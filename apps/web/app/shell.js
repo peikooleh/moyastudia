@@ -4,24 +4,23 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { t } from "../lib/i18n";
+import { apiFetch } from "../lib/api";
 import { usePrefs } from "./providers";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 export function Shell({ children }) {
-  const { prefs, uiLang, update } = usePrefs();
+  const { prefs, uiLang } = usePrefs();
   const path = usePathname();
   const router = useRouter();
   const [channel, setChannel] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/channels`)
+    apiFetch("/channels")
       .then((r) => (r.ok ? r.json() : []))
       .then(async (rows) => {
         const id = prefs.selectedChannelId;
         let ch = rows.find((r) => String(r.id) === String(id)) || rows[0] || null;
         if (ch && ch.has_token && (!ch.banner_url || !ch.thumbnail_url)) {
-          const res = await fetch(`${API}/channels/${ch.id}/refresh-profile`, { method: "POST" });
+          const res = await apiFetch(`/channels/${ch.id}/refresh-profile`, { method: "POST" });
           if (res.ok) ch = { ...ch, ...(await res.json()) };
         }
         setChannel(ch);
@@ -29,9 +28,9 @@ export function Shell({ children }) {
       .catch(() => setChannel(null));
   }, [prefs.selectedChannelId]);
 
-  function logout() {
-    update({ signedIn: false });
-    router.replace("/");
+  async function logout() {
+    const response = await apiFetch("/auth/logout", { method: "POST" });
+    if (response.ok) router.replace("/");
   }
 
   return (

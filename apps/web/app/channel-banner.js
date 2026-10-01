@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
 import { usePrefs } from "./providers";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function ChannelBanner() {
   const { prefs } = usePrefs();
   const [url, setUrl] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/channels`)
+    apiFetch("/channels")
       .then((r) => (r.ok ? r.json() : []))
       .then((rows) => {
         const id = prefs.selectedChannelId;

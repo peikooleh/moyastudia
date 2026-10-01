@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch, apiUrl } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { CHANNEL_LANGS, UI_LANGS } from "../../lib/prefs";
 import { ThemePicker } from "../theme-picker";
@@ -9,7 +10,6 @@ import { usePrefs } from "../providers";
 import { Shell } from "../shell";
 import { QuotaRings } from "../quota-rings";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const PICK_LANGS = UI_LANGS.filter((l) => l.id !== "auto");
 
 function clamp(n, min, max) {
@@ -23,32 +23,47 @@ export default function CabinetPage() {
   const router = useRouter();
   const [tab, setTab] = useState("profile");
   const [channels, setChannels] = useState([]);
-  const [serverKeys, setServerKeys] = useState(false);
-  const [stats, setStats] = useState({});
+  const [session, setSession] = useState(undefined);
   const [langEdit, setLangEdit] = useState("");
+  const [selectionConnectionId, setSelectionConnectionId] = useState("");
+  const [availableChannels, setAvailableChannels] = useState([]);
+  const [selectedYoutubeIds, setSelectedYoutubeIds] = useState([]);
+  const [selectionLoading, setSelectionLoading] = useState(false);
+  const [selectionSaving, setSelectionSaving] = useState(false);
+  const [selectionError, setSelectionError] = useState("");
+  const [selectionNotice, setSelectionNotice] = useState("");
+  const [discoveryRetry, setDiscoveryRetry] = useState(0);
 
   useEffect(() => {
-    if (!prefs.signedIn) router.replace("/");
-  }, [prefs.signedIn, router]);
+    const connectionId = new URLSearchParams(window.location.search).get("select_connection");
+    if (connectionId && /^\d+$/.test(connectionId)) {
+      setSelectionConnectionId(connectionId);
+      setTab("channels");
+    }
+  }, []);
 
-  function loadChannels() {
-    return fetch(`${API}/channels`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => {
-        setChannels(rows);
-        return rows;
+  useEffect(() => {
+    apiFetch("/auth/session")
+      .then((response) => (response.ok ? response.json() : { authenticated: false }))
+      .then((status) => {
+        setSession(status);
+        if (!status.authenticated) router.replace("/");
       })
       .catch(() => {
-        setChannels([]);
-        return [];
+        setSession({ authenticated: false });
+        router.replace("/");
       });
-  }
+  }, [router]);
 
   useEffect(() => {
-    loadChannels().then((rows) => {
+    if (!session?.authenticated) return;
+    apiFetch("/channels")
+      .then((response) => (response.ok ? response.json() : []))
+      .then((rows) => {
+        setChannels(rows);
       (rows || []).forEach((pick) => {
         if (!pick.has_token) return;
-        fetch(`${API}/channels/${pick.id}/refresh-profile`, { method: "POST" })
+        apiFetch(`/channels/${pick.id}/refresh-profile`, { method: "POST" })
           .then((r) => (r.ok ? r.json() : null))
           .then((fresh) => {
             if (!fresh) return;
@@ -56,29 +71,87 @@ export default function CabinetPage() {
           })
           .catch(() => {});
       });
-    });
-    fetch(`${API}/health`)
-      .then((r) => r.json())
-      .then((h) => setServerKeys(Boolean(h.google_configured)))
-      .catch(() => setServerKeys(false));
-  }, []);
+      })
+      .catch(() => setChannels([]));
+  }, [session]);
 
   useEffect(() => {
-    if (!prefs.selectedChannelId) return;
-    fetch(`${API}/channels/${prefs.selectedChannelId}/videos`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => {
-        const acc = { public: 0, private: 0, unlisted: 0, scheduled: 0 };
-        for (const v of rows || []) {
-          const k = v.status || "private";
-          acc[k] = (acc[k] || 0) + 1;
-        }
-        setStats(acc);
+    if (!session?.authenticated || !selectionConnectionId) return;
+    let cancelled = false;
+    setSelectionLoading(true);
+    setSelectionError("");
+    setSelectedYoutubeIds([]);
+    apiFetch(`/google-connections/${selectionConnectionId}/available-channels`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || t(uiLang, "channelSelectionLoadError"));
+        return data;
       })
-      .catch(() => setStats({}));
-  }, [prefs.selectedChannelId]);
+      .then((rows) => {
+        if (!cancelled) setAvailableChannels(rows);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAvailableChannels([]);
+          setSelectionError(error.message || t(uiLang, "channelSelectionLoadError"));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSelectionLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.authenticated, selectionConnectionId, discoveryRetry, uiLang]);
+
+  async function saveChannelSelection() {
+    setSelectionSaving(true);
+    setSelectionError("");
+    try {
+      const response = await apiFetch(
+        `/google-connections/${selectionConnectionId}/channels`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ youtube_channel_ids: selectedYoutubeIds }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) throw new Error(t(uiLang, "channelSelectionConflict"));
+        if (response.status === 422) throw new Error(t(uiLang, "channelSelectionUnavailable"));
+        throw new Error(data.detail || t(uiLang, "channelSelectionSaveError"));
+      }
+      const channelsResponse = await apiFetch("/channels");
+      if (!channelsResponse.ok) throw new Error(t(uiLang, "channelSelectionSaveError"));
+      const rows = await channelsResponse.json();
+      setChannels(rows);
+      if (!prefs.selectedChannelId && data.channels?.[0]) {
+        update({ selectedChannelId: String(data.channels[0].id) });
+      }
+      setSelectionNotice(t(uiLang, "channelSelectionSaved"));
+      setSelectionConnectionId("");
+      setAvailableChannels([]);
+      setSelectedYoutubeIds([]);
+      router.replace("/cabinet");
+    } catch (error) {
+      setSelectionError(error.message || t(uiLang, "channelSelectionSaveError"));
+    } finally {
+      setSelectionSaving(false);
+    }
+  }
+
+  function closeChannelSelection() {
+    setSelectionConnectionId("");
+    setAvailableChannels([]);
+    setSelectedYoutubeIds([]);
+    setSelectionError("");
+    router.replace("/cabinet");
+  }
 
   const ch = channels.find((c) => String(c.id) === String(prefs.selectedChannelId)) || channels[0];
+
+  if (session === undefined || !session.authenticated) return null;
 
   return (
     <Shell>
@@ -101,47 +174,9 @@ export default function CabinetPage() {
               <div className="profile-row">
                 <div className="profile-fields">
                   <div className="field">
-                    <label>{t(uiLang, "displayName")}</label>
-                    <input
-                      title={(prefs.displayName || t(uiLang, "tipName"))}
-                      maxLength={80}
-                      value={prefs.displayName}
-                      onChange={(e) => update({ displayName: e.target.value.slice(0, 80) })}
-                    />
-                  </div>
-                  <div className="field">
                     <label>{t(uiLang, "email")}</label>
-                    <input
-                      title={(prefs.email || ch?.owner_email || t(uiLang, "tipEmail"))}
-                      maxLength={120}
-                      value={prefs.email || ch?.owner_email || ""}
-                      onChange={(e) => update({ email: e.target.value.slice(0, 120) })}
-                    />
+                    <input value={session.user?.email || ""} readOnly />
                   </div>
-                  {serverKeys ? (
-                    <div className="field" style={{ gridColumn: "1 / -1" }}>
-                      <label>Google</label>
-                      <input title={t(uiLang, "tipKeys")} value="ключи заданы на сервере" readOnly />
-                    </div>
-                  ) : (
-                    <>
-                      <div className="field">
-                        <label>Client ID</label>
-                        <input
-                          value={prefs.googleClientId}
-                          onChange={(e) => update({ googleClientId: e.target.value.trim() })}
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Client secret</label>
-                        <input
-                          type="password"
-                          value={prefs.googleClientSecret}
-                          onChange={(e) => update({ googleClientSecret: e.target.value.trim() })}
-                        />
-                      </div>
-                    </>
-                  )}
                 </div>
                 <div title={t(uiLang, "tipQuota")}>
                 <QuotaRings
@@ -173,9 +208,71 @@ export default function CabinetPage() {
           {tab === "channels" && (
             <div className="panel">
               <h1>{t(uiLang, "channels")}</h1>
+              {selectionNotice ? <p className="selection-notice" role="status">{selectionNotice}</p> : null}
+              {selectionConnectionId ? (
+                <section className="channel-selection" aria-labelledby="channel-selection-title">
+                  <h2 id="channel-selection-title">{t(uiLang, "channelSelectionTitle")}</h2>
+                  <p className="hint">{t(uiLang, "channelSelectionHint")}</p>
+                  {selectionLoading ? <p role="status">{t(uiLang, "channelSelectionLoading")}</p> : null}
+                  {selectionError ? (
+                    <div className="selection-error" role="alert">
+                      <span>{selectionError}</span>
+                      <button className="btn ghost" type="button" onClick={() => setDiscoveryRetry((n) => n + 1)}>
+                        {t(uiLang, "channelSelectionRetry")}
+                      </button>
+                    </div>
+                  ) : null}
+                  {!selectionLoading && !selectionError && availableChannels.length === 0 ? (
+                    <p>{t(uiLang, "channelSelectionEmpty")}</p>
+                  ) : null}
+                  <div className="channel-discovery-list">
+                    {availableChannels.map((channel) => {
+                      const selected = selectedYoutubeIds.includes(channel.youtube_channel_id);
+                      return (
+                        <label
+                          className={`channel-discovery-option ${selected ? "selected" : ""}`}
+                          key={channel.youtube_channel_id}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() =>
+                              setSelectedYoutubeIds((current) =>
+                                selected
+                                  ? current.filter((id) => id !== channel.youtube_channel_id)
+                                  : [...current, channel.youtube_channel_id],
+                              )
+                            }
+                          />
+                          {channel.thumbnail_url ? (
+                            <img src={channel.thumbnail_url} alt="" referrerPolicy="no-referrer" />
+                          ) : null}
+                          <span>
+                            <strong>{channel.title}</strong>
+                            <small>{channel.youtube_channel_id}</small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="actions">
+                    <button className="btn ghost" type="button" onClick={closeChannelSelection}>
+                      {t(uiLang, "channelSelectionCancel")}
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={selectionLoading || selectionSaving || selectedYoutubeIds.length === 0}
+                      onClick={saveChannelSelection}
+                    >
+                      {selectionSaving ? t(uiLang, "channelSelectionSaving") : t(uiLang, "channelSelectionSave")}
+                    </button>
+                  </div>
+                </section>
+              ) : null}
               <div className="chan-split">
                 <div className="tiles">
-                {channels.slice(0, 5).map((item) => {
+                {channels.map((item) => {
                   const on = String(item.id) === String(prefs.selectedChannelId);
                   return (
                     <div
@@ -250,29 +347,13 @@ export default function CabinetPage() {
                             ))}
                           </select>
                         ) : null}
-                        <button
-                          type="button"
-                          className="ico"
-                          title={t(uiLang, "tipDisconnect")}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (!window.confirm(t(uiLang, "disconnect") + " — " + item.title)) return;
-                            setChannels((prev) => prev.filter((c) => c.id !== item.id));
-                            if (on) update({ selectedChannelId: "" });
-                            await fetch(`${API}/channels/${item.id}`, { method: "DELETE" });
-                          }}
-                        >
-                          🗑
-                        </button>
                       </div>
                     </div>
                   );
                 })}
-                {channels.length < 5 ? (
-                  <a className="tile add" href={`${API}/auth/youtube/login`} title={t(uiLang, "tipAddChannel")}>
+                <a className="tile add" href={apiUrl("/auth/youtube/login")} title={t(uiLang, "connectAnother")}>
                     +
-                  </a>
-                ) : null}
+                </a>
                 </div>
                 {ch ? (
                   <article className="chan-card">
@@ -289,7 +370,7 @@ export default function CabinetPage() {
                       </div>
                       <div className="chan-kpis">
                         <div>
-                          <b>{ch.video_count ?? (stats.public || 0) + (stats.private || 0) + (stats.unlisted || 0) + (stats.scheduled || 0)}</b>
+                          <b>{ch.video_count ?? "—"}</b>
                           <span>ролики</span>
                         </div>
                         <div>

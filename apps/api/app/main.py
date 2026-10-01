@@ -1,20 +1,65 @@
-from fastapi import Depends, FastAPI, HTTPException, Query
+import base64
+import json
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+from uuid import uuid4
+
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from sqlalchemy import text
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
+from sqlalchemy import and_, case, func, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import db as database
 from .db import get_db
-from .models import Channel, Video
+from .models import (
+    Channel,
+    ChannelCatalogSync,
+    GoogleConnection,
+    Identity,
+    User,
+    UserSession,
+    Video,
+)
+from .security import (
+    clear_session_cookie,
+    consume_oauth_state,
+    create_oauth_state,
+    create_session,
+    get_current_user,
+    get_optional_user,
+    hash_secret,
+    oauth_state_cookie_name,
+    require_same_origin,
+    clear_oauth_state_cookie,
+    set_session_cookie,
+    set_oauth_state_cookie,
+)
 from .settings import settings
+from .tokens import (
+    TokenEncryptionError,
+    decrypt_refresh_token,
+    encrypt_refresh_token,
+    validate_encryption_key,
+)
 from . import youtube as yt
 
 app = FastAPI(title="MoyaStudia API")
 
+
+class ChannelSelection(BaseModel):
+    youtube_channel_ids: list[str]
+
+
+class CatalogSyncRequest(BaseModel):
+    mode: Literal["initial", "incremental", "reconcile"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://localhost:3000"],
+    allow_origins=[settings.frontend_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,16 +69,6 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     database.init_engine()
-    if database.engine is not None:
-        database.Base.metadata.create_all(bind=database.engine)
-        with database.engine.begin() as conn:
-            for col in ("thumbnail_url", "banner_url", "owner_name", "owner_email", "description", "yt_published_at"):
-                conn.execute(text(
-                    f"ALTER TABLE channels ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT ''"
-                ))
-            conn.execute(text(
-                "ALTER TABLE channels ADD COLUMN IF NOT EXISTS subscriber_count INTEGER DEFAULT 0"
-            ))
 
 
 @app.get("/health")
@@ -53,19 +88,205 @@ def health():
     }
 
 
+def _require_google_configuration() -> None:
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(503, "Google OAuth is not configured")
+
+
+@app.get("/auth/session")
+def auth_session(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    if user is None:
+        return {"authenticated": False}
+    identity = (
+        db.query(Identity)
+        .filter(Identity.user_id == user.id, Identity.provider == "google")
+        .order_by(Identity.created_at)
+        .first()
+    )
+    youtube_connected = (
+        db.query(GoogleConnection.id)
+        .filter(GoogleConnection.user_id == user.id, GoogleConnection.is_active.is_(True))
+        .first()
+        is not None
+    )
+    return {
+        "authenticated": True,
+        "user": {
+            "id": user.id,
+            "email": identity.email if identity else None,
+            "youtube_connected": youtube_connected,
+        },
+    }
+
+
+@app.get("/auth/google/login")
+def google_login(db: Session = Depends(get_db)):
+    _require_google_configuration()
+    url, state = yt.identity_authorization_url()
+    _, browser_binding = create_oauth_state(db, "google_identity", value=state)
+    response = RedirectResponse(url)
+    set_oauth_state_cookie(response, state, browser_binding)
+    return response
+
+
+@app.get("/auth/google/callback")
+def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    db: Session = Depends(get_db),
+):
+    browser_binding = request.cookies.get(oauth_state_cookie_name(state), "") if state else ""
+    if not code or not state or not browser_binding or not consume_oauth_state(
+        db, state, "google_identity", browser_binding
+    ):
+        raise HTTPException(400, "invalid or expired OAuth state")
+    try:
+        credentials = yt.exchange_identity_code(code, state)
+        claims = yt.verify_identity_token(credentials.id_token or "")
+    except Exception as exc:
+        raise HTTPException(400, "Google authentication failed") from exc
+
+    subject = claims.get("sub")
+    if not subject:
+        raise HTTPException(400, "Google identity is missing a subject")
+    identity = (
+        db.query(Identity)
+        .filter(Identity.provider == "google", Identity.subject == subject)
+        .one_or_none()
+    )
+    if identity is None:
+        user = User()
+        db.add(user)
+        db.flush()
+        identity = Identity(
+            user_id=user.id,
+            provider="google",
+            subject=subject,
+            email=claims.get("email"),
+            email_verified=bool(claims.get("email_verified")),
+        )
+        db.add(identity)
+    else:
+        user = identity.user
+        identity.email = claims.get("email")
+        identity.email_verified = bool(claims.get("email_verified"))
+    db.commit()
+
+    session_value = create_session(db, user.id)
+    response = RedirectResponse(settings.frontend_origin + "/", status_code=303)
+    set_session_cookie(response, session_value)
+    clear_oauth_state_cookie(response, state)
+    return response
+
+
+@app.post("/auth/logout", dependencies=[Depends(require_same_origin)])
+def logout(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    value = request.cookies.get(settings.session_cookie_name, "")
+    session = db.query(UserSession).filter(
+        UserSession.token_hash == hash_secret(value), UserSession.user_id == user.id
+    ).one_or_none()
+    if session is not None:
+        db.delete(session)
+        db.commit()
+    response = JSONResponse({"ok": True})
+    clear_session_cookie(response)
+    return response
+
+
+@app.get("/auth/youtube/login")
+def youtube_login(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_google_configuration()
+    try:
+        validate_encryption_key()
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    url, state = yt.youtube_authorization_url()
+    _, browser_binding = create_oauth_state(db, "youtube_connection", user.id, state)
+    response = RedirectResponse(url)
+    set_oauth_state_cookie(response, state, browser_binding)
+    return response
+
+
+@app.get("/auth/youtube/callback")
+def youtube_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    db: Session = Depends(get_db),
+):
+    user = get_optional_user(request, db)
+    if user is None:
+        raise HTTPException(401, "authentication required")
+    browser_binding = request.cookies.get(oauth_state_cookie_name(state), "") if state else ""
+    if not code or not state or not consume_oauth_state(
+        db, state, "youtube_connection", browser_binding, user.id
+    ):
+        raise HTTPException(400, "invalid or expired OAuth state")
+    try:
+        credentials = yt.exchange_youtube_code(code, state)
+        claims = yt.verify_identity_token(credentials.id_token or "")
+    except Exception as exc:
+        raise HTTPException(502, "YouTube connection failed") from exc
+
+    google_subject = claims.get("sub")
+    if not google_subject:
+        raise HTTPException(400, "Google connection is missing a subject")
+    connection = (
+        db.query(GoogleConnection)
+        .filter(GoogleConnection.google_subject == google_subject)
+        .one_or_none()
+    )
+    if connection is not None and connection.user_id != user.id:
+        raise HTTPException(409, "Google account is connected to another MoyaStudia user")
+    if connection is None:
+        connection = GoogleConnection(
+            user_id=user.id,
+            google_subject=google_subject,
+            email=claims.get("email"),
+            encrypted_refresh_token="",
+        )
+        db.add(connection)
+        db.flush()
+    if credentials.refresh_token:
+        connection.encrypted_refresh_token = encrypt_refresh_token(credentials.refresh_token)
+    elif not connection.encrypted_refresh_token:
+        raise HTTPException(400, "Google did not return a refresh token; reconnect with consent")
+    connection.email = claims.get("email") or connection.email
+    connection.is_active = True
+
+    db.commit()
+    response = RedirectResponse(
+        settings.frontend_origin + f"/cabinet?select_connection={connection.id}",
+        status_code=303,
+    )
+    clear_oauth_state_cookie(response, state)
+    return response
+
+
 @app.get("/channels")
-def list_channels(db: Session = Depends(get_db)):
-    rows = db.query(Channel).order_by(Channel.id.desc()).all()
+def list_channels(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = (
+        db.query(Channel)
+        .join(GoogleConnection)
+        .filter(GoogleConnection.user_id == user.id)
+        .order_by(Channel.id.desc())
+        .all()
+    )
     return [
         {
             "id": row.id,
             "youtube_channel_id": row.youtube_channel_id,
             "title": row.title,
-            "has_token": bool(row.refresh_token),
+            "has_token": bool(row.google_connection.encrypted_refresh_token),
             "thumbnail_url": getattr(row, "thumbnail_url", "") or "",
             "banner_url": getattr(row, "banner_url", "") or "",
-            "owner_name": getattr(row, "owner_name", "") or "",
-            "owner_email": getattr(row, "owner_email", "") or "",
+            "owner_email": row.google_connection.email or "",
             "description": getattr(row, "description", "") or "",
             "yt_published_at": getattr(row, "yt_published_at", "") or "",
             "subscriber_count": int(getattr(row, "subscriber_count", 0) or 0),
@@ -74,55 +295,754 @@ def list_channels(db: Session = Depends(get_db)):
     ]
 
 
-@app.delete("/channels/{channel_id}")
-def detach_channel(channel_id: int, db: Session = Depends(get_db)):
-    row = db.query(Channel).filter(Channel.id == channel_id).one_or_none()
-    if row is None:
-        raise HTTPException(404, "channel not found")
+def _google_connection_or_404(
+    db: Session, user: User, connection_id: int
+) -> GoogleConnection:
+    connection = (
+        db.query(GoogleConnection)
+        .filter(
+            GoogleConnection.id == connection_id,
+            GoogleConnection.user_id == user.id,
+        )
+        .one_or_none()
+    )
+    if connection is None:
+        raise HTTPException(404, "Google connection not found")
+    if not connection.is_active or not connection.encrypted_refresh_token:
+        raise HTTPException(400, "Google connection is inactive")
+    return connection
+
+
+def _available_youtube_channels(connection: GoogleConnection) -> list[dict]:
     try:
-        db.query(Video).filter(Video.channel_id == channel_id).delete()
-    except Exception:
-        db.rollback()
-        row = db.query(Channel).filter(Channel.id == channel_id).one_or_none()
-    if row is not None:
-        db.delete(row)
+        token = decrypt_refresh_token(connection.encrypted_refresh_token)
+        credentials = yt.creds_from_refresh(token)
+        return yt.list_available_channels(credentials)
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/google-connections/{connection_id}/available-channels")
+def available_channels(
+    connection_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    connection = _google_connection_or_404(db, user, connection_id)
+    return [
+        {
+            "youtube_channel_id": item["youtube_channel_id"],
+            "title": item["title"],
+            "thumbnail_url": item["thumbnail_url"],
+        }
+        for item in _available_youtube_channels(connection)
+    ]
+
+
+@app.post(
+    "/google-connections/{connection_id}/channels",
+    dependencies=[Depends(require_same_origin)],
+)
+def save_channel_selection(
+    connection_id: int,
+    selection: ChannelSelection = Body(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    connection = _google_connection_or_404(db, user, connection_id)
+    if not selection.youtube_channel_ids or any(
+        not channel_id.strip() for channel_id in selection.youtube_channel_ids
+    ):
+        raise HTTPException(422, "Select at least one available YouTube channel")
+
+    selected_ids = list(dict.fromkeys(selection.youtube_channel_ids))
+    available = _available_youtube_channels(connection)
+    available_by_id = {item["youtube_channel_id"]: item for item in available}
+    if any(channel_id not in available_by_id for channel_id in selected_ids):
+        raise HTTPException(422, "One or more selected channels are not available")
+
+    existing = (
+        db.query(Channel)
+        .filter(Channel.youtube_channel_id.in_(selected_ids))
+        .all()
+    )
+    existing_by_youtube_id = {channel.youtube_channel_id: channel for channel in existing}
+    if any(channel.google_connection_id != connection.id for channel in existing):
+        raise HTTPException(
+            409,
+            "One or more selected channels are already connected through another Google account",
+        )
+
+    selected_channels = []
+    for youtube_channel_id in selected_ids:
+        info = available_by_id[youtube_channel_id]
+        channel = existing_by_youtube_id.get(youtube_channel_id)
+        if channel is None:
+            channel = Channel(
+                google_connection_id=connection.id,
+                youtube_channel_id=youtube_channel_id,
+            )
+            db.add(channel)
+        channel.title = info["title"]
+        channel.thumbnail_url = info["thumbnail_url"]
+        channel.banner_url = info["banner_url"]
+        channel.description = info["description"]
+        channel.yt_published_at = info["yt_published_at"]
+        channel.subscriber_count = info["subscriber_count"]
+        selected_channels.append(channel)
+
+    try:
         db.commit()
-    return {"ok": True}
+    except IntegrityError as exc:
+        db.rollback()
+        persisted = (
+            db.query(Channel)
+            .filter(Channel.youtube_channel_id.in_(selected_ids))
+            .all()
+        )
+        if len(persisted) == len(selected_ids) and all(
+            channel.google_connection_id == connection.id for channel in persisted
+        ):
+            selected_channels = persisted
+        elif any(channel.youtube_channel_id in selected_ids for channel in persisted):
+            raise HTTPException(
+                409,
+                "One or more selected channels are already connected through another Google account",
+            ) from exc
+        else:
+            raise
+
+    return {
+        "channels": [
+            {
+                "id": channel.id,
+                "youtube_channel_id": channel.youtube_channel_id,
+                "title": channel.title,
+                "thumbnail_url": channel.thumbnail_url or "",
+            }
+            for channel in selected_channels
+        ]
+    }
 
 
-def _channel_or_404(db: Session, channel_id: int) -> Channel:
-    row = db.query(Channel).filter(Channel.id == channel_id).one_or_none()
+@app.delete("/channels/{channel_id}", dependencies=[Depends(require_same_origin)])
+def detach_channel(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _channel_or_404(db, user, channel_id, require_token=False)
+    raise HTTPException(409, "channel disconnect is not available yet")
+
+
+def _channel_or_404(
+    db: Session, user: User, channel_id: int, require_token: bool = True
+) -> Channel:
+    row = (
+        db.query(Channel)
+        .join(GoogleConnection)
+        .filter(Channel.id == channel_id, GoogleConnection.user_id == user.id)
+        .one_or_none()
+    )
     if row is None:
         raise HTTPException(404, "channel not found")
-    if not row.refresh_token:
-        raise HTTPException(400, "channel has no refresh token — connect again")
+    if require_token and (
+        not row.google_connection.is_active
+        or not row.google_connection.encrypted_refresh_token
+    ):
+        raise HTTPException(400, "Google connection is inactive")
     return row
 
 
-@app.get("/channels/{channel_id}/videos")
-def channel_videos(channel_id: int, limit: int = Query(500, ge=1, le=500), db: Session = Depends(get_db)):
-    row = _channel_or_404(db, channel_id)
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_youtube_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
     try:
-        return yt.list_videos(row.refresh_token, limit=limit)
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _catalog_row(db: Session, channel: Channel) -> ChannelCatalogSync | None:
+    return db.query(ChannelCatalogSync).filter_by(channel_id=channel.id).one_or_none()
+
+
+def _catalog_status(db: Session, channel: Channel) -> dict:
+    sync = _catalog_row(db, channel)
+    video_count = (
+        db.query(func.count(Video.id))
+        .filter(Video.channel_id == channel.id, Video.youtube_video_id.is_not(None))
+        .scalar()
+        or 0
+    )
+    if sync is None:
+        state = "NOT_IMPORTED"
+        return {
+            "state": state,
+            "mode": None,
+            "video_count": video_count,
+            "scanned_count": 0,
+            "last_success_at": None,
+            "last_error_code": None,
+            "can_continue": False,
+        }
+
+    state = sync.state
+    if state in ("COMPLETE", "EMPTY") and sync.last_success_at is not None:
+        last_success = sync.last_success_at
+        if last_success.tzinfo is None:
+            last_success = last_success.replace(tzinfo=timezone.utc)
+        if _utcnow() - last_success > timedelta(minutes=15):
+            state = "STALE"
+    if state == "EMPTY" and video_count > 0:
+        state = "COMPLETE"
+    if state == "ERROR" and video_count > 0:
+        state = "STALE"
+
+    return {
+        "state": state,
+        "mode": sync.mode,
+        "video_count": video_count,
+        "scanned_count": sync.scanned_count,
+        "last_success_at": sync.last_success_at.isoformat() if sync.last_success_at else None,
+        "last_error_code": sync.last_error_code,
+        "can_continue": state in ("LOADING", "PARTIAL", "STALE", "ERROR"),
+    }
+
+
+def _encode_video_cursor(
+    channel_id: int,
+    sort: str,
+    query_text: str,
+    visibility: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    video: Video,
+) -> str:
+    if sort == "date":
+        displayed_date = video.youtube_scheduled_at or video.youtube_published_at
+        value = displayed_date.isoformat() if displayed_date else None
+    elif sort == "title":
+        value = (video.youtube_title or "").lower()
+    else:
+        value = "scheduled" if video.youtube_scheduled_at else (video.youtube_visibility or "unknown")
+    payload = {
+        "channel_id": channel_id,
+        "sort": sort,
+        "query": query_text,
+        "visibility": visibility,
+        "date_from": date_from.isoformat() if date_from else None,
+        "date_to": date_to.isoformat() if date_to else None,
+        "value": value,
+        "id": video.id,
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_video_cursor(
+    cursor: str,
+    channel_id: int,
+    sort: str,
+    query_text: str,
+    visibility: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> dict:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        if (
+            payload.get("channel_id") != channel_id
+            or payload.get("sort") != sort
+            or payload.get("query") != query_text
+            or payload.get("visibility") != visibility
+            or payload.get("date_from") != (date_from.isoformat() if date_from else None)
+            or payload.get("date_to") != (date_to.isoformat() if date_to else None)
+            or not isinstance(payload.get("id"), int)
+        ):
+            raise ValueError
+        return payload
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, "invalid catalog cursor") from exc
+
+
+def _youtube_error_code(error: Exception) -> str:
+    if isinstance(error, TokenEncryptionError):
+        return "token_configuration_error"
+    if isinstance(error, LookupError):
+        return "selected_channel_unavailable"
+    response = getattr(error, "resp", None)
+    status = getattr(response, "status", None)
+    reasons = {
+        detail.get("reason")
+        for detail in (getattr(error, "error_details", None) or [])
+        if isinstance(detail, dict)
+    }
+    if status == 401:
+        return "authorization_required"
+    if status == 403 and reasons.intersection({"quotaExceeded", "rateLimitExceeded"}):
+        return "quota_exceeded"
+    if status and status >= 500:
+        return "youtube_unavailable"
+    return "youtube_api_error"
+
+
+def _ensure_catalog_sync(db: Session, channel: Channel) -> ChannelCatalogSync:
+    sync = _catalog_row(db, channel)
+    if sync is not None:
+        return sync
+    sync = ChannelCatalogSync(channel_id=channel.id)
+    db.add(sync)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        sync = _catalog_row(db, channel)
+        if sync is None:
+            raise
+    return sync
+
+
+def _catalog_sync_locked(sync: ChannelCatalogSync) -> bool:
+    if sync.lease_expires_at is None:
+        return False
+    expires_at = sync.lease_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at > _utcnow()
+
+
+def _claim_catalog_page(db: Session, channel_id: int) -> str:
+    now = _utcnow()
+    lease_token = str(uuid4())
+    claimed = (
+        db.query(ChannelCatalogSync)
+        .filter(
+            ChannelCatalogSync.channel_id == channel_id,
+            or_(
+                ChannelCatalogSync.lease_expires_at.is_(None),
+                ChannelCatalogSync.lease_expires_at <= now,
+            ),
+        )
+        .update(
+            {
+                ChannelCatalogSync.lease_token: lease_token,
+                ChannelCatalogSync.lease_expires_at: now + timedelta(minutes=5),
+            },
+            synchronize_session=False,
+        )
+    )
+    if not claimed:
+        db.rollback()
+        raise HTTPException(409, "catalog sync page is already running")
+    db.commit()
+    return lease_token
+
+
+def _video_catalog_item(video: Video) -> dict:
+    scheduled_at = video.youtube_scheduled_at
+    published_at = video.youtube_published_at
+    return {
+        "id": video.id,
+        "youtubeId": video.youtube_video_id,
+        "title": video.youtube_title or "",
+        "description": video.youtube_description or "",
+        "tags": ", ".join(video.youtube_tags or []),
+        "category": video.youtube_category_id or "",
+        "playlist": "",
+        "language": video.youtube_default_language
+        or video.youtube_default_audio_language
+        or "",
+        "privacy": video.youtube_visibility or "",
+        "slot": scheduled_at.isoformat(timespec="minutes") if scheduled_at else "",
+        "status": (
+            "unavailable"
+            if video.availability_status == "unavailable"
+            else "scheduled"
+            if scheduled_at
+            else video.youtube_visibility or "unknown"
+        ),
+        "availability": video.availability_status,
+        "thumb": video.youtube_thumbnail_url or "",
+        "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
+        "duration": video.youtube_duration or "",
+        "views": video.youtube_view_count,
+        "likes": video.youtube_like_count,
+        "comments": video.youtube_comment_count,
+        "captions": video.youtube_captions_available,
+        "madeForKids": video.youtube_made_for_kids,
+    }
+
+
+@app.get("/channels/{channel_id}/videos")
+def channel_videos(
+    channel_id: int,
+    limit: int = Query(50, ge=1, le=50),
+    cursor: str | None = None,
+    q: str = Query("", max_length=200),
+    visibility: Literal["public", "private", "unlisted", "scheduled", "unavailable"] | None = None,
+    sort: Literal["date", "title", "status"] = "date",
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    query = db.query(Video).filter(
+        Video.channel_id == channel.id,
+        Video.youtube_video_id.is_not(None),
+    )
+    if q:
+        query = query.filter(
+            or_(Video.youtube_title.ilike(f"%{q}%"), Video.youtube_description.ilike(f"%{q}%"))
+        )
+    displayed_date = func.coalesce(Video.youtube_scheduled_at, Video.youtube_published_at)
+    if date_from is not None:
+        query = query.filter(displayed_date >= date_from)
+    if date_to is not None:
+        query = query.filter(displayed_date < date_to)
+    if visibility == "scheduled":
+        query = query.filter(
+            Video.availability_status == "available",
+            Video.youtube_scheduled_at.is_not(None),
+        )
+    elif visibility == "unavailable":
+        query = query.filter(Video.availability_status == "unavailable")
+    elif visibility is not None:
+        query = query.filter(
+            Video.availability_status == "available",
+            Video.youtube_visibility == visibility,
+        )
+
+    total = query.count()
+    status_expression = case(
+        (Video.availability_status == "unavailable", "unavailable"),
+        (Video.youtube_scheduled_at.is_not(None), "scheduled"),
+        else_=func.coalesce(Video.youtube_visibility, Video.availability_status, "unknown"),
+    )
+    counts = (
+        db.query(status_expression, func.count(Video.id))
+        .filter(Video.channel_id == channel.id, Video.youtube_video_id.is_not(None))
+        .group_by(status_expression)
+        .all()
+    )
+    upcoming = (
+        db.query(Video)
+        .filter(
+            Video.channel_id == channel.id,
+            Video.youtube_video_id.is_not(None),
+            Video.availability_status == "available",
+            Video.youtube_scheduled_at > _utcnow(),
+        )
+        .order_by(Video.youtube_scheduled_at.asc(), Video.id.asc())
+        .first()
+    )
+    latest = (
+        db.query(Video)
+        .filter(
+            Video.channel_id == channel.id,
+            Video.youtube_video_id.is_not(None),
+            Video.availability_status == "available",
+            Video.youtube_scheduled_at.is_(None),
+            Video.youtube_published_at.is_not(None),
+        )
+        .order_by(Video.youtube_published_at.desc(), Video.id.desc())
+        .first()
+    )
+    if sort == "title":
+        sort_expression = func.lower(func.coalesce(Video.youtube_title, ""))
+        query = query.order_by(sort_expression.asc(), Video.id.asc())
+    elif sort == "status":
+        sort_expression = func.lower(status_expression)
+        query = query.order_by(sort_expression.asc(), Video.id.asc())
+    else:
+        sort_expression = displayed_date
+        query = query.order_by(displayed_date.is_(None).asc())
+        query = query.order_by(displayed_date.desc(), Video.id.desc())
+
+    if cursor:
+        payload = _decode_video_cursor(
+            cursor, channel.id, sort, q, visibility, date_from, date_to
+        )
+        last_id = payload["id"]
+        value = payload.get("value")
+        if sort == "date":
+            if value is None:
+                query = query.filter(
+                    displayed_date.is_(None), Video.id < last_id
+                )
+            else:
+                last_date = _parse_youtube_datetime(value)
+                if last_date is None:
+                    raise HTTPException(400, "invalid catalog cursor")
+                query = query.filter(
+                    or_(
+                        displayed_date < last_date,
+                        and_(displayed_date == last_date, Video.id < last_id),
+                        displayed_date.is_(None),
+                    )
+                )
+        else:
+            query = query.filter(
+                or_(
+                    sort_expression > value,
+                    and_(sort_expression == value, Video.id > last_id),
+                )
+            )
+
+    rows = query.limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    next_cursor = (
+        _encode_video_cursor(
+            channel.id, sort, q, visibility, date_from, date_to, rows[-1]
+        )
+        if has_more and rows
+        else None
+    )
+    return {
+        "items": [_video_catalog_item(video) for video in rows],
+        "next_cursor": next_cursor,
+        "total": total,
+        "status_counts": {str(key): count for key, count in counts},
+        "summary": {
+            "upcoming": _video_catalog_item(upcoming) if upcoming else None,
+            "latest": _video_catalog_item(latest) if latest else None,
+        },
+    }
+
+
+@app.get("/channels/{channel_id}/catalog/status")
+def catalog_status(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    return _catalog_status(db, channel)
+
+
+@app.post(
+    "/channels/{channel_id}/catalog/sync",
+    dependencies=[Depends(require_same_origin)],
+)
+def start_catalog_sync(
+    channel_id: int,
+    request: CatalogSyncRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    sync = _ensure_catalog_sync(db, channel)
+    if _catalog_sync_locked(sync):
+        raise HTTPException(409, "catalog sync page is already running")
+    if sync.state in ("LOADING", "PARTIAL"):
+        if sync.mode != request.mode:
+            raise HTTPException(409, "another catalog sync mode is in progress")
+        return _catalog_status(db, channel)
+    if request.mode == "initial" and sync.state in ("COMPLETE", "EMPTY"):
+        return _catalog_status(db, channel)
+
+    resume = sync.state in ("ERROR", "STALE") and sync.mode == request.mode
+    sync.mode = request.mode
+    sync.state = "LOADING"
+    sync.last_started_at = _utcnow()
+    sync.last_finished_at = None
+    sync.last_error_code = None
+    sync.scanned_count = 0 if not resume else sync.scanned_count
+    if not resume:
+        sync.next_page_token = None
+        if request.mode == "initial":
+            sync.uploads_playlist_id = None
+        if request.mode in ("initial", "reconcile"):
+            sync.generation += 1
+    db.commit()
+    return _catalog_status(db, channel)
+
+
+@app.post(
+    "/channels/{channel_id}/catalog/sync/continue",
+    dependencies=[Depends(require_same_origin)],
+)
+def continue_catalog_sync(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    sync = _catalog_row(db, channel)
+    if sync is None or sync.mode is None or sync.state not in (
+        "LOADING",
+        "PARTIAL",
+        "STALE",
+        "ERROR",
+    ):
+        raise HTTPException(409, "catalog sync has not been started")
+    lease_token = _claim_catalog_page(db, channel.id)
+    sync = _catalog_row(db, channel)
+    try:
+        refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        page = yt.list_videos(
+            refresh_token,
+            channel.youtube_channel_id,
+            page_token=sync.next_page_token,
+            uploads_playlist_id=sync.uploads_playlist_id,
+            limit=50,
+        )
+        if page["next_page_token"] and page["next_page_token"] == sync.next_page_token:
+            raise RuntimeError("YouTube returned a non-advancing page token")
+
+        video_ids = page["video_ids"]
+        existing_rows = (
+            db.query(Video)
+            .filter(
+                Video.channel_id == channel.id,
+                Video.youtube_video_id.in_(video_ids),
+            )
+            .all()
+            if video_ids
+            else []
+        )
+        existing_ids = {video.youtube_video_id for video in existing_rows}
+        videos_by_id = {video["youtube_video_id"]: video for video in page["videos"]}
+        rows_by_id = {video.youtube_video_id: video for video in existing_rows}
+        now = _utcnow()
+
+        for youtube_video_id in video_ids:
+            video = rows_by_id.get(youtube_video_id)
+            if video is None:
+                video = Video(
+                    channel_id=channel.id,
+                    youtube_video_id=youtube_video_id,
+                    internal_status=None,
+                )
+                db.add(video)
+                rows_by_id[youtube_video_id] = video
+            remote = videos_by_id.get(youtube_video_id)
+            if remote is None:
+                video.availability_status = "unavailable"
+            else:
+                video.availability_status = "available"
+                for field in (
+                    "youtube_title",
+                    "youtube_description",
+                    "youtube_tags",
+                    "youtube_thumbnail_url",
+                    "youtube_category_id",
+                    "youtube_default_language",
+                    "youtube_default_audio_language",
+                    "youtube_duration",
+                    "youtube_visibility",
+                    "youtube_upload_status",
+                    "youtube_view_count",
+                    "youtube_like_count",
+                    "youtube_comment_count",
+                    "youtube_captions_available",
+                    "youtube_made_for_kids",
+                ):
+                    setattr(video, field, remote[field])
+                video.youtube_published_at = _parse_youtube_datetime(
+                    remote["youtube_published_at"]
+                )
+                video.youtube_scheduled_at = _parse_youtube_datetime(
+                    remote["youtube_scheduled_at"]
+                )
+            video.last_synced_at = now
+            if sync.mode in ("initial", "reconcile"):
+                video.last_seen_generation = sync.generation
+
+        incremental_overlap = sync.mode == "incremental" and bool(
+            existing_ids.intersection(video_ids)
+        )
+        sync.uploads_playlist_id = page["uploads_playlist_id"]
+        sync.scanned_count += len(video_ids)
+        sync.next_page_token = page["next_page_token"]
+        if incremental_overlap or not sync.next_page_token:
+            if sync.mode == "reconcile":
+                db.flush()
+                (
+                    db.query(Video)
+                    .filter(
+                        Video.channel_id == channel.id,
+                        Video.youtube_video_id.is_not(None),
+                        or_(
+                            Video.last_seen_generation.is_(None),
+                            Video.last_seen_generation != sync.generation,
+                        ),
+                    )
+                    .delete(synchronize_session=False)
+                )
+            sync.state = "EMPTY" if sync.scanned_count == 0 else "COMPLETE"
+            sync.next_page_token = None
+            sync.last_finished_at = now
+            sync.last_success_at = now
+        else:
+            sync.state = "PARTIAL"
+        sync.last_error_code = None
+        sync.lease_token = None
+        sync.lease_expires_at = None
+        db.commit()
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        error_code = _youtube_error_code(exc)
+        db.rollback()
+        sync = _catalog_row(db, channel)
+        if sync is not None and sync.lease_token == lease_token:
+            cached_count = (
+                db.query(func.count(Video.id))
+                .filter(Video.channel_id == channel.id, Video.youtube_video_id.is_not(None))
+                .scalar()
+                or 0
+            )
+            sync.state = "STALE" if cached_count else "ERROR"
+            sync.last_error_code = error_code
+            sync.last_finished_at = _utcnow()
+            sync.lease_token = None
+            sync.lease_expires_at = None
+            db.commit()
+        raise HTTPException(502, "YouTube catalog sync failed") from exc
+
+    return _catalog_status(db, channel)
 
 
 @app.get("/channels/{channel_id}/playlists")
-def channel_playlists(channel_id: int, db: Session = Depends(get_db)):
-    row = _channel_or_404(db, channel_id)
+def channel_playlists(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = _channel_or_404(db, user, channel_id)
     try:
-        return yt.list_playlists(row.refresh_token)
+        token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
+        return yt.list_playlists(token)
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
         raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
 
 
-@app.post("/channels/{channel_id}/refresh-profile")
-def refresh_profile(channel_id: int, db: Session = Depends(get_db)):
-    row = _channel_or_404(db, channel_id)
+@app.post(
+    "/channels/{channel_id}/refresh-profile",
+    dependencies=[Depends(require_same_origin)],
+)
+def refresh_profile(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = _channel_or_404(db, user, channel_id)
     try:
-        creds = yt.creds_from_refresh(row.refresh_token)
+        token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
+        creds = yt.creds_from_refresh(token)
         info = yt.fetch_channel(creds, row.youtube_channel_id)
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
         raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
     row.title = info.get("title") or row.title
@@ -142,8 +1062,7 @@ def refresh_profile(channel_id: int, db: Session = Depends(get_db)):
         "title": info.get("title") or row.title,
         "thumbnail_url": info.get("thumbnail_url") or row.thumbnail_url or "",
         "banner_url": info.get("banner_url") or getattr(row, "banner_url", "") or "",
-        "owner_name": getattr(row, "owner_name", "") or "",
-        "owner_email": getattr(row, "owner_email", "") or "",
+        "owner_email": row.google_connection.email or "",
         "youtube_channel_id": row.youtube_channel_id,
         "has_token": True,
         "description": info.get("description") or "",
@@ -152,59 +1071,3 @@ def refresh_profile(channel_id: int, db: Session = Depends(get_db)):
         "video_count": int(info.get("video_count") or 0),
         "hidden_subscribers": bool(info.get("hidden_subscribers")),
     }
-
-
-@app.get("/auth/youtube/login")
-def youtube_login():
-    if not settings.google_client_id:
-        raise HTTPException(500, "GOOGLE_CLIENT_ID is not set")
-    return RedirectResponse(yt.authorization_url())
-
-
-@app.get("/auth/youtube/callback")
-def youtube_callback(code: str = "", db: Session = Depends(get_db)):
-    if not code:
-        raise HTTPException(400, "missing code")
-    creds = yt.exchange_code(code)
-    info = yt.fetch_channel(creds)
-    owner = yt.fetch_owner(creds)
-    if not info["youtube_channel_id"]:
-        raise HTTPException(400, "no YouTube channel on this Google account")
-
-    row = (
-        db.query(Channel)
-        .filter(Channel.youtube_channel_id == info["youtube_channel_id"])
-        .one_or_none()
-    )
-    if row is None:
-        row = Channel(
-            youtube_channel_id=info["youtube_channel_id"],
-            title=info["title"],
-            refresh_token=creds.refresh_token or "",
-            thumbnail_url=info.get("thumbnail_url") or "",
-            banner_url=info.get("banner_url") or "",
-            description=info.get("description") or "",
-            yt_published_at=info.get("yt_published_at") or "",
-            subscriber_count=info.get("subscriber_count") or 0,
-            owner_name=owner.get("owner_name") or "",
-            owner_email=owner.get("owner_email") or "",
-        )
-        db.add(row)
-    else:
-        row.title = info["title"]
-        row.thumbnail_url = info.get("thumbnail_url") or row.thumbnail_url
-        row.banner_url = info.get("banner_url") or getattr(row, "banner_url", "")
-        if info.get("description"):
-            row.description = info["description"]
-        if info.get("yt_published_at"):
-            row.yt_published_at = info["yt_published_at"]
-        if info.get("subscriber_count") is not None:
-            row.subscriber_count = info["subscriber_count"]
-        if owner.get("owner_name"):
-            row.owner_name = owner["owner_name"]
-        if owner.get("owner_email"):
-            row.owner_email = owner["owner_email"]
-        if creds.refresh_token:
-            row.refresh_token = creds.refresh_token
-    db.commit()
-    return RedirectResponse(settings.frontend_origin + "/?connected=1")

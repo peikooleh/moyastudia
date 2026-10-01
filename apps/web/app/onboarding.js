@@ -2,19 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { t } from "../lib/i18n";
+import { apiFetch, apiUrl } from "../lib/api";
 import { CHANNEL_LANGS, UI_LANGS } from "../lib/prefs";
 import { ThemePicker } from "./theme-picker";
 import { usePrefs } from "./providers";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-export function Onboarding() {
+export function Onboarding({ youtubeConnected = false }) {
   const { prefs, uiLang, update } = usePrefs();
   const [step, setStep] = useState(0);
   const [channels, setChannels] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/channels`)
+    apiFetch("/channels")
       .then((r) => (r.ok ? r.json() : []))
       .then(setChannels)
       .catch(() => setChannels([]));
@@ -74,13 +73,20 @@ export function Onboarding() {
         {step === 2 && !main && (
           <>
             <h1>{t(uiLang, "connectTitle")}</h1>
+            {youtubeConnected ? <p>{t(uiLang, "connectionSaved")}</p> : null}
             <div className="actions">
               <button className="btn ghost" type="button" onClick={() => setStep(1)}>
                 {t(uiLang, "back")}
               </button>
-              <a className="btn" href={`${API}/auth/youtube/login`}>
-                {t(uiLang, "connectBtn")}
-              </a>
+              {youtubeConnected ? (
+                <a className="btn" href="/cabinet">
+                  {t(uiLang, "openCabinet")}
+                </a>
+              ) : (
+                <a className="btn" href={apiUrl("/auth/youtube/login")}>
+                  {t(uiLang, "connectBtn")}
+                </a>
+              )}
             </div>
           </>
         )}
@@ -116,7 +122,7 @@ export function Onboarding() {
                 className="btn"
                 type="button"
                 disabled={!selected}
-                onClick={() => update({ onboarded: true, signedIn: true })}
+                onClick={() => update({ onboarded: true })}
               >
                 {t(uiLang, "finish")}
               </button>

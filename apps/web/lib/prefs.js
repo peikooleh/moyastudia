@@ -33,22 +33,21 @@ const defaults = {
   uiLang: "auto",
   theme: "auto",
   onboarded: false,
-  signedIn: false,
   channelLangs: {},
-  displayName: "",
-  email: "",
   selectedChannelId: "",
   dailyEdits: 20,
   dailyUploads: 10,
-  googleClientId: "",
-  googleClientSecret: "",
 };
 
 export function loadPrefs() {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...defaults };
-    return { ...defaults, ...JSON.parse(raw) };
+    const stored = JSON.parse(raw);
+    for (const key of ["signedIn", "displayName", "email", "googleClientId", "googleClientSecret"]) {
+      delete stored[key];
+    }
+    return { ...defaults, ...stored };
   } catch {
     return { ...defaults };
   }

@@ -1,0 +1,130 @@
+import os
+
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, inspect, text
+
+
+def test_foundation_migration_discards_prototype_records(tmp_path):
+    database_path = tmp_path / "legacy.db"
+    database_url = "sqlite:///" + str(database_path).replace("\\", "/")
+    legacy_engine = create_engine(database_url)
+    with legacy_engine.begin() as connection:
+        connection.execute(
+            text("CREATE TABLE channels (id INTEGER PRIMARY KEY, refresh_token TEXT)")
+        )
+        connection.execute(
+            text("CREATE TABLE videos (id INTEGER PRIMARY KEY, channel_id INTEGER)")
+        )
+        connection.execute(
+            text("INSERT INTO channels (id, refresh_token) VALUES (1, 'prototype-token')")
+        )
+
+    api_dir = os.path.dirname(os.path.dirname(__file__))
+    config = Config(os.path.join(api_dir, "alembic.ini"))
+    config.set_main_option("script_location", os.path.join(api_dir, "migrations"))
+    config.set_main_option("prepend_sys_path", api_dir)
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "head")
+
+    migrated_engine = create_engine(database_url)
+    inspector = inspect(migrated_engine)
+    assert {
+        "users",
+        "identities",
+        "google_connections",
+        "channels",
+        "videos",
+        "user_sessions",
+        "oauth_states",
+    } <= set(inspector.get_table_names())
+    assert "refresh_token" not in {
+        column["name"] for column in inspector.get_columns("channels")
+    }
+    with migrated_engine.connect() as connection:
+        assert connection.execute(text("SELECT COUNT(*) FROM channels")).scalar_one() == 0
+    command.check(config)
+    migrated_engine.dispose()
+    legacy_engine.dispose()
+
+
+def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
+    database_path = tmp_path / "catalog.db"
+    database_url = "sqlite:///" + str(database_path).replace("\\", "/")
+    api_dir = os.path.dirname(os.path.dirname(__file__))
+    config = Config(os.path.join(api_dir, "alembic.ini"))
+    config.set_main_option("script_location", os.path.join(api_dir, "migrations"))
+    config.set_main_option("prepend_sys_path", api_dir)
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "0001_foundation")
+
+    legacy_engine = create_engine(database_url)
+    with legacy_engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO users (id) VALUES ('user-one')")
+        )
+        connection.execute(
+            text(
+                "INSERT INTO google_connections "
+                "(id, user_id, google_subject, encrypted_refresh_token) "
+                "VALUES (1, 'user-one', 'google-one', 'encrypted')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO channels (id, google_connection_id, youtube_channel_id) "
+                "VALUES (1, 1, 'youtube-one')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO videos "
+                "(id, channel_id, youtube_video_id, internal_status, title, description, tags) "
+                "VALUES (7, 1, 'existing-video', 'DRAFT', 'Working title', 'Working description', 'tag')"
+            )
+        )
+
+    command.upgrade(config, "head")
+    migrated_engine = create_engine(database_url)
+    inspector = inspect(migrated_engine)
+    video_columns = {column["name"]: column for column in inspector.get_columns("videos")}
+    assert video_columns["internal_status"]["nullable"] is True
+    assert "youtube_title" in video_columns
+    assert "availability_status" in video_columns
+    assert "channel_catalog_syncs" in inspector.get_table_names()
+    with migrated_engine.connect() as connection:
+        video = connection.execute(
+            text(
+                "SELECT id, channel_id, youtube_video_id, internal_status, title, description, tags "
+                "FROM videos WHERE id = 7"
+            )
+        ).one()
+        assert tuple(video) == (
+            7,
+            1,
+            "existing-video",
+            "DRAFT",
+            "Working title",
+            "Working description",
+            "tag",
+        )
+        assert connection.execute(
+            text("SELECT COUNT(*) FROM channel_catalog_syncs")
+        ).scalar_one() == 0
+    command.check(config)
+    command.downgrade(config, "0001_foundation")
+    downgraded_engine = create_engine(database_url)
+    downgraded_inspector = inspect(downgraded_engine)
+    assert "channel_catalog_syncs" not in downgraded_inspector.get_table_names()
+    downgraded_columns = {
+        column["name"]: column for column in downgraded_inspector.get_columns("videos")
+    }
+    assert "youtube_title" not in downgraded_columns
+    assert downgraded_columns["internal_status"]["nullable"] is False
+    with downgraded_engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT internal_status FROM videos WHERE id = 7")
+        ).scalar_one() == "DRAFT"
+    downgraded_engine.dispose()
+    migrated_engine.dispose()
+    legacy_engine.dispose()

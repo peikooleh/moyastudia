@@ -1,17 +1,18 @@
 "use client";
 
 import { t } from "../lib/i18n";
+import { apiUrl } from "../lib/api";
 import { usePrefs } from "./providers";
 
 export function Landing() {
-  const { uiLang, update } = usePrefs();
+  const { uiLang } = usePrefs();
   return (
     <div className="land">
       <header className="land-top">
         <div className="brand"><img src="/logo.svg" alt="" className="brand-mark" />{t(uiLang, "brand")}</div>
-        <button className="btn" type="button" onClick={() => update({ signedIn: true })}>
+        <a className="btn" href={apiUrl("/auth/google/login")}>
           {t(uiLang, "landCta")}
-        </button>
+        </a>
       </header>
       <section className="land-hero">
         <h1>{t(uiLang, "landTitle")}</h1>

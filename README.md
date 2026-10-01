@@ -4,15 +4,13 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Пользователь подключает свой Google-аккаунт и свои YouTube-каналы. Видео остаются на YouTube; MoyaStudia хранит только необходимые метаданные и настройки, поэтому большие видеофайлы не нужно переносить в наше хранилище.
 
-Текущая фаза — архитектура и read-only интерфейс на реальных данных подключённых каналов. Запись в YouTube намеренно не включается, пока интерфейс и модель данных не будут утверждены.
+Текущая фаза — Foundation (Stage 1): Google identity MoyaStudia, серверная cookie-сессия, проверка OAuth state, зашифрованные YouTube refresh tokens, PostgreSQL-модель с ownership, тесты и CI. Модель identity поддерживает Apple, его OAuth flow подключается позже. Поиск каналов и синхронизация каталога относятся к будущим этапам. Запись в YouTube не включена.
 
 ## Что умеем сегодня
 
-- Лендинг → вход → онбординг языка/темы → кабинет/студия.
-- Кабинет: профиль, каналы, интерфейс.
-- Несколько каналов на одном аккаунте. Выбор плитки, отвязка, язык контента канала (хранится у нас в браузере).
-- Карточка выбранного канала: баннер, название, дата создания, ролики, подписчики, описание — с YouTube Data API, только чтение.
-- Студия: список роликов канала (public / private / unlisted / scheduled), карточка полей, превью desktop/mobile. Поля read-only. Кнопка записи на YouTube ещё не живая.
+- Лендинг → вход через Google → онбординг языка/темы. Сервер проверяет аутентификацию; браузер хранит только настройки интерфейса.
+- Подключение YouTube — отдельный OAuth flow; refresh token зашифрован при хранении.
+- Поиск каналов, синхронизация каталога видео и доступ к данным студии не входят в Stage 1.
 - Тема светлая/тёмная/авто, язык интерфейса en/ru/uk отдельно от языка канала.
 - Read-only работа строится на реальных данных YouTube, а не на mock-каталоге.
 
@@ -34,24 +32,27 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Монорепозиторий без общего package.json. API и web поднимаются отдельно.
 
-## Как устроены данные
+## Foundation data model
 
-- **Сессия кабинета** — `localStorage` (`signedIn`, `uiLang`, `theme`, `selectedChannelId`, `channelLangs`, квоты-муляжи). Выход не стирает настройки, только `signedIn`.
-- **Канал в Postgres** — `youtube_channel_id`, `title`, `refresh_token`, `thumbnail_url`, `banner_url`, `description`, `yt_published_at`, `subscriber_count`, владелец.
-- **Ролики** в студии не кэшируем в БД на чтение: каждый раз `channels.list` + `playlistItems` uploads + `videos.list`.
-- OAuth: `access_type=offline`, `prompt=consent`. Access token обновляется по `refresh_token` без повторной передачи нашего списка scope (иначе Google отвечает ошибкой и падают `/videos` и `/refresh-profile`).
+- **Identity** — провайдер и стабильный provider subject. Сначала работает Google; схема также поддерживает Apple. Совпадение email не объединяет identity автоматически.
+- **Session** — случайное непрозрачное значение в HttpOnly cookie; в PostgreSQL хранятся только его hash и срок действия. `localStorage` не используется для аутентификации.
+- **Google connection** — отдельно от identity продукта; зашифрованный refresh token хранится в `google_connections`, ключ Fernet обязателен и поступает из environment/secret manager.
+- **Каналы и видео** — принадлежат Google connection через явные foreign keys. Миграция Stage 1 удаляет prototype `channels`/`videos`; владельцы старых записей не угадываются.
+- Схема обновляется через Alembic, а не при старте приложения.
 
 Важные эндпоинты API:
 
 - `GET /health`
+- `GET /auth/google/login` → callback `GET /auth/google/callback`
+- `GET /auth/session`; `POST /auth/logout`
 - `GET /auth/youtube/login` → callback `GET /auth/youtube/callback`
-- `GET /channels`
+- `GET /channels` and channel data routes require a server session and owner match
 - `POST /channels/{id}/refresh-profile`
 - `DELETE /channels/{id}`
 - `GET /channels/{id}/videos`
 - `GET /channels/{id}/playlists`
 
-`apps/api/app/youtube.py` — только Google/YouTube. `apps/api/app/main.py` — HTTP. Не копировать `main.py` поверх `youtube.py`.
+`apps/api/app/youtube.py` — Google/YouTube OAuth и API. `apps/api/app/main.py` — HTTP routes и ownership checks. `apps/api/app/tokens.py` — шифрование токенов. Не копировать `main.py` поверх `youtube.py`.
 
 ## Соглашения для следующей модели
 
@@ -62,4 +63,4 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - Патчи пользователю — дельта изменённых файлов, не весь монорепо.
 - Windows / PowerShell, кириллица в ответах.
 
-Подробный статус: `STATUS.md`. Запуск с нуля: `КАК-ЗАПУСТИТЬ.md`.
+Подробный статус: `STATUS.md`. Запуск с нуля: `HOWTOSTART.md`.

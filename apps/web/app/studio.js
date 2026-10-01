@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../lib/api";
+import { catalogVideosUrl, isCurrentCatalogRequest } from "../lib/catalog-state.mjs";
 import { usePrefs } from "./providers";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const VIEWS = [
   { id: "catalog", label: "Каталог" },
   { id: "playlists", label: "Плейлисты" },
@@ -44,8 +45,10 @@ function monthMatrix(anchor) {
 
 export function Studio() {
   const { prefs } = usePrefs();
+  const channelId = String(prefs.selectedChannelId || "");
   const [view, setView] = useState("catalog");
   const [videos, setVideos] = useState([]);
+  const [calendarVideos, setCalendarVideos] = useState([]);
   const [playlists, setPlaylists] = useState([]);
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("date");
@@ -54,77 +57,269 @@ export function Studio() {
   const [pickedPl, setPickedPl] = useState("");
   const [err, setErr] = useState("");
   const [ch, setCh] = useState(null);
+  const [catalogStatus, setCatalogStatus] = useState({ state: "NOT_IMPORTED", video_count: 0 });
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({});
+  const [catalogSummary, setCatalogSummary] = useState({});
+  const [nextCursor, setNextCursor] = useState(null);
+  const [calendarCursor, setCalendarCursor] = useState(null);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [month, setMonth] = useState(() => new Date());
-  const [coverName, setCoverName] = useState("");
-  const [subName, setSubName] = useState("");
+  const channelRequestId = useRef(0);
+  const catalogRequestId = useRef(0);
+  const syncRunId = useRef(0);
+  const channelIdRef = useRef(channelId);
+  channelIdRef.current = channelId;
 
   useEffect(() => {
-    fetch(`${API}/channels`)
-      .then((r) => (r.ok ? r.json() : []))
+    const requestId = ++channelRequestId.current;
+    syncRunId.current += 1;
+    setSyncBusy(false);
+    setCh(null);
+    setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
+    if (!channelId) return undefined;
+
+    apiFetch("/channels")
+      .then((response) => (response.ok ? response.json() : []))
       .then((rows) => {
-        const id = prefs.selectedChannelId;
-        setCh(rows.find((r) => String(r.id) === String(id)) || rows[0] || null);
+        if (requestId !== channelRequestId.current) return;
+        setCh(rows.find((row) => String(row.id) === channelId) || null);
       })
-      .catch(() => setCh(null));
-  }, [prefs.selectedChannelId]);
-
-  useEffect(() => {
-    const id = prefs.selectedChannelId;
-    if (!id) return;
-    fetch(`${API}/channels/${id}/videos`)
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || "read fail");
+      .catch(() => {
+        if (requestId === channelRequestId.current) setCh(null);
+      });
+    apiFetch(`/channels/${channelId}/catalog/status`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Не удалось загрузить состояние каталога");
         return data;
       })
-      .then((rows) => {
-        setVideos(rows);
-        if (rows[0]) setSelectedId(rows[0].id);
-        setErr("");
+      .then((data) => {
+        if (requestId === channelRequestId.current) setCatalogStatus(data);
       })
-      .catch((e) => setErr(String(e.message || e)));
-    fetch(`${API}/channels/${id}/playlists`)
-      .then((r) => (r.ok ? r.json() : []))
+      .catch((error) => {
+        if (requestId === channelRequestId.current) {
+          setCatalogStatus({ state: "ERROR", video_count: 0 });
+          setErr(String(error.message || error));
+        }
+      });
+
+    return () => {
+      channelRequestId.current += 1;
+    };
+  }, [channelId]);
+
+  useEffect(() => {
+    const requestId = ++catalogRequestId.current;
+    const controller = new AbortController();
+    setVideos([]);
+    setNextCursor(null);
+    setCatalogTotal(0);
+    setStatusCounts({});
+    setSelectedId("");
+    setErr("");
+    if (!channelId) {
+      setLoadingVideos(false);
+      return () => controller.abort();
+    }
+
+    setLoadingVideos(true);
+    apiFetch(catalogVideosUrl(channelId, { filter, query, sort }), { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Не удалось загрузить каталог");
+        return data;
+      })
+      .then((data) => {
+        if (requestId !== catalogRequestId.current) return;
+        setVideos(data.items || []);
+        setNextCursor(data.next_cursor || null);
+        setCatalogTotal(data.total || 0);
+        setStatusCounts(data.status_counts || {});
+        setCatalogSummary(data.summary || {});
+        setSelectedId(data.items?.[0]?.id || "");
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError" && requestId === catalogRequestId.current) {
+          setErr(String(error.message || error));
+        }
+      })
+      .finally(() => {
+        if (requestId === catalogRequestId.current) setLoadingVideos(false);
+      });
+    return () => controller.abort();
+  }, [channelId, filter, query, sort]);
+
+  useEffect(() => {
+    if (view !== "playlists" || !channelId) return undefined;
+    const controller = new AbortController();
+    apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : []))
       .then((rows) => {
+        if (controller.signal.aborted) return;
         setPlaylists(rows);
-        if (rows[0]) setPickedPl(rows[0].id);
+        setPickedPl(rows[0]?.id || "");
       })
-      .catch(() => setPlaylists([]));
-  }, [prefs.selectedChannelId]);
+      .catch(() => {
+        if (!controller.signal.aborted) setPlaylists([]);
+      });
+    return () => controller.abort();
+  }, [channelId, view]);
+
+  useEffect(() => {
+    if (view !== "grid" || !channelId) return undefined;
+    const controller = new AbortController();
+    const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    setCalendarVideos([]);
+    setCalendarCursor(null);
+    setLoadingCalendar(true);
+    apiFetch(
+      catalogVideosUrl(channelId, { dateFrom: start, dateTo: end, sort: "date" }),
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Не удалось загрузить каталог месяца");
+        return data;
+      })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setCalendarVideos(data.items || []);
+        setCalendarCursor(data.next_cursor || null);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setErr(String(error.message || error));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingCalendar(false);
+      });
+    return () => controller.abort();
+  }, [channelId, month, view]);
+
+  async function loadMoreCatalog() {
+    if (!nextCursor || !channelId || loadingMore) return;
+    const requestId = catalogRequestId.current;
+    setLoadingMore(true);
+    try {
+      const response = await apiFetch(
+        catalogVideosUrl(channelId, { cursor: nextCursor, filter, query, sort }),
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Не удалось загрузить следующую страницу");
+      if (!isCurrentCatalogRequest(channelId, channelIdRef.current, requestId, catalogRequestId.current)) return;
+      setVideos((current) => [...current, ...(data.items || [])]);
+      setNextCursor(data.next_cursor || null);
+      setCatalogTotal(data.total || 0);
+      setStatusCounts(data.status_counts || {});
+      setCatalogSummary(data.summary || {});
+    } catch (error) {
+      setErr(String(error.message || error));
+    } finally {
+      if (requestId === catalogRequestId.current) setLoadingMore(false);
+    }
+  }
+
+  async function loadMoreCalendar() {
+    if (!calendarCursor || !channelId || loadingCalendar) return;
+    const requestId = channelRequestId.current;
+    const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    setLoadingCalendar(true);
+    try {
+      const response = await apiFetch(
+        catalogVideosUrl(channelId, {
+          cursor: calendarCursor,
+          dateFrom: start,
+          dateTo: end,
+          sort: "date",
+        }),
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Не удалось загрузить следующую страницу");
+      if (!isCurrentCatalogRequest(channelId, channelIdRef.current, requestId, channelRequestId.current)) return;
+      setCalendarVideos((current) => [...current, ...(data.items || [])]);
+      setCalendarCursor(data.next_cursor || null);
+    } catch (error) {
+      if (isCurrentCatalogRequest(channelId, channelIdRef.current, requestId, channelRequestId.current)) {
+        setErr(String(error.message || error));
+      }
+    } finally {
+      if (isCurrentCatalogRequest(channelId, channelIdRef.current, requestId, channelRequestId.current)) {
+        setLoadingCalendar(false);
+      }
+    }
+  }
+
+  async function runCatalogSync(mode) {
+    if (!channelId || syncBusy) return;
+    const runId = ++syncRunId.current;
+    setSyncBusy(true);
+    setErr("");
+    try {
+      const startResponse = await apiFetch(`/channels/${channelId}/catalog/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      let status = await startResponse.json();
+      if (!startResponse.ok) throw new Error(status.detail || "Не удалось запустить синхронизацию");
+      if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
+      setCatalogStatus(status);
+
+      while (["LOADING", "PARTIAL"].includes(status.state)) {
+        if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
+        const response = await apiFetch(`/channels/${channelId}/catalog/sync/continue`, {
+          method: "POST",
+        });
+        status = await response.json();
+        if (!response.ok) throw new Error(status.detail || "Синхронизация каталога прервана");
+        if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
+        setCatalogStatus(status);
+
+        const pageRequestId = catalogRequestId.current;
+          const pageResponse = await apiFetch(catalogVideosUrl(channelId, { filter, query, sort }));
+        const data = await pageResponse.json();
+        if (!pageResponse.ok) throw new Error(data.detail || "Не удалось загрузить каталог");
+          if (
+            !isCurrentCatalogRequest(channelId, channelIdRef.current, runId, syncRunId.current)
+            || pageRequestId !== catalogRequestId.current
+          ) return;
+          setVideos(data.items || []);
+          setNextCursor(data.next_cursor || null);
+          setCatalogTotal(data.total || 0);
+          setStatusCounts(data.status_counts || {});
+          setCatalogSummary(data.summary || {});
+          setSelectedId(data.items?.[0]?.id || "");
+      }
+    } catch (error) {
+      if (runId === syncRunId.current && channelIdRef.current === channelId) {
+        setErr(String(error.message || error));
+        apiFetch(`/channels/${channelId}/catalog/status`)
+          .then((response) => (response.ok ? response.json() : null))
+          .then((status) => {
+            if (status && runId === syncRunId.current) setCatalogStatus(status);
+          })
+          .catch(() => {});
+      }
+    } finally {
+      if (runId === syncRunId.current) setSyncBusy(false);
+    }
+  }
 
   const selected = videos.find((v) => v.id === selectedId) || null;
   const playlist = playlists.find((p) => p.id === pickedPl) || null;
-  const visible = useMemo(() => {
-    const rows = videos.filter((v) => {
-      if (filter !== "all" && v.status !== filter) return false;
-      if (query && !v.title.toLowerCase().includes(query.toLowerCase())) return false;
-      return true;
-    });
-    const copy = [...rows];
-    copy.sort((a, b) => {
-      if (sort === "title") return a.title.localeCompare(b.title);
-      if (sort === "status") return (a.status || "").localeCompare(b.status || "");
-      return (b.publishedAt || b.slot || "").localeCompare(a.publishedAt || a.slot || "");
-    });
-    return copy;
-  }, [videos, filter, query, sort]);
 
   const light = lightOf(selected);
-  const counts = videos.reduce((acc, v) => {
-    const k = v.status || "other";
-    acc[k] = (acc[k] || 0) + 1;
-    return acc;
-  }, {});
-  const now = new Date().toISOString().slice(0, 16);
-  const upcoming = videos
-    .filter((v) => v.status === "scheduled" && v.slot && v.slot > now)
-    .sort((a, b) => a.slot.localeCompare(b.slot))[0];
-  const last = videos
-    .filter((v) => v.publishedAt)
-    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
+  const counts = statusCounts;
+  const upcoming = catalogSummary.upcoming;
+  const last = catalogSummary.latest;
   const cells = monthMatrix(month);
   const byDay = {};
-  videos.forEach((v) => {
+  calendarVideos.forEach((v) => {
     const key = (v.slot || v.publishedAt || "").slice(0, 10);
     if (!key) return;
     byDay[key] = byDay[key] || [];
@@ -162,6 +357,81 @@ export function Studio() {
       </div>
 
       {view === "catalog" ? (
+        <>
+        <section className="catalog-state" aria-live="polite">
+          <div>
+            <strong>
+              {{
+                NOT_IMPORTED: "Каталог ещё не загружен",
+                LOADING: "Загружаем каталог",
+                PARTIAL: "Импорт продолжается",
+                COMPLETE: "Каталог актуален",
+                STALE: "Показан сохранённый каталог",
+                ERROR: "Не удалось загрузить каталог",
+                EMPTY: "На канале пока нет видео",
+              }[catalogStatus.state] || "Состояние каталога неизвестно"}
+            </strong>
+            {catalogStatus.video_count > 0 ? (
+              <span>{catalogStatus.video_count} видео в кэше</span>
+            ) : null}
+            {["LOADING", "PARTIAL"].includes(catalogStatus.state) ? (
+              <span>Обработано записей: {catalogStatus.scanned_count || 0}</span>
+            ) : null}
+            {catalogStatus.last_success_at ? (
+              <span>Последнее обновление: {catalogStatus.last_success_at.replace("T", " ").slice(0, 16)}</span>
+            ) : null}
+            {catalogStatus.last_error_code ? (
+              <span role="alert">Последняя ошибка: {catalogStatus.last_error_code}</span>
+            ) : null}
+          </div>
+          {catalogStatus.state === "NOT_IMPORTED" ? (
+            <button className="btn" type="button" disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
+              {syncBusy ? "Загружаем..." : "Загрузить каталог"}
+            </button>
+          ) : null}
+          {["PARTIAL", "ERROR"].includes(catalogStatus.state) ? (
+            <button
+              className="btn"
+              type="button"
+              disabled={syncBusy}
+              onClick={() => runCatalogSync(catalogStatus.mode || "initial")}
+            >
+              {syncBusy ? "Продолжаем..." : "Продолжить импорт"}
+            </button>
+          ) : null}
+          {["COMPLETE", "STALE", "EMPTY"].includes(catalogStatus.state) ? (
+            catalogStatus.state === "STALE" && catalogStatus.last_error_code ? (
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={syncBusy}
+                onClick={() => runCatalogSync(catalogStatus.mode || "reconcile")}
+              >
+                {syncBusy ? "Продолжаем..." : "Продолжить синхронизацию"}
+              </button>
+            ) : (
+              <>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={() => runCatalogSync("incremental")}
+                >
+                  {syncBusy ? "Проверяем..." : "Обновить каталог"}
+                </button>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={syncBusy}
+                  onClick={() => runCatalogSync("reconcile")}
+                >
+                  Полная сверка
+                </button>
+              </>
+            )
+          ) : null}
+          {syncBusy ? <span role="status">Загрузка продолжается по страницам...</span> : null}
+        </section>
         <div className="studio">
           <aside className="studio-list">
             <div className="studio-tools">
@@ -179,7 +449,14 @@ export function Studio() {
             </div>
             <div className="list">
               {err ? <div className="empty">{err}</div> : null}
-              {visible.map((v) => (
+              {loadingVideos ? <div className="empty">Загрузка кэша...</div> : null}
+              {!loadingVideos && catalogStatus.state === "EMPTY" ? (
+                <div className="empty">На выбранном канале нет видео.</div>
+              ) : null}
+              {!loadingVideos && catalogStatus.state === "NOT_IMPORTED" ? (
+                <div className="empty">Нажмите «Загрузить каталог», чтобы начать импорт.</div>
+              ) : null}
+              {videos.map((v) => (
                 <button
                   key={v.id}
                   type="button"
@@ -193,11 +470,22 @@ export function Studio() {
                   </div>
                 </button>
               ))}
+              {nextCursor ? (
+                <button className="btn ghost" type="button" disabled={loadingMore} onClick={loadMoreCatalog}>
+                  {loadingMore ? "Загружаем..." : `Загрузить ещё (${Math.max(catalogTotal - videos.length, 0)})`}
+                </button>
+              ) : null}
             </div>
           </aside>
           <section className="studio-card">
             {!selected ? (
-              <div className="empty">Выберите ролик</div>
+              <div className="empty">
+                {catalogStatus.state === "EMPTY"
+                  ? "На выбранном канале нет видео."
+                  : catalogStatus.state === "NOT_IMPORTED"
+                    ? "Загрузите каталог, чтобы увидеть видео."
+                    : "Выберите ролик"}
+              </div>
             ) : (
               <>
                 {selected.thumb ? <img className="cover" src={selected.thumb} alt="" /> : null}
@@ -221,30 +509,13 @@ export function Studio() {
                   <label>Для детей<input value={selected.madeForKids === true ? "да" : selected.madeForKids === false ? "нет" : "—"} readOnly /></label>
                 </div>
                 <div className="studio-actions">
-                  <label className="btn ghost file-btn">
-                    Обложка{coverName ? `: ${coverName}` : ""}
-                    <input type="file" accept="image/*" hidden onChange={(e) => setCoverName(e.target.files?.[0]?.name || "")} />
-                  </label>
-                  <label className="btn ghost file-btn">
-                    Субтитры{subName ? `: ${subName}` : ""}
-                    <input type="file" accept=".srt,.vtt" hidden onChange={(e) => setSubName(e.target.files?.[0]?.name || "")} />
-                  </label>
                   <button type="button" className="btn ghost" onClick={() => {
-                    const blob = new Blob([JSON.stringify({ videos }, null, 2)], { type: "application/json" });
+                    const blob = new Blob([JSON.stringify({ videos, nextCursor }, null, 2)], { type: "application/json" });
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
-                    a.download = "content-plan.json";
+                    a.download = "catalog-page.json";
                     a.click();
-                  }}>Экспорт плана</button>
-                  <label className="btn ghost file-btn">
-                    Импорт плана
-                    <input type="file" accept="application/json" hidden onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      if (!f) return;
-                      const data = JSON.parse(await f.text());
-                      if (Array.isArray(data.videos)) setVideos(data.videos);
-                    }} />
-                  </label>
+                  }}>Экспорт страницы каталога</button>
                 </div>
                 <div className="previews">
                   <div>
@@ -270,6 +541,7 @@ export function Studio() {
             )}
           </section>
         </div>
+        </>
       ) : null}
 
       {view === "playlists" ? (
@@ -342,6 +614,12 @@ export function Studio() {
               );
             })}
           </div>
+          {loadingCalendar ? <div className="empty">Загружаем события из кэша...</div> : null}
+          {calendarCursor ? (
+            <button className="btn ghost" type="button" disabled={loadingCalendar} onClick={loadMoreCalendar}>
+              Загрузить ещё события
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

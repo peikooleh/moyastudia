@@ -8,7 +8,7 @@ Windows, PowerShell. Два терминала: API на `:8000`, кабинет
 - Node.js 20+.
 - Git (если `git` не находится: `& "C:\Program Files\Git\cmd\git.exe"`).
 - Проект Neon и Google Cloud (OAuth Web + YouTube Data API v3).
-- В OAuth consent добавлен тестовый пользователь — тот же Gmail, которым логинитесь.
+- В OAuth consent добавлен тестовый пользователь для Google identity и YouTube connection.
 
 ## 1. Секреты
 
@@ -24,8 +24,10 @@ copy apps\web\.env.example apps\web\.env.local
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
 GOOGLE_CLIENT_ID=....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=....
-GOOGLE_REDIRECT_URI=http://localhost:8000/auth/youtube/callback
-APP_SECRET=любая-строка
+GOOGLE_IDENTITY_REDIRECT_URI=http://localhost:8000/auth/google/callback
+GOOGLE_YOUTUBE_REDIRECT_URI=http://localhost:8000/auth/youtube/callback
+TOKEN_ENCRYPTION_KEY=<generated Fernet key>
+APP_ENV=development
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
@@ -35,11 +37,19 @@ FRONTEND_ORIGIN=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-В Google Cloud Authorized redirect URIs должен быть ровно `http://localhost:8000/auth/youtube/callback`.
+После установки зависимостей в API venv сгенерируйте Fernet key командой `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` и сохраните его только в secret manager или локальном `apps\api\.env`. Не добавляйте ключ в репозиторий. В production используйте `APP_ENV=production` и HTTPS.
+
+В Google Cloud Authorized redirect URIs должны быть зарегистрированы оба адреса: `http://localhost:8000/auth/google/callback` и `http://localhost:8000/auth/youtube/callback`.
 
 ## 2. База
 
-Таблицы создаёт API при старте (`create_all` + `ALTER … IF NOT EXISTS`). Отдельно миграции гонять не нужно.
+Из `apps\api` примените начальную миграцию:
+
+```powershell
+alembic upgrade head
+```
+
+Начальная миграция удаляет старые prototype-таблицы `channels` и `videos` без переноса записей. После этого schema управляется Alembic; API не меняет структуру БД при запуске.
 
 Проверка после запуска API: в `apps\api` при активном venv
 
@@ -86,11 +96,9 @@ npm run dev
 
 ## 5. Подключить канал
 
-1. Вход на лендинге.
-2. Кабинет → Каналы → плитка «+» (это `GET /auth/youtube/login`).
-3. Google → разрешение YouTube.
-4. Возврат на `http://localhost:3000/?connected=1`.
-5. Выбрать плитку канала. Карточка обновится через `POST /channels/{id}/refresh-profile`.
+1. На лендинге войдите через Google. Это MoyaStudia identity и устанавливает серверную HttpOnly session cookie.
+2. При первом входе выберите «Подключить YouTube-канал» для отдельного Google/YouTube OAuth consent.
+3. После Foundation connection будет сохранено зашифрованно; обнаружение и выбор каналов появятся на следующем этапе.
 
 ## Частые поломки
 
@@ -99,8 +107,10 @@ npm run dev
 | ERR_CONNECTION_REFUSED :8000 | uvicorn не запущен или запущен не из `apps\api` |
 | ERR_CONNECTION_REFUSED :3000 | `npm run dev` не из `apps\web` |
 | OAuth 403 access_denied | тестовый пользователь в Google Cloud |
-| 502 `/videos` и `нет list_videos` | в `youtube.py` снова попал код `main.py` |
-| 502 после рестарта API | refresh токена со scope; см. `creds_from_refresh` без `scopes=` |
+| 401 на API | войдите через Google; локальные preferences не являются сессией |
+| Ошибка TOKEN_ENCRYPTION_KEY | задайте Fernet key в secret manager или локальном `.env` |
+| Ошибка миграции | проверьте `DATABASE_URL`, затем запустите `alembic upgrade head` из `apps\api` |
+| 502 на чтении YouTube | проверьте scopes connection и доступность Google API |
 | `pg_config not found` | ставить `psycopg[binary]`, не собирать `psycopg2` из исходников |
 | Сайт без лого/баннера | перезапуск API + refresh-profile, не путать venv |
 
