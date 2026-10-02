@@ -1,23 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { t } from "../lib/i18n";
-import { apiFetch, apiUrl } from "../lib/api";
+import { apiUrl } from "../lib/api";
 import { CHANNEL_LANGS, UI_LANGS } from "../lib/prefs";
 import { ThemePicker } from "./theme-picker";
 import { usePrefs } from "./providers";
+import { LogoutControl } from "./logout-control";
 
-export function Onboarding({ youtubeConnected = false }) {
+export function Onboarding({ channels = [], youtubeConnected = false }) {
   const { prefs, uiLang, update } = usePrefs();
   const [step, setStep] = useState(0);
-  const [channels, setChannels] = useState([]);
-
-  useEffect(() => {
-    apiFetch("/channels")
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setChannels)
-      .catch(() => setChannels([]));
-  }, []);
 
   const main = channels[0];
   const selected = (main && prefs.channelLangs[String(main.id)]) || "";
@@ -26,6 +19,10 @@ export function Onboarding({ youtubeConnected = false }) {
     <div className="onb">
       <div className="onb-card">
         <div className="onb-logo">{t(uiLang, "brand")}</div>
+        <nav className="onb-account-nav" aria-label={t(uiLang, "account") }>
+          <a className="btn ghost" href="/cabinet">{t(uiLang, "openCabinet")}</a>
+          <LogoutControl />
+        </nav>
         <div
           className="onb-dots"
           role="progressbar"
@@ -97,15 +94,12 @@ export function Onboarding({ youtubeConnected = false }) {
               <button className="btn ghost" type="button" onClick={() => setStep(1)}>
                 {t(uiLang, "back")}
               </button>
-              {youtubeConnected ? (
-                <a className="btn" href="/cabinet">
-                  {t(uiLang, "openCabinet")}
-                </a>
-              ) : (
+              {!youtubeConnected ? (
                 <a className="btn" href={apiUrl("/auth/youtube/login")}>
                   {t(uiLang, "connectBtn")}
                 </a>
-              )}
+              ) : null}
+              <a className="btn ghost" href="/cabinet">{t(uiLang, "openCabinet")}</a>
             </div>
           </>
         )}

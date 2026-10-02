@@ -73,7 +73,13 @@ def test_identity_oauth_scopes_accept_google_set_and_reject_mismatch():
         parse_token_response(mismatched_response, scope=expected_identity_scopes)
 
 
-def test_youtube_authorization_url_does_not_merge_previously_granted_scopes(monkeypatch):
+@pytest.mark.parametrize(
+    ("force_consent", "expected_prompt"),
+    [(True, "consent select_account"), (False, "select_account")],
+)
+def test_youtube_authorization_url_keeps_offline_scopes_and_uses_consent_policy(
+    monkeypatch, force_consent, expected_prompt
+):
     captured = {}
 
     class FakeFlow:
@@ -88,14 +94,14 @@ def test_youtube_authorization_url_does_not_merge_previously_granted_scopes(monk
 
     monkeypatch.setattr(main.yt, "_flow", fake_flow)
 
-    url, state = main.yt.youtube_authorization_url()
+    url, state = main.yt.youtube_authorization_url(force_consent=force_consent)
 
     assert url == "https://accounts.test/youtube"
     assert state == "fixture-state"
     assert captured["scopes"] == YOUTUBE_SCOPES
     assert captured["authorization_kwargs"] == {
         "access_type": "offline",
-        "prompt": "consent",
+        "prompt": expected_prompt,
     }
 
 
@@ -141,7 +147,21 @@ def test_google_login_validates_one_time_state_and_issues_secure_cookie(
         "/auth/google/callback",
         params={"code": "authorization-code", "state": state},
     )
-    assert replay.status_code == 400
+    assert replay.status_code == 303
+    assert "auth_error=invalid_state" in replay.headers["location"]
+
+
+def test_authenticated_user_without_google_connection_has_separate_connection_state(
+    client, test_database
+):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+
+    session = client.get("/auth/session").json()
+    assert session["authenticated"] is True
+    assert session["user"]["youtube_connected"] is False
+    assert client.get("/google-connections").json() == []
+    assert client.get("/channels").json() == []
 
 
 def test_google_oauth_state_cannot_be_reused_from_another_browser(client, monkeypatch):
@@ -157,7 +177,8 @@ def test_google_oauth_state_cannot_be_reused_from_another_browser(client, monkey
             "/auth/google/callback",
             params={"code": "attacker-code", "state": state},
         )
-    assert response.status_code == 400
+    assert response.status_code == 303
+    assert "auth_error=invalid_state" in response.headers["location"]
 
 
 def test_google_callback_rejects_unknown_state_without_exchanging_code(client, monkeypatch):
@@ -169,7 +190,8 @@ def test_google_callback_rejects_unknown_state_without_exchanging_code(client, m
         "/auth/google/callback",
         params={"code": "authorization-code", "state": "unrecognized"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 303
+    assert "auth_error=invalid_state" in response.headers["location"]
 
 
 @pytest.mark.parametrize("failure_step", ["exchange", "verify"])
@@ -217,8 +239,8 @@ def test_google_callback_failures_use_generic_error_without_echoing_credentials(
         params={"code": "fixture-authorization-code", "state": state},
     )
 
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Google authentication failed"}
+    assert response.status_code == 303
+    assert "auth_error=identity_failed" in response.headers["location"]
     for secret in (
         "fixture-authorization-code",
         "fixture-client-secret",
@@ -239,7 +261,7 @@ def test_youtube_callback_failures_use_generic_error_without_echoing_credentials
     monkeypatch.setattr(
         main.yt,
         "youtube_authorization_url",
-        lambda: ("https://accounts.test/youtube", state),
+        lambda **kwargs: ("https://accounts.test/youtube", state),
     )
     if failure_step == "exchange":
         def fail_exchange(*args):
@@ -276,8 +298,8 @@ def test_youtube_callback_failures_use_generic_error_without_echoing_credentials
         params={"code": "fixture-authorization-code", "state": state},
     )
 
-    assert response.status_code == 502
-    assert response.json() == {"detail": "YouTube connection failed"}
+    assert response.status_code == 303
+    assert "connection_error=connection_failed" in response.headers["location"]
     for secret in (
         "fixture-authorization-code",
         "fixture-client-secret",
@@ -299,6 +321,25 @@ def test_session_logout_revokes_server_session_and_checks_origin(client, test_da
     assert response.status_code == 200
     assert client.get("/auth/session").json() == {"authenticated": False}
 
+def test_logout_clears_cookie_and_expired_session(client, test_database):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    with test_database() as db:
+        session = db.query(UserSession).one()
+        session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+
+    response = client.post(
+        "/auth/logout",
+        headers={"Origin": settings.frontend_origin},
+    )
+
+    assert response.status_code == 200
+    assert "max-age=0" in response.headers["set-cookie"].lower()
+    assert client.get("/auth/session").json() == {"authenticated": False}
+    with test_database() as db:
+        assert db.query(UserSession).count() == 0
+
 
 def test_expired_session_is_rejected_for_protected_endpoint(client, test_database):
     _, token = create_account(test_database)
@@ -317,7 +358,7 @@ def test_youtube_connection_persists_only_encrypted_token(
     user_id, token = create_account(test_database)
     client.cookies.set(settings.session_cookie_name, token)
     state = "youtube-state-once"
-    monkeypatch.setattr(main.yt, "youtube_authorization_url", lambda: ("https://accounts.test/youtube", state))
+    monkeypatch.setattr(main.yt, "youtube_authorization_url", lambda **kwargs: ("https://accounts.test/youtube", state))
     monkeypatch.setattr(
         main.yt,
         "exchange_youtube_code",
@@ -344,12 +385,45 @@ def test_youtube_connection_persists_only_encrypted_token(
     with test_database() as db:
         connection = db.query(GoogleConnection).one()
         assert callback.headers["location"].endswith(
-            f"/cabinet?select_connection={connection.id}"
+            f"/cabinet?select_connection={connection.id}&connection_status=connected"
         )
         assert connection.user_id == user_id
         assert connection.encrypted_refresh_token != "refresh-token-value"
         assert decrypt_refresh_token(connection.encrypted_refresh_token) == "refresh-token-value"
         assert db.query(Channel).count() == 0
+
+
+def test_youtube_login_without_session_redirects_to_identity_recovery(client):
+    response = client.get("/auth/youtube/login")
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("/?auth_error=session_expired")
+
+
+def test_youtube_callback_with_expired_moya_session_redirects_to_identity_login(
+    client, test_database, monkeypatch
+):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    state = "expired-session-youtube-state"
+    monkeypatch.setattr(
+        main.yt,
+        "youtube_authorization_url",
+        lambda force_consent=False: ("https://accounts.test/youtube", state),
+    )
+    assert client.get("/auth/youtube/login").status_code == 307
+    with test_database() as db:
+        session = db.query(UserSession).one()
+        session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+
+    response = client.get(
+        "/auth/youtube/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("/?auth_error=session_expired")
 
 
 def _add_google_connection(session_factory, user_id, google_subject):
@@ -363,6 +437,242 @@ def _add_google_connection(session_factory, user_id, google_subject):
         db.add(connection)
         db.commit()
         return connection.id
+
+
+def test_list_google_connections_is_owner_scoped_and_includes_empty_connections(
+    client, test_database
+):
+    owner_id, owner_token = create_account(test_database, subject="connections-owner")
+    foreign_user_id, _ = create_account(test_database, subject="connections-foreign")
+    empty_connection_id = _add_google_connection(
+        test_database, owner_id, "empty-google-connection"
+    )
+    inactive_connection_id = _add_google_connection(
+        test_database, owner_id, "inactive-google-connection"
+    )
+    populated_connection_id = _add_google_connection(
+        test_database, owner_id, "populated-google-connection"
+    )
+    foreign_connection_id = _add_google_connection(
+        test_database, foreign_user_id, "foreign-google-connection"
+    )
+    with test_database() as db:
+        populated_connection = db.get(GoogleConnection, populated_connection_id)
+        db.add_all([
+            Channel(
+                google_connection_id=populated_connection.id,
+                youtube_channel_id="owned-channel-one",
+                title="Owned channel one",
+            ),
+            Channel(
+                google_connection_id=populated_connection.id,
+                youtube_channel_id="owned-channel-two",
+                title="Owned channel two",
+            ),
+        ])
+        db.get(GoogleConnection, inactive_connection_id).is_active = False
+        db.commit()
+
+    assert client.get("/google-connections").status_code == 401
+    client.cookies.set(settings.session_cookie_name, owner_token)
+    response = client.get("/google-connections")
+
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()}
+    assert set(rows) == {empty_connection_id, inactive_connection_id, populated_connection_id}
+    assert rows[empty_connection_id]["status"] == "connected"
+    assert rows[empty_connection_id]["channel_count"] == 0
+    assert rows[empty_connection_id]["channels"] == []
+    assert rows[inactive_connection_id]["status"] == "reauthorization_required"
+    assert rows[inactive_connection_id]["channel_count"] == 0
+    assert rows[populated_connection_id]["channel_count"] == 2
+    assert {channel["title"] for channel in rows[populated_connection_id]["channels"]} == {
+        "Owned channel one",
+        "Owned channel two",
+    }
+    assert foreign_connection_id not in rows
+    assert all("google_subject" not in row and "encrypted_refresh_token" not in row for row in rows.values())
+
+def test_youtube_login_requests_consent_only_for_first_connection_or_reauth(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    states = iter(["consent-first", "consent-existing", "consent-explicit", "consent-reconnect"])
+    consent_modes = []
+
+    def authorization_url(force_consent=False):
+        consent_modes.append(force_consent)
+        return "https://accounts.test/youtube", next(states)
+
+    monkeypatch.setattr(main.yt, "youtube_authorization_url", authorization_url)
+
+    assert client.get("/auth/youtube/login").status_code == 307
+    connection_id = _add_google_connection(test_database, user_id, "valid-connection")
+    assert client.get("/auth/youtube/login").status_code == 307
+    assert client.get("/auth/youtube/login?consent_required=true").status_code == 307
+    assert client.get(
+        f"/auth/youtube/login?reconnect_connection_id={connection_id}"
+    ).status_code == 307
+
+    assert connection_id > 0
+    assert consent_modes == [True, False, True, True]
+
+
+def test_missing_new_refresh_token_redirects_to_explicit_consent_retry(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    _add_google_connection(test_database, user_id, "existing-valid-connection")
+    client.cookies.set(settings.session_cookie_name, token)
+    state = "missing-refresh-token-state"
+    monkeypatch.setattr(
+        main.yt,
+        "youtube_authorization_url",
+        lambda force_consent=False: ("https://accounts.test/youtube", state),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "exchange_youtube_code",
+        lambda *args: SimpleNamespace(id_token="new-account-id-token", refresh_token=None),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "verify_identity_token",
+        lambda token: {"sub": "new-account-without-refresh", "email": "new@example.test"},
+    )
+
+    assert client.get("/auth/youtube/login").status_code == 307
+    callback = client.get(
+        "/auth/youtube/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert callback.status_code == 303
+    assert "connection_error=consent_required" in callback.headers["location"]
+    with test_database() as db:
+        assert db.query(GoogleConnection).count() == 1
+
+
+def test_existing_refresh_token_is_retained_when_oauth_omits_replacement(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    connection_id = _add_google_connection(test_database, user_id, "existing-refresh-account")
+    client.cookies.set(settings.session_cookie_name, token)
+    state = "refresh-token-retained-state"
+    monkeypatch.setattr(
+        main.yt,
+        "youtube_authorization_url",
+        lambda force_consent=False: ("https://accounts.test/youtube", state),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "exchange_youtube_code",
+        lambda *args: SimpleNamespace(id_token="existing-account-id-token", refresh_token=None),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "verify_identity_token",
+        lambda token: {"sub": "existing-refresh-account", "email": "existing@example.test"},
+    )
+
+    assert client.get(
+        f"/auth/youtube/login?consent_required=true&reconnect_connection_id={connection_id}"
+    ).status_code == 307
+    callback = client.get(
+        "/auth/youtube/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert callback.status_code == 303
+    assert "connection_status=connected" in callback.headers["location"]
+    with test_database() as db:
+        connection = db.get(GoogleConnection, connection_id)
+        assert decrypt_refresh_token(connection.encrypted_refresh_token) == "refresh-token"
+
+
+def test_reauthorization_state_rejects_a_different_google_subject(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    connection_id = _add_google_connection(test_database, user_id, "reauth-target-subject")
+    client.cookies.set(settings.session_cookie_name, token)
+    state = "reauth-subject-mismatch-state"
+    monkeypatch.setattr(
+        main.yt,
+        "youtube_authorization_url",
+        lambda force_consent=False: ("https://accounts.test/youtube", state),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "exchange_youtube_code",
+        lambda *args: SimpleNamespace(id_token="different-id-token", refresh_token="other-token"),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "verify_identity_token",
+        lambda token: {"sub": "different-google-subject", "email": "different@example.test"},
+    )
+
+    assert client.get(
+        f"/auth/youtube/login?reconnect_connection_id={connection_id}"
+    ).status_code == 307
+    response = client.get(
+        "/auth/youtube/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+
+    assert response.status_code == 303
+    assert "connection_error=reauthorize_account_mismatch" in response.headers["location"]
+    with test_database() as db:
+        connections = db.query(GoogleConnection).all()
+        assert len(connections) == 1
+        assert connections[0].google_subject == "reauth-target-subject"
+        assert decrypt_refresh_token(connections[0].encrypted_refresh_token) == "refresh-token"
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_parameter"),
+    [("identity", "auth_error=cancelled"), ("youtube", "connection_error=cancelled")],
+)
+def test_oauth_cancellation_redirects_to_recovery_and_consumes_state(
+    client, test_database, monkeypatch, provider, expected_parameter
+):
+    state = f"cancelled-{provider}-state"
+    if provider == "identity":
+        monkeypatch.setattr(
+            main.yt,
+            "identity_authorization_url",
+            lambda: ("https://accounts.test/identity", state),
+        )
+        login_path = "/auth/google/login"
+        callback_path = "/auth/google/callback"
+    else:
+        _, token = create_account(test_database)
+        client.cookies.set(settings.session_cookie_name, token)
+        monkeypatch.setattr(
+            main.yt,
+            "youtube_authorization_url",
+            lambda force_consent=False: ("https://accounts.test/youtube", state),
+        )
+        login_path = "/auth/youtube/login"
+        callback_path = "/auth/youtube/callback"
+
+    assert client.get(login_path).status_code == 307
+    callback = client.get(
+        callback_path,
+        params={"state": state, "error": "access_denied"},
+    )
+    replay = client.get(
+        callback_path,
+        params={"state": state, "error": "access_denied"},
+    )
+
+    assert callback.status_code == 303
+    assert expected_parameter in callback.headers["location"]
+    assert replay.status_code == 303
+    assert "invalid_state" in replay.headers["location"]
 
 
 def _available_channel(youtube_channel_id, title):
@@ -422,6 +732,25 @@ def test_channel_discovery_returns_empty_list(client, test_database, monkeypatch
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_channel_discovery_provider_error_does_not_echo_exception_text(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    connection_id = _add_google_connection(test_database, user_id, "discovery-error-account")
+    client.cookies.set(settings.session_cookie_name, token)
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda value: object())
+
+    def fail_discovery(*args, **kwargs):
+        raise ValueError("access_token=secret-refresh-token")
+
+    monkeypatch.setattr(main.yt, "list_available_channels", fail_discovery)
+    response = client.get(f"/google-connections/{connection_id}/available-channels")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "YouTube channel discovery failed"}
+    assert "secret-refresh-token" not in response.text
 
 
 def test_channel_selection_saves_only_selected_and_is_idempotent(
@@ -568,7 +897,7 @@ def test_repeated_youtube_oauth_reuses_connection_and_selected_channel(
     monkeypatch.setattr(
         main.yt,
         "youtube_authorization_url",
-        lambda: ("https://accounts.test/youtube", next(states)),
+        lambda **kwargs: ("https://accounts.test/youtube", next(states)),
     )
     monkeypatch.setattr(
         main.yt,
@@ -624,7 +953,8 @@ def test_youtube_oauth_state_is_bound_to_authenticated_user(client, test_databas
         "/auth/youtube/callback",
         params={"code": "authorization-code", "state": state},
     )
-    assert response.status_code == 400
+    assert response.status_code == 303
+    assert "connection_error=invalid_state" in response.headers["location"]
     assert first_token != second_token
 
 
@@ -636,7 +966,7 @@ def test_youtube_oauth_cannot_claim_connection_owned_by_another_user(
     connection_id = _add_google_connection(test_database, owner_id, "shared-google-subject")
     client.cookies.set(settings.session_cookie_name, other_token)
     monkeypatch.setattr(
-        main.yt, "youtube_authorization_url", lambda: ("https://accounts.test/youtube", "collision-state")
+        main.yt, "youtube_authorization_url", lambda **kwargs: ("https://accounts.test/youtube", "collision-state")
     )
     monkeypatch.setattr(
         main.yt,
@@ -657,7 +987,8 @@ def test_youtube_oauth_cannot_claim_connection_owned_by_another_user(
         params={"code": "authorization-code", "state": "collision-state"},
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 303
+    assert "connection_error=connection_conflict" in response.headers["location"]
     with test_database() as db:
         connection = db.get(GoogleConnection, connection_id)
         assert connection.user_id == owner_id

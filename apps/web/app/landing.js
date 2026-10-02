@@ -4,7 +4,7 @@ import { t } from "../lib/i18n";
 import { apiUrl } from "../lib/api";
 import { usePrefs } from "./providers";
 
-export function Landing() {
+export function Landing({ authError = "" }) {
   const { uiLang } = usePrefs();
   return (
     <div className="land">
@@ -22,6 +22,7 @@ export function Landing() {
           <span className="land-eyebrow">{t(uiLang, "secureReadOnly")}</span>
           <h1>{t(uiLang, "landTitle")}</h1>
           <p>{t(uiLang, "landLead")}</p>
+          {authError ? <p className="selection-error" role="alert">{t(uiLang, authError)}</p> : null}
           <div className="land-security">
             <span className="land-security-mark" aria-hidden="true">RO</span>
             <span>{t(uiLang, "secureReadOnlyHint")}</span>

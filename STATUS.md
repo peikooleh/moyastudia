@@ -1,6 +1,265 @@
 # MoyaStudia — Current Status
 
-Snapshot: 2026-10-01. This is the current implementation handoff; architecture and product roadmap details live in [MoyaStudia_ARCHITECTURE.md](MoyaStudia_ARCHITECTURE.md).
+## Stage 2.5 — Current Status
+
+**Stage 2 / 2.5 scope: implemented and locally verified.** Account/Auth/Connections and the original prompt's supported information architecture, data hierarchy, search, channel metrics, sync status, Calendar and responsive requirements have been checked in the browser. Playlist data remains channel-wide/read-only as supported; the UI does not claim per-video playlist membership or add a new YouTube operation.
+
+### Architecture
+
+```text
+User
+	├── UserSession
+	└── GoogleConnection
+				└── Channel (0..N)
+```
+
+Implemented model remains `User → GoogleConnection → Channel`. `Channel.google_connection_id` and global `youtube_channel_id` uniqueness are unchanged; no Channel transfer or `user_id` was added. Authentication, sessions, connections, Channel ownership and available Channels are server-authoritative. Theme/UI language remain browser-global; onboarding/selected-channel/channel-language preferences carry an `accountUserId` marker and reset when a different MoyaStudia user signs in. Server-returned Channels are validated against that preference before selection.
+
+### Application states
+
+- `ANONYMOUS`: `/auth/session` returns `authenticated: false`.
+- `SESSION_LOADING` / `SESSION_ERROR`: frontend request state, distinct from anonymous.
+- `AUTHENTICATED_NO_CONNECTION`: valid User session, zero GoogleConnections.
+- `AUTHENTICATED_WITH_CONNECTIONS`: one or more owned GoogleConnections, whether or not they have saved Channels.
+- `AUTHENTICATED_CONNECTION_NO_CHANNEL`: a connection exists but no local Channel is attached.
+- `CHANNEL_SELECTION`: an owned connection is selected; current discovery and save endpoints perform discovery/selection.
+- `AUTHENTICATED_CHANNEL_SELECTED`: selected Channel exists in the current user's owned Channel set.
+- `LOGOUT_IDLE`, `LOGOUT_PENDING`, `LOGOUT_ERROR`: UI request states; logout success is confirmed by an OK response or by `/auth/session` proving the backend session is already anonymous.
+- OAuth callback results are typed, allowlisted UI states; raw exception text/secrets are not returned in redirect parameters.
+
+User authentication, YouTube connection and selected Channel are independent. `youtube_connected` must not be interpreted as `has_channel`.
+
+### API contracts
+
+Implemented owner-scoped `GET /google-connections`, requiring an authenticated User. It returns only that user's GoogleConnections and local Channel associations, makes no YouTube calls, and omits `google_subject`, refresh tokens and encrypted values. Response shape:
+
+```json
+[
+	{
+		"id": 12,
+		"email": "account@example.test",
+		"status": "connected",
+		"channel_count": 1,
+		"channels": [
+			{ "id": 34, "youtube_channel_id": "UC…", "title": "Channel", "thumbnail_url": "" }
+		]
+	}
+]
+```
+
+`status` is `connected` only when `is_active` and a non-empty stored encrypted refresh token are present; otherwise it is `reauthorization_required`. This is a stored-state indicator, not a live Google refresh-token validity probe. `channel_count` and nested `channels` describe local Channel records, not every YouTube channel available to the connection. Empty `channels` is valid.
+
+Preserved `GET /google-connections/{id}/available-channels` and `POST /google-connections/{id}/channels`; both remain owner-scoped and revalidate connection/channel ownership. Cabinet uses a connection ID internally to discover/select Channels without another OAuth round trip. Explicit reauthorization stores the targeted connection ID in the existing one-time OAuth state's purpose; callback validates session, browser binding, owner and verified Google subject before updating the connection. No DB migration was needed.
+
+`GET /channels` now also returns `catalog_video_count`, the count of locally cached videos with YouTube IDs; it is not presented as the live YouTube total. The existing read-only `/channels/{id}/refresh-profile` response supplies YouTube `video_count` and `hidden_subscribers` when a profile refresh is available. Catalog list search/sort use effective title/description, and every row returns `dirty`/`dirtyFields` from its working values.
+
+### OAuth, errors and logout policy
+
+- Keep Identity OAuth separate from YouTube OAuth. Identity never requests YouTube consent.
+- Keep YouTube `access_type=offline`, current scopes and encrypted refresh-token storage.
+- For a user's first YouTube connection or explicit reauthorization, request consent. For adding an account when the user already has an active connection with a stored refresh token, request account selection without unconditionally forcing consent.
+- If Google does not issue a refresh token and no usable token is already stored, redirect with the typed `consent_required` result and offer an explicit retry using consent. A valid stored refresh token is retained when OAuth omits a new one.
+- Explicit reauthorization is owner-scoped and OAuth-state-bound. A callback with a different verified Google subject returns a typed mismatch and does not change ownership or create a replacement connection.
+- OAuth callbacks redirect to the app with a fixed allowlisted status (cancelled, invalid state, ownership conflict, consent required or generic provider failure); no raw exception details, codes, tokens or secrets in UI URLs.
+- Logout remains same-origin. It safely retries/clears an expired cookie, deletes a matching server session when present and clears the cookie in the response. Frontend shows pending/error and returns to Landing only after confirmed logout or confirmed anonymous session state.
+
+### Preferences policy
+
+Keep theme and UI language browser-global. Add a minimal authenticated-user owner marker for `onboarded`, `selectedChannelId` and `channelLangs`; on a different MoyaStudia user, clear those account-scoped values while retaining theme/language. On logout, do not treat local storage as authentication. Always validate a stored Channel ID against the current user's server-returned Channels before selecting it. No backend preferences subsystem or DB migration is planned.
+
+### Scope boundary
+
+No Channel ownership/model change, automatic transfer, YouTube write scope/operation, disconnect/destructive cleanup, catalog/snapshot redesign, or Stage 3 work. Full GoogleConnection disconnect remains out of scope; preserving its refresh token is required.
+
+### Completed
+
+- Added owner-scoped `GET /google-connections` with status, local channel count/list and no credentials; preserved existing discovery/selection endpoints and ownership invariants.
+- Kept Moya Identity login separate from YouTube OAuth. First/no-stored-token and explicit reauthorization use consent; ordinary additional account connection does not unconditionally force consent. Offline access/scopes/encrypted refresh-token storage remain.
+- Added state/browser/user-bound per-connection reauthorization and a verified-subject mismatch recovery path; a newly required refresh token can be retried with explicit consent, while an existing stored token is retained if Google omits a replacement.
+- OAuth cancellation, invalid state, provider/token configuration failure, connection failure, cross-user conflict, consent-required and session expiry redirect with allowlisted query statuses; frontend shows localized recovery messages.
+- Authenticated users can continue from onboarding to Cabinet and separately connect YouTube. Cabinet reads real Connections, groups Channels by connection ID, discovers Channels for an existing connection and offers explicit reauthorization.
+- Logout now has idle/pending/error/retry UI and a bounded request. The same-origin backend logout is idempotent for absent/expired sessions and clears the cookie; after failure/timeout the client checks `/auth/session` and redirects if the backend already revoked the session.
+- Global Shell shows the selected channel's localized catalog sync state from the existing read-only endpoint, including loading, unavailable and no-channel states; no sync/write operation was added.
+- Catalog API search/sort now use effective title/description and effective title cursors. Each row returns dirty fields, and Studio shows local-change state for every edited row.
+- `/channels` returns a local catalog video count without schema changes. Cabinet channel rows show subscribers and distinguish live YouTube video count (from the existing profile refresh) from cached catalog count; hidden subscriber counts are labeled as hidden.
+- Video list shows availability separately and keeps duration out of repeated rows. Calendar uses local date keys so scheduled items render on the correct day. Inspector playlist metadata no longer shows an empty selected-video field; supported channel playlists are a clearly labeled secondary read-only disclosure.
+- Account-specific browser prefs reset across Moya user changes, while theme/UI language remain global. Selected Channel/channel-language entries are reconciled against the current user's Channels.
+- No schema migration, Channel ownership change, disconnect, dependency update, YouTube write, commit or push.
+
+### Prompt progress
+
+- [x] Read instructions, status, prompt, current code and pre-change Git state; preserve dirty prompt and launcher files.
+- [x] Record entity/state model and concrete API response before functional code.
+- [x] Implement authenticated owner-scoped GoogleConnection listing; empty connections and multiple Connections/Channels covered.
+- [x] Keep existing channel discovery/selection flow usable without another OAuth round trip.
+- [x] Implement conditional consent and explicit owner-bound reauthorization without changing scopes, offline access or token encryption.
+- [x] Add typed OAuth recovery, logout pending/error/retry, channel-less Cabinet path, account-scoped prefs and stale-channel validation.
+- [x] Preserve global Channel uniqueness/ownership and add regression tests; no DB/schema changes.
+- [x] Search and title sorting use effective local values; cursor pagination follows effective-title order.
+- [x] Every catalog row exposes and displays its own working dirty state.
+- [x] Channel responses distinguish local catalog count from live YouTube video count; subscriber and video metrics render compactly in Cabinet.
+- [x] Availability is explicit in video rows; duration remains in the selected-video Inspector only.
+- [x] Supported read-only channel playlists remain secondary and are labeled as channel-wide; no unsupported selected-video membership claim or extra YouTube call was introduced.
+- [x] Browser-verified authenticated Studio, Cabinet, Connections, channel-less onboarding, discovery of an existing connection, channel selection, Calendar and logout recovery using synthetic records in an isolated temporary SQLite database; no live Google/YouTube calls.
+- [x] Responsive screenshots/checks at 390/768/1024/1440; repaired mobile shell overlap and confirmed scheduled Calendar items render on their local date. Video list rows show availability separately and keep duration in the Inspector.
+- [x] Added global shell sync status using the existing read-only catalog endpoint; verified selected-channel and no-channel labels in the browser.
+- [x] Updated this handoff and ran the listed checks; no commit or push.
+
+### Validation
+
+- `apps/api`: `python -m pytest -o addopts= -q -c apps/api/pytest.ini apps/api/tests` — 74 passed in this run; 3 existing Starlette/FastAPI deprecation warnings.
+- `apps/web`: `node --test apps/web/tests/studio-catalog.test.mjs` — 20 passed in this run; existing Node module-type warning for `prefs.js`.
+- `npm run lint --prefix apps/web` — passed in this run; existing `<img>`, custom-font and deprecated `next lint` warnings remain.
+- `npm run build --prefix apps/web` — passed in this run; same non-blocking image/font warnings.
+- Editor diagnostics — no errors in modified app/backend/test files.
+- `git diff --check` — passed; only Git LF/CRLF normalization warnings.
+- Local verification used Next.js at `http://localhost:3000` and FastAPI at `http://127.0.0.1:8000` concurrently. FastAPI used a temporary isolated SQLite DB with synthetic users/sessions/channels/video; `/health` returned `db:true`, `google_configured:false`. Both servers were responsive after the production build; the dev server was restarted afterward.
+- Browser logout: successful `POST /auth/logout` returned 200, the immediate UI became Landing, and `/auth/session` returned `authenticated:false`; Cabinet redirected to Landing. Double-click sent exactly one POST. An aborted POST while the session remained active showed the retry error; retry returned 200 and logged out. Lost-response reconciliation was also exercised.
+- Browser login recovery: after logout the login link reached the local API. With Google credentials deliberately absent, the real endpoint returned typed `provider_unavailable`; a synthetic redirect/session fixture then restored authenticated Studio state without contacting Google.
+- Browser layouts were inspected with screenshots and overflow checks at 390/768/1024/1440. Studio, Videos, Calendar, Inspector, Cabinet, Connections, channel selection, playlist disclosure, empty states, auth/channel errors and all seven catalog sync states were exercised with isolated synthetic data.
+- Tests use SQLite fixtures/mocks; no live OAuth, production session, PostgreSQL migration or YouTube API/write operation was run.
+
+### Known limitations
+
+- `status=connected` means active plus non-empty encrypted refresh token, not that Google has recently validated it. Detecting revocation requires a separate safe refresh/probe policy and is not required by the original Stage 2 prompt.
+- No GoogleConnection disconnect/revoke endpoint was added; this was explicitly excluded to avoid destructive token/connection lifecycle decisions.
+- Logout pending, double-click protection, active-session error/retry, successful server logout, lost-response reconciliation and logged-out Cabinet navigation were checked in the browser. Actual Google identity OAuth was not run: the isolated API deliberately had no Google credentials and returned the typed `provider_unavailable` result; a synthetic local redirect/session fixture verified authenticated state restoration.
+- There is no persistent automated React end-to-end suite; interactive auth/onboarding, Connections, channel selection, logout, Calendar, Inspector and responsive states were manually exercised in the browser during this run.
+- Live refresh-token validity still cannot be inferred from stored encrypted-token presence; no live Google probe was made.
+- Playlist information is channel-wide, read-only and shown in a secondary Inspector disclosure. The selected-video membership field was removed rather than left blank or inferred; the original prompt requires supported playlist information but prohibits adding a new YouTube operation for membership lookup.
+
+### Next step
+
+Stage 2/2.5 is complete within the original prompt's read-only product scope and has been locally verified. Live Google token validation and real Google OAuth were not performed because no Google credentials were used in the isolated environment; these are external validation boundaries, not unimplemented prompt UI/API requirements. Do not add disconnect or change Channel ownership as incidental follow-up.
+
+### Git state
+
+- Branch: `main`; HEAD before implementation: `587e1012c92f77f5a2f4b7af2f8c3efe935b2942`.
+- Existing user changes remain uncommitted. This pass additionally changed `apps/api/app/main.py`, `apps/api/tests/test_catalog.py`, `apps/web/app/logout-control.js`, `apps/web/lib/auth-state.mjs`, `apps/web/app/page.js`, `apps/web/app/globals.css`, `apps/web/app/shell.js`, `apps/web/app/studio.js`, `apps/web/app/cabinet/page.js`, `apps/web/lib/i18n.js`, `apps/web/tests/studio-catalog.test.mjs` and this status handoff.
+- `промпт.txt` and the four untracked launcher scripts were preserved and not edited. No commit or push was created.
+- No commit was created.
+
+---
+
+## Stage 2 History — 2026-10-02
+
+The Stage 2 implementation and audit snapshot below is historical; Stage 2.5 status above supersedes it. Product architecture and roadmap remain in [MoyaStudia_ARCHITECTURE.md](MoyaStudia_ARCHITECTURE.md).
+
+### Current Stage
+
+Stage 2 — Information Architecture + UI System is implemented in the frontend. Its goal was to organize the existing shell, workspace navigation, Videos/Inspector, Calendar, Playlists, Cabinet and responsive presentation without adding product capabilities or changing backend contracts.
+
+Stage 2 is at UI/code handoff, not a fully evidenced viewport-by-viewport visual sign-off. The separate Stage 2.5 Account/Auth/Connections implementation is recorded above.
+
+### Completed
+
+- Global shell now has brand, active channel selector, Videos/Calendar navigation, Cabinet and logout. The selector shows avatar/name and changes the browser-local selected channel.
+- Videos has search/filter/sort, compact thumbnail/title/status/date/duration rows, catalog status/actions, and a selected-video Inspector.
+- Inspector keeps effective values and existing local edit/save/reset/conflict behavior. Metadata, statistics, playlists and snapshot/working/revision details are lower-level disclosures.
+- Calendar uses cached scheduled/published catalog items, month navigation, search/filter and the shared Inspector. It does not create draft events.
+- Playlist workspace and unsupported Create/upload controls were removed. Read-only channel playlists are shown in the Inspector.
+- Cabinet has Account, Connections, Channels and Interface tabs; quota/AI mock panels and oversized channel presentation were removed.
+- Frontend distinguishes session/channel loading and errors from anonymous/empty states. Backend/API/DB/OAuth were not modified.
+- Two runtime fixes were subsequently made in `apps/web/app/page.js`: import the existing `t` function and guard the initial nullable channel state before inspecting index 0.
+- Existing snapshot/working/effective, revision and conflict flows remain in use. No dependency changes or commit were made.
+
+### Prompt Progress — `промпт.txt`
+
+Status key: `[x]` complete; `[~]` partial; `[ ]` not complete; `[!]` requires a separate decision.
+
+#### Scope and audit
+
+- [x] Phase A inventory: routes, shell, Studio, Cabinet, CSS, API data shapes and responsive rules were inspected before implementation.
+- [x] Phase B IA plan: affected files and intended responsibilities were identified before implementation.
+- [x] Stage 2 stayed in the existing frontend architecture; no new feature, dependency, API, model, DB schema or auth system was added.
+- [x] Git baseline and pre-existing user changes were recorded; no commit was made.
+
+#### App shell and navigation
+
+- [~] Global shell: brand, channel avatar/name selector, Videos/Calendar navigation and Cabinet/account actions exist. Catalog/sync status is shown inside Videos, not in the global shell.
+- [x] Workspace primary navigation is Videos and Calendar; Playlists is not a primary workspace route.
+- [x] Cabinet is a separate route and the active channel can be changed from the shell.
+
+#### Videos and data hierarchy
+
+- [~] Compact video list shows thumbnail, effective/local title, status, date and duration. Duration is currently present in every row despite the prompt asking not to repeat it in every row.
+- [~] Local-change indicator is shown for the selected video only; the catalog list API has no per-row dirty field for all entries.
+- [~] P0 title/status/date and human-readable catalog state are surfaced. Availability is not presented as a separate field; it is folded into the status label. Sync status is in the Videos view, not the global shell.
+- [~] P1 thumbnail/duration are adjacent to the video; subscriber count is hidden in Channel details, and video count is not available in the current `/channels` response.
+- [~] P2 description/tags remain visible as editing fields; other metadata/statistics are disclosures. Playlists in the Inspector are channel-wide playlist rows, not verified membership for the selected video.
+- [x] P3 YouTube ID, revision, catalog freshness and snapshot/working/base/conflict payloads are in Technical details; they are not in ordinary list rows.
+- [x] Existing effective/snapshot/working and conflict/revision behavior was retained; no backend working-state contract was changed.
+- [!] Search still queries snapshot `youtube_title`/`youtube_description`, while the list displays effective/local title. `промпт.txt` explicitly defers backend changes; decide separately whether API search should include effective values.
+- [x] Existing visibility filters and sort options were reused; no new filter family was added.
+
+#### Calendar and Playlists
+
+- [~] Calendar shows catalog events with month navigation, compact existing filters/search and selected-video Inspector; loading/error/catalog states are represented in code. Visual verification at each requested viewport remains unconfirmed.
+- [x] Calendar only renders catalog items with scheduled/published dates; no draft-event model or UI was added.
+- [~] Full Playlist workspace and unsupported disabled actions were removed. Read-only playlist data remains in Inspector, but the API returns no selected-video-to-playlist membership, so this is not per-video membership information.
+
+#### Cabinet, placeholders and onboarding
+
+- [~] Cabinet has Account, Connections, Channels and Interface sections; channel selection/details are more compact and secondary details are disclosed.
+- [~] Connections is currently derived/grouped from `/channels` rows. A GoogleConnection that has no saved Channel is therefore not represented as a connection entry.
+- [x] Quota and AI-provider mock panels and unsupported disabled playlist/write controls were removed from the primary UI.
+- [~] Catalog states are mapped to localized user-facing labels. Loading/session/channel errors are distinct in the frontend, but authenticated no-channel onboarding still makes Cabinet/exit paths unclear.
+
+#### Responsive, visual validation and boundaries
+
+- [~] Responsive CSS includes shell/list/Inspector/Calendar/Cabinet rules at 900, 720 and 390 CSS-pixel breakpoints. The user reported manual visual review; exact checks at 390/768/1024/1440 and screenshot/overflow evidence are not recorded.
+- [~] Existing CSS variables and patterns were extended rather than replaced. Full visual consistency is not independently verified by browser screenshots.
+- [~] No production YouTube write was performed and no backend/auth/DB/OAuth/sync algorithm/pagination/snapshot-working/conflict/revision implementation was changed. Real authorized read-only data was not independently verified during this pass.
+- [x] Phase E code validation completed as recorded below; no dependencies or lockfiles were changed.
+- [x] Stage 2 completion summary was reported. Search mismatch and other backend requirements remain documented rather than implemented.
+
+### Runtime Fixes Already Made
+
+Both changes are limited to `apps/web/app/page.js`:
+
+1. Added the missing `import { t } from "../lib/i18n"` used by loading/error messages.
+2. Changed the first-channel guard to `channels?.[0]` so the effect is safe while `channels` is initially `null`; behavior for loaded non-empty arrays is unchanged.
+
+After these fixes, `npm run lint --prefix apps/web` and `npm run build --prefix apps/web` passed. `git diff --check` passed (Git emitted only LF/CRLF normalization warnings). The restarted local dev server returned HTTP 200 for `/`. The catalog test suite had last passed 14/14 before these two page-only runtime fixes; it was not rerun specifically afterward.
+
+### Known Issues / Remaining Work
+
+- Logout POST removes the MoyaStudia server session and cookie only on success. The UI redirects only for `response.ok`; failed/non-2xx requests have no visible error/fallback. Google provider SSO and browser-local preferences are not cleared by app logout.
+- YouTube OAuth always requests `prompt=consent` with `access_type=offline`, so reconnecting can repeatedly show Google's consent screen. Identity login is a separate flow and uses `prompt=select_account`.
+- MoyaStudia Identity login, YouTube GoogleConnection and selected YouTube Channel are distinct states. Backend permits an authenticated user without any connection/channel, but the root route gates Studio on onboarding/channel presence.
+- Cabinet route itself is available to an authenticated channel-less user, but onboarding does not always provide a clear link there or a logout action. A `youtube_connected` user may reach Cabinet without the `select_connection` context needed to discover channels.
+- Cabinet's Connections list is inferred from channels; a connection with zero saved channels is invisible. There is no owner-scoped API endpoint to list GoogleConnections independently.
+- A YouTube channel is owned through exactly one GoogleConnection. Cross-connection selection of an existing global `youtube_channel_id` is rejected with HTTP 409; ownership is not transferred.
+- Browser `moyastudia.prefs.v1` persists `onboarded`, selected channel and channel-language preferences across logout and is not user-scoped.
+- API search does not match effective/local titles; selected-video local change state is not available for every list row; per-video playlist membership and channel `video_count` are absent from current API data.
+- Browser bridge screenshots/DOM verification did not complete. The user separately reported manual visual review; no exact viewport matrix is recorded here.
+
+### Validation
+
+- `npm run lint --prefix apps/web` — passed after runtime fixes; existing `<img>`, custom-font and deprecated `next lint` warnings remain.
+- `npm run build --prefix apps/web` — passed after runtime fixes; same non-blocking warnings.
+- `node --test apps/web/tests/studio-catalog.test.mjs` — 14 passed on the final Stage 2 UI state, before the two later `page.js` runtime fixes; not rerun after them.
+- `git diff --check` — passed; only line-ending normalization warnings.
+- `GET http://localhost:3001/` via local PowerShell — HTTP 200 after dev-server restart. This confirms HTTP response/Next compilation, not an interactive browser-console pass.
+- Browser visual validation — user reported a manual review; embedded browser bridge did not confirm rendered DOM/screenshots or the required viewport matrix.
+- Backend tests were not run in the Stage 2/runtime-fix handoff. No production YouTube mutations or OAuth run were performed.
+
+### Git State
+
+- Branch: `main`.
+- HEAD: `587e1012c92f77f5a2f4b7af2f8c3efe935b2942`.
+- Before this STATUS update, tracked worktree changes were seven frontend files plus the already-dirty `промпт.txt`; four launcher files were untracked. No commit exists for these worktree changes.
+- Stage 2 frontend files currently modified: `apps/web/app/cabinet/page.js`, `apps/web/app/globals.css`, `apps/web/app/onboarding.js`, `apps/web/app/page.js`, `apps/web/app/shell.js`, `apps/web/app/studio.js`, `apps/web/lib/i18n.js`.
+- Existing user-owned files: `промпт.txt`, `create-desktop-shortcut.ps1`, `start-moyastudia.bat`, `start-moyastudia.ps1`, `stop-moyastudia.ps1`. Do not modify or overwrite them.
+- This handoff update modifies `STATUS.md` only. No commit is to be created.
+
+### Continuation Point
+
+Stage 2 UI is implemented; first decide whether to close its remaining visual/data-priority gaps or start a separately scoped Account/Auth/Connections follow-up. Recommended next task: agree the auth/onboarding state model and whether authenticated users without a YouTube Channel should have an explicit Cabinet/Workspace path. Do not alter OAuth consent, ownership, or connection lifecycle as incidental Stage 2 cleanup.
+
+---
+
+Historical handoff snapshot: 2026-10-01. The following sections are retained as project history and are superseded by the current handoff above.
 
 ## Project purpose
 

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { prefsAfterChannelRemoval } from "../lib/prefs.js";
+import {
+  accountPrefsForUser,
+  channelPreferencesForAvailableChannels,
+  prefsAfterChannelRemoval,
+} from "../lib/prefs.js";
+import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -19,6 +24,47 @@ import {
   workingVideoPatch,
   workingVideoStatusKey,
 } from "../lib/catalog-state.mjs";
+
+test("logout request succeeds only for an OK response", async () => {
+  assert.equal(await requestLogout(async () => ({ ok: true })), true);
+  assert.equal(await requestLogout(async () => ({ ok: false })), false);
+  assert.equal(await requestLogout(async () => { throw new Error("offline"); }), false);
+});
+
+test("logout request supplies an abort signal", async () => {
+  let signal;
+  await requestLogout(async (_path, options) => {
+    signal = options.signal;
+    return { ok: true };
+  });
+
+  assert.equal(signal instanceof AbortSignal, true);
+  assert.equal(signal.aborted, false);
+});
+
+test("logout request fails when its request times out", async () => {
+  const result = await requestLogout(
+    (_path, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }),
+    5,
+  );
+
+  assert.equal(result, false);
+});
+
+test("session state distinguishes authenticated, anonymous, and unavailable", async () => {
+  assert.equal(await requestSessionState(async () => ({
+    ok: true,
+    json: async () => ({ authenticated: true }),
+  })), true);
+  assert.equal(await requestSessionState(async () => ({
+    ok: true,
+    json: async () => ({ authenticated: false }),
+  })), false);
+  assert.equal(await requestSessionState(async () => ({ ok: false })), null);
+  assert.equal(await requestSessionState(async () => { throw new Error("offline"); }), null);
+});
 
 test("Studio catalog pages use the selected channel's local API route", () => {
   const url = catalogVideosUrl("channel-7", {
@@ -64,6 +110,35 @@ test("removing the last channel clears its selected ID and language preference",
     prefsAfterChannelRemoval(
       { selectedChannelId: "7", channelLangs: { "7": "ru" } },
       "7",
+      [],
+    ),
+    { selectedChannelId: "", channelLangs: {} },
+  );
+});
+
+test("account-scoped preferences reset when switching MoyaStudia users", () => {
+  assert.deepEqual(accountPrefsForUser("user-b"), {
+    accountUserId: "user-b",
+    onboarded: false,
+    selectedChannelId: "",
+    channelLangs: {},
+  });
+});
+
+test("channel preferences retain only channels returned for the authenticated user", () => {
+  assert.deepEqual(
+    channelPreferencesForAvailableChannels(
+      {
+        selectedChannelId: "foreign-channel",
+        channelLangs: { "owned-channel": "ru", "foreign-channel": "uk" },
+      },
+      [{ id: "owned-channel" }, { id: "another-owned-channel" }],
+    ),
+    { selectedChannelId: "owned-channel", channelLangs: { "owned-channel": "ru" } },
+  );
+  assert.deepEqual(
+    channelPreferencesForAvailableChannels(
+      { selectedChannelId: "stale-channel", channelLangs: { "stale-channel": "ru" } },
       [],
     ),
     { selectedChannelId: "", channelLangs: {} },

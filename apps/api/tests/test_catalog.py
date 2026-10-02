@@ -88,6 +88,151 @@ def continue_sync(client, channel_id):
     )
 
 
+def test_channel_list_includes_only_local_catalog_video_count(client, test_database):
+    user_id, token = create_account(test_database, subject="channel-count-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "channel-count")
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add_all(
+            [
+                Video(channel_id=channel_id, youtube_video_id="catalog-one"),
+                Video(channel_id=channel_id, youtube_video_id="catalog-two"),
+                Video(channel_id=channel_id, youtube_video_id=None, title="Local-only"),
+            ]
+        )
+        db.commit()
+
+    response = client.get("/channels")
+
+    assert response.status_code == 200
+    assert response.json()[0]["catalog_video_count"] == 2
+    assert response.json()[0]["hidden_subscribers"] is None
+
+
+def test_refresh_profile_returns_youtube_video_count_and_hidden_subscribers(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database, subject="channel-profile-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "channel-profile")
+    authorized_client(client, token)
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda refresh_token: object())
+    monkeypatch.setattr(
+        main.yt,
+        "fetch_channel",
+        lambda credentials, youtube_channel_id: {
+            "title": "Channel profile",
+            "thumbnail_url": "",
+            "banner_url": "",
+            "description": "",
+            "yt_published_at": "",
+            "subscriber_count": 0,
+            "video_count": 37,
+            "hidden_subscribers": True,
+        },
+    )
+
+    response = client.post(
+        f"/channels/{channel_id}/refresh-profile",
+        headers=post_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["video_count"] == 37
+    assert response.json()["subscriber_count"] == 0
+    assert response.json()["hidden_subscribers"] is True
+
+
+def test_catalog_search_sort_and_cursor_use_effective_title(client, test_database):
+    user_id, token = create_account(test_database, subject="effective-catalog-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "effective-catalog")
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add_all(
+            [
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="snapshot-zebra",
+                    youtube_title="Snapshot title",
+                    youtube_description="Snapshot description",
+                    title="Effective zebra",
+                    description="Current description",
+                ),
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="effective-alpha",
+                    youtube_title="Effective alpha",
+                ),
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="effective-beta",
+                    youtube_title="Effective beta",
+                ),
+            ]
+        )
+        db.commit()
+
+    base_url = f"/channels/{channel_id}/videos"
+    by_effective_title = client.get(base_url, params={"sort": "title", "limit": 1})
+    assert by_effective_title.status_code == 200
+    assert by_effective_title.json()["items"][0]["effectiveTitle"] == "Effective alpha"
+    cursor = by_effective_title.json()["next_cursor"]
+    second_page = client.get(
+        base_url,
+        params={"sort": "title", "limit": 1, "cursor": cursor},
+    )
+    assert second_page.json()["items"][0]["effectiveTitle"] == "Effective beta"
+    third_page = client.get(
+        base_url,
+        params={"sort": "title", "limit": 1, "cursor": second_page.json()["next_cursor"]},
+    )
+    assert third_page.json()["items"][0]["effectiveTitle"] == "Effective zebra"
+
+    assert client.get(base_url, params={"q": "Effective zebra"}).json()["total"] == 1
+    assert client.get(base_url, params={"q": "Current description"}).json()["total"] == 1
+    assert client.get(base_url, params={"q": "Snapshot title"}).json()["total"] == 0
+    assert client.get(base_url, params={"q": "Snapshot description"}).json()["total"] == 0
+
+
+def test_catalog_rows_include_dirty_state_for_every_video(client, test_database):
+    user_id, token = create_account(test_database, subject="dirty-catalog-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "dirty-catalog")
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add_all(
+            [
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="locally-edited",
+                    youtube_title="Snapshot",
+                    title="Local title",
+                ),
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="unchanged",
+                    youtube_title="Unchanged",
+                    working_ready=True,
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get(f"/channels/{channel_id}/videos")
+    assert response.status_code == 200
+    items = {item["youtubeId"]: item for item in response.json()["items"]}
+    assert items["locally-edited"]["dirty"] is True
+    assert items["locally-edited"]["dirtyFields"] == {
+        "title": True,
+        "description": False,
+        "tags": False,
+    }
+    assert items["unchanged"]["dirty"] is False
+    assert items["unchanged"]["dirtyFields"] == {
+        "title": False,
+        "description": False,
+        "tags": False,
+    }
+
+
 def test_list_videos_resolves_selected_channel_and_returns_one_page(monkeypatch):
     calls = []
 

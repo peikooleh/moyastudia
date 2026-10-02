@@ -22,11 +22,6 @@ import {
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 
-const VIEWS = [
-  { id: "catalog", key: "catalogTab" },
-  { id: "playlists", key: "playlistsTab" },
-  { id: "grid", key: "calendarTab" },
-];
 const FILTERS = [
   { id: "all", key: "filterAll" },
   { id: "public", key: "filterPublic" },
@@ -56,22 +51,6 @@ function statusLabel(uiLang, status) {
   return key ? t(uiLang, key) : status || "—";
 }
 
-function readinessLabel(uiLang, light) {
-  const key = {
-    green: "readinessGood",
-    yellow: "readinessPartial",
-    red: "readinessMissing",
-  }[light];
-  return t(uiLang, key || "readinessMissing");
-}
-
-function lightOf(v) {
-  if (!v) return "red";
-  if (v.title && v.description && v.playlist && v.language && v.slot) return "green";
-  if (v.title && v.description) return "yellow";
-  return "red";
-}
-
 function monthMatrix(anchor) {
   const y = anchor.getFullYear();
   const m = anchor.getMonth();
@@ -85,10 +64,187 @@ function monthMatrix(anchor) {
   return cells;
 }
 
-export function Studio() {
+function localDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function VideoInspector({
+  uiLang,
+  selected,
+  workingLoading,
+  workingVideo,
+  workingDraft,
+  workingEdits,
+  workingSaving,
+  workingError,
+  workingStateKey,
+  workingStateLabels,
+  updateWorkingField,
+  resetWorkingToSnapshot,
+  saveWorkingVideo,
+  videos,
+  nextCursor,
+  catalogStatus,
+  playlists,
+  playlistsLoading,
+  playlistsError,
+  retryPlaylists,
+}) {
+  if (!selected) {
+    return <section className="video-inspector empty">{t(uiLang, "catalogSelectVideo")}</section>;
+  }
+
+  const effectiveTitle = workingDraft?.title ?? catalogVideoDisplayTitle(selected);
+  const displayDate = selected.slot || selected.publishedAt || "";
+
+  return (
+    <section className="video-inspector" aria-label={t(uiLang, "selectedVideo")}>
+      <header className="video-summary">
+        {selected.thumb ? <img src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
+        <div className="video-summary-copy">
+          <h2>{effectiveTitle || t(uiLang, "untitledVideo")}</h2>
+          <div className="video-summary-meta">
+            <span className={`status-label ${selected.availability === "unavailable" || selected.remoteMissing ? "warning" : ""}`}>
+              {statusLabel(uiLang, selected.status)}
+            </span>
+            {displayDate ? <time dateTime={displayDate}>{displayDate.replace("T", " ")}</time> : null}
+            {selected.availability === "available" ? <span>{t(uiLang, "availabilityAvailable")}</span> : null}
+            {selected.duration ? <span>{selected.duration}</span> : null}
+            {workingVideo?.dirty ? <span className="item-change">{t(uiLang, "workingModified")}</span> : null}
+          </div>
+        </div>
+      </header>
+
+      <section className="inspector-edit" aria-labelledby="inspector-edit-title">
+        <h3 id="inspector-edit-title">{t(uiLang, "videoEditing")}</h3>
+        <label>
+          {t(uiLang, "videoTitle")}
+          <input
+            value={workingDraft?.title ?? catalogVideoDisplayTitle(selected)}
+            readOnly={!workingVideo || workingLoading || workingSaving}
+            onChange={(event) => updateWorkingField("title", event.target.value)}
+          />
+        </label>
+        <label>
+          {t(uiLang, "videoDescription")}
+          <textarea
+            value={workingDraft?.description ?? selected.description ?? ""}
+            readOnly={!workingVideo || workingLoading || workingSaving}
+            onChange={(event) => updateWorkingField("description", event.target.value)}
+          />
+        </label>
+        <label>
+          {t(uiLang, "videoTags")}
+          <input
+            value={workingDraft?.tags ?? selected.tags ?? ""}
+            readOnly={!workingVideo || workingLoading || workingSaving}
+            onChange={(event) => updateWorkingField("tags", event.target.value)}
+          />
+        </label>
+      </section>
+
+      <div className="working-controls" aria-live="polite">
+        {workingLoading ? <span>{t(uiLang, "workingLoading")}</span> : null}
+        {workingStateKey ? (
+          <strong className={`working-state ${workingStateKey}`}>
+            {t(uiLang, workingStateLabels[workingStateKey])}
+          </strong>
+        ) : null}
+        {workingVideo?.remoteMissing ? <span role="alert">{t(uiLang, "workingRemoteMissing")}</span> : null}
+        {workingError ? <span role="alert">{workingError}</span> : null}
+        <button
+          className="btn ghost"
+          type="button"
+          disabled={!workingVideo || workingLoading || workingSaving || (
+            !Object.keys(workingEdits).length
+            && !Object.values(workingVideo?.working || {}).some((value) => value !== null)
+          )}
+          onClick={resetWorkingToSnapshot}
+        >
+          {t(uiLang, "workingUseSnapshot")}
+        </button>
+        <button
+          className="btn"
+          type="button"
+          disabled={!workingVideo || workingLoading || workingSaving || !Object.keys(workingEdits).length}
+          onClick={saveWorkingVideo}
+        >
+          {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
+        </button>
+      </div>
+
+      <details className="inspector-disclosure">
+        <summary>{t(uiLang, "videoMetadata")}</summary>
+        <dl className="inspector-data">
+          <div><dt>{t(uiLang, "videoCategory")}</dt><dd>{selected.category || "—"}</dd></div>
+          <div><dt>{t(uiLang, "videoLanguage")}</dt><dd>{selected.language || "—"}</dd></div>
+          <div><dt>{t(uiLang, "videoCaptions")}</dt><dd>{selected.captions == null ? "—" : selected.captions ? t(uiLang, "yes") : t(uiLang, "no")}</dd></div>
+          <div><dt>{t(uiLang, "videoMadeForKids")}</dt><dd>{selected.madeForKids == null ? "—" : selected.madeForKids ? t(uiLang, "yes") : t(uiLang, "no")}</dd></div>
+        </dl>
+      </details>
+
+      <details className="inspector-disclosure">
+        <summary>{t(uiLang, "videoStatistics")}</summary>
+        <dl className="inspector-data">
+          <div><dt>{t(uiLang, "videoViews")}</dt><dd>{selected.views ?? "—"}</dd></div>
+          <div><dt>{t(uiLang, "videoLikes")}</dt><dd>{selected.likes ?? "—"}</dd></div>
+          <div><dt>{t(uiLang, "videoComments")}</dt><dd>{selected.comments ?? "—"}</dd></div>
+        </dl>
+      </details>
+
+      <details className="inspector-disclosure">
+        <summary>{t(uiLang, "channelPlaylists")}</summary>
+        {playlistsLoading ? <p role="status">{t(uiLang, "playlistsLoading")}</p> : null}
+        {playlistsError ? (
+          <p role="alert">{playlistsError} <button className="text-button" type="button" onClick={retryPlaylists}>{t(uiLang, "playlistsRetry")}</button></p>
+        ) : null}
+        {!playlistsLoading && !playlistsError && playlists.length === 0 ? <p>{t(uiLang, "emptyPlaylists")}</p> : null}
+        <ul className="playlist-list">
+          {playlists.map((playlist) => (
+            <li key={playlist.id}>
+              <strong>{playlist.title}</strong>
+              <span>{playlist.itemCount ?? "—"} · {playlist.privacy || "—"}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      <details className="inspector-disclosure technical-disclosure">
+        <summary>{t(uiLang, "videoTechnical")}</summary>
+        <dl className="inspector-data">
+          <div><dt>YouTube ID</dt><dd>{workingVideo?.youtubeId || selected.youtubeId || "—"}</dd></div>
+          <div><dt>{t(uiLang, "workingRevision")}</dt><dd>{workingVideo?.revision ?? "—"}</dd></div>
+          <div><dt>{t(uiLang, "catalogStateLabel")}</dt><dd>{t(uiLang, ({
+            NOT_IMPORTED: "catalogNotImported", LOADING: "catalogLoading", PARTIAL: "catalogPartial",
+            COMPLETE: "catalogComplete", STALE: "catalogStale", ERROR: "catalogError", EMPTY: "catalogEmpty",
+          })[catalogStatus.state] || "catalogUnknown")}</dd></div>
+          <div><dt>{t(uiLang, "catalogLastUpdatedLabel")}</dt><dd>{catalogStatus.last_success_at || "—"}</dd></div>
+          <div><dt>{t(uiLang, "workingSnapshot")}</dt><dd>{JSON.stringify(workingVideo?.snapshot || {})}</dd></div>
+          <div><dt>{t(uiLang, "workingValue")}</dt><dd>{JSON.stringify(workingVideo?.working || {})}</dd></div>
+          <div><dt>{t(uiLang, "workingBase")}</dt><dd>{JSON.stringify(workingVideo?.base || {})}</dd></div>
+          <div><dt>{t(uiLang, "workingConflicts")}</dt><dd>{JSON.stringify(workingVideo?.conflictFields || {})}</dd></div>
+        </dl>
+        <button className="btn ghost" type="button" onClick={() => {
+          const blob = new Blob([JSON.stringify({ videos, nextCursor }, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = "catalog-page.json";
+          anchor.click();
+          URL.revokeObjectURL(url);
+        }}>{t(uiLang, "exportCatalogPage")}</button>
+      </details>
+    </section>
+  );
+}
+
+export function Studio({ view = "videos" }) {
   const { prefs, uiLang } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
-  const [view, setView] = useState("catalog");
   const [videos, setVideos] = useState([]);
   const [calendarVideos, setCalendarVideos] = useState([]);
   const [playlistState, setPlaylistState] = useState({
@@ -102,9 +258,7 @@ export function Studio() {
   const [sort, setSort] = useState("date");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
-  const [pickedPl, setPickedPl] = useState("");
   const [err, setErr] = useState("");
-  const [ch, setCh] = useState(null);
   const [catalogStatus, setCatalogStatus] = useState({ state: "NOT_IMPORTED", video_count: 0 });
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState({});
@@ -136,7 +290,7 @@ export function Studio() {
   const playlists = playlistsForChannel(playlistState, channelId);
   const currentPlaylistState = playlistState.channelId === channelId ? playlistState : null;
   const playlistsLoading = Boolean(
-    view === "playlists"
+    view === "videos"
     && channelId
     && (!currentPlaylistState || currentPlaylistState.loading),
   );
@@ -147,24 +301,13 @@ export function Studio() {
     syncRunId.current += 1;
     finishCatalogSync(syncBusyRef);
     setSyncBusy(false);
-    setCh(null);
     setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
     setCalendarVideos([]);
     setCalendarCursor(null);
     setLoadingCalendar(false);
     setPlaylistState({ channelId, items: [], loading: false, error: "" });
-    setPickedPl("");
     if (!channelId) return undefined;
 
-    apiFetch("/channels")
-      .then((response) => (response.ok ? response.json() : []))
-      .then((rows) => {
-        if (requestId !== channelRequestId.current) return;
-        setCh(rows.find((row) => String(row.id) === channelId) || null);
-      })
-      .catch(() => {
-        if (requestId === channelRequestId.current) setCh(null);
-      });
     apiFetch(`/channels/${channelId}/catalog/status`)
       .then(async (response) => {
         const data = await response.json();
@@ -267,14 +410,12 @@ export function Studio() {
   }, [channelId, selectedId, workingDetailReload]);
 
   useEffect(() => {
-    if (view !== "playlists" || !channelId) {
+    if (view !== "videos" || !channelId) {
       setPlaylistState({ channelId, items: [], loading: false, error: "" });
-      setPickedPl("");
       return undefined;
     }
     const controller = new AbortController();
     setPlaylistState({ channelId, items: [], loading: true, error: "" });
-    setPickedPl("");
     apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
@@ -290,7 +431,6 @@ export function Studio() {
         if (controller.signal.aborted) return;
         const items = Array.isArray(rows) ? rows.map(mapPlaylistForStudio) : [];
         setPlaylistState({ channelId, items, loading: false, error: "" });
-        setPickedPl(items[0]?.id || "");
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
@@ -306,15 +446,16 @@ export function Studio() {
   }, [channelId, view, playlistRetry]);
 
   useEffect(() => {
-    if (view !== "grid" || !channelId) return undefined;
+    if (view !== "calendar" || !channelId) return undefined;
     const controller = new AbortController();
     const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
     const end = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
     setCalendarVideos([]);
     setCalendarCursor(null);
+    setSelectedId("");
     setLoadingCalendar(true);
     apiFetch(
-      catalogVideosUrl(channelId, { dateFrom: start, dateTo: end, sort: "date" }),
+      catalogVideosUrl(channelId, { dateFrom: start, dateTo: end, sort: "date", filter, query }),
       { signal: controller.signal },
     )
       .then(async (response) => {
@@ -334,7 +475,14 @@ export function Studio() {
         if (!controller.signal.aborted) setLoadingCalendar(false);
       });
     return () => controller.abort();
-  }, [channelId, month, view]);
+  }, [channelId, filter, month, query, view]);
+
+  useEffect(() => {
+    const activeVideos = view === "calendar" ? calendarVideos : videos;
+    if (!activeVideos.some((video) => video.id === selectedId)) {
+      setSelectedId(activeVideos[0]?.id || "");
+    }
+  }, [calendarVideos, selectedId, videos, view]);
 
   async function loadMoreCatalog() {
     if (!nextCursor || !channelId || loadingMore) return;
@@ -372,6 +520,8 @@ export function Studio() {
           dateFrom: start,
           dateTo: end,
           sort: "date",
+          filter,
+          query,
         }),
       );
       const data = await response.json();
@@ -513,9 +663,9 @@ export function Studio() {
     }
   }
 
-  const selected = videos.find((v) => v.id === selectedId) || null;
-  const playlist = playlists.find((p) => p.id === pickedPl) || null;
-
+  const selected = videos.find((v) => v.id === selectedId)
+    || calendarVideos.find((v) => v.id === selectedId)
+    || null;
   const workingStateKey = workingVideoStatusKey(
     workingVideo,
     workingEdits,
@@ -529,10 +679,6 @@ export function Studio() {
     saving: "workingSaving",
     error: "workingSaveError",
   };
-  const light = lightOf(workingVideo ? { ...selected, ...workingVideo.effective } : selected);
-  const counts = statusCounts;
-  const upcoming = catalogSummary.upcoming;
-  const last = catalogSummary.latest;
   const cells = monthMatrix(month);
   const byDay = {};
   calendarVideos.forEach((v) => {
@@ -541,53 +687,16 @@ export function Studio() {
     byDay[key] = byDay[key] || [];
     byDay[key].push(v);
   });
-  const quotaLeft = Math.max(0, (prefs.dailyEdits || 20) - (prefs.usedEdits || 0));
-
   return (
     <div className="studio-wrap">
-      <div className="studio-head">
-        {ch && ch.thumbnail_url ? (
-          <img className="studio-logo" referrerPolicy="no-referrer" src={ch.thumbnail_url} alt="" />
-        ) : (
-          <span className="avatar">{(ch && ch.title ? ch.title : "?").slice(0, 1)}</span>
-        )}
-        <div className="channel-banner">
-          {ch && ch.banner_url ? (
-            <img referrerPolicy="no-referrer" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} />
-          ) : null}
-        </div>
-        <div className="studio-stats">
-          <div>{["public", "private", "unlisted", "scheduled", "unavailable", "remote_missing"].map((key) =>
-            `${t(uiLang, FILTERS.find((item) => item.id === key)?.key || "filterAll")} ${counts[key] || 0}`
-          ).join(" · ")}</div>
-          <div title={upcoming ? upcoming.title : ""}>
-            {t(uiLang, "upcomingVideo")} {upcoming ? upcoming.slot.replace("T", " ") : "—"}
-          </div>
-          <div title={last ? last.title : ""}>
-            {t(uiLang, "latestVideo")} {last ? last.publishedAt.replace("T", " ") : "—"}
-          </div>
-          <div title={t(uiLang, "quotaRemaining")}>
-            {t(uiLang, "quotaEdits", { left: quotaLeft, cap: prefs.dailyEdits || 20 })}
-          </div>
-        </div>
-      </div>
+      {view === "videos" ? (
+        <header className="workspace-heading">
+          <h1>{t(uiLang, "videos")}</h1>
+          <span>{t(uiLang, "videoCount", { count: catalogTotal })}</span>
+        </header>
+      ) : null}
 
-      <div className="studio-tabs">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            className={view === v.id ? "on" : ""}
-            title={t(uiLang, "catalogViewTitle", { view: t(uiLang, v.key) })}
-            aria-pressed={view === v.id}
-            onClick={() => setView(v.id)}
-          >
-            {t(uiLang, v.key)}
-          </button>
-        ))}
-      </div>
-
-      {view === "catalog" ? (
+      {view === "videos" ? (
         <>
         <section className="catalog-state" aria-live="polite">
           <div>
@@ -620,9 +729,6 @@ export function Studio() {
             ) : null}
             {catalogStatus.last_success_at ? (
               <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
-            ) : null}
-            {catalogStatus.last_error_code ? (
-              <span role="alert">{t(uiLang, "catalogErrorCode", { code: catalogStatus.last_error_code })}</span>
             ) : null}
           </div>
           {catalogStatus.state === "NOT_IMPORTED" ? (
@@ -680,18 +786,18 @@ export function Studio() {
         </section>
         <div className="studio">
           <aside className="studio-list">
-            <div className="studio-tools">
-              {FILTERS.map((f) => (
-                <button key={f.id} type="button" title={t(uiLang, "tipFilterCatalog")} aria-pressed={filter === f.id} className={`chip ${filter === f.id ? "active" : ""}`} onClick={() => setFilter(f.id)}>
-                  {t(uiLang, f.key)}
-                </button>
-              ))}
-              <select value={sort} onChange={(e) => setSort(e.target.value)} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
+            <div className="video-toolbar">
+              <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
+              <select value={filter} onChange={(event) => setFilter(event.target.value)} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
+                {FILTERS.map((item) => (
+                  <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>
+                ))}
+              </select>
+              <select value={sort} onChange={(event) => setSort(event.target.value)} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
                 {SORTS.map((s) => (
                   <option key={s.id} value={s.id}>{t(uiLang, s.key)}</option>
                 ))}
               </select>
-              <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
             <div className="list">
               {err ? <div className="empty">{err}</div> : null}
@@ -709,11 +815,18 @@ export function Studio() {
                   className={`item ${v.id === selectedId ? "active" : ""}`}
                   onClick={() => setSelectedId(v.id)}
                 >
-                  <div className="item-title">{catalogVideoDisplayTitle(v)}</div>
-                  <div className="item-meta">
-                    <span>{statusLabel(uiLang, v.status)}</span>
-                    <span>{(v.slot || v.publishedAt || "").replace("T", " ")}</span>
-                  </div>
+                  {v.thumb ? <img className="item-thumb" src={v.thumb} alt="" loading="lazy" /> : <span className="item-thumb empty-thumb" />}
+                  <span className="item-content">
+                    <strong className="item-title">{catalogVideoDisplayTitle(v) || t(uiLang, "untitledVideo")}</strong>
+                    <span className="item-meta">
+                      <span>{statusLabel(uiLang, v.status)}</span>
+                      {v.availability === "available" ? <span>{t(uiLang, "availabilityAvailable")}</span> : null}
+                      <time dateTime={v.slot || v.publishedAt || undefined}>{(v.slot || v.publishedAt || "").replace("T", " ")}</time>
+                    </span>
+                    {v.dirty ? (
+                      <span className="item-change">{t(uiLang, "workingModified")}</span>
+                    ) : null}
+                  </span>
                 </button>
               ))}
               {nextCursor ? (
@@ -725,232 +838,119 @@ export function Studio() {
               ) : null}
             </div>
           </aside>
-          <section className="studio-card">
-            {!selected ? (
-              <div className="empty">
-                {catalogStatus.state === "EMPTY"
-                  ? t(uiLang, "catalogEmptyHint")
-                  : catalogStatus.state === "NOT_IMPORTED"
-                      ? t(uiLang, "catalogSelectVideo")
-                    : t(uiLang, "catalogSelectVideo")}
-              </div>
-            ) : (
-              <>
-                {selected.thumb ? <img className="cover" src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
-                <div className={`light ${light}`} title={readinessLabel(uiLang, light)}>
-                  {readinessLabel(uiLang, light)}
-                </div>
-                <h2>{workingDraft?.title ?? catalogVideoDisplayTitle(selected)}</h2>
-                <div className="meta-grid">
-                  <label>
-                    {t(uiLang, "videoTitle")}
-                    <small className="working-snapshot">
-                      {t(uiLang, "workingSnapshot")}: {workingVideo?.snapshot.title || "—"}
-                    </small>
-                    <input
-                      value={workingDraft?.title ?? selected.title}
-                      readOnly={!workingVideo || workingLoading || workingSaving}
-                      onChange={(event) => updateWorkingField("title", event.target.value)}
-                    />
-                  </label>
-                  <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly /></label>
-                  <label className="wide">
-                    {t(uiLang, "videoDescription")}
-                    <small className="working-snapshot">
-                      {t(uiLang, "workingSnapshot")}: {workingVideo?.snapshot.description || "—"}
-                    </small>
-                    <textarea
-                      value={workingDraft?.description ?? selected.description}
-                      readOnly={!workingVideo || workingLoading || workingSaving}
-                      onChange={(event) => updateWorkingField("description", event.target.value)}
-                    />
-                  </label>
-                  <label className="wide">
-                    {t(uiLang, "videoTags")}
-                    <small className="working-snapshot">
-                      {t(uiLang, "workingSnapshot")}: {workingVideo?.snapshot.tags || "—"}
-                    </small>
-                    <input
-                      value={workingDraft?.tags ?? selected.tags}
-                      readOnly={!workingVideo || workingLoading || workingSaving}
-                      onChange={(event) => updateWorkingField("tags", event.target.value)}
-                    />
-                  </label>
-                  <label>{t(uiLang, "videoPlaylist")}<input value={selected.playlist || "—"} readOnly title={t(uiLang, "noPlaylist")} /></label>
-                  <label>{t(uiLang, "videoCategory")}<input value={selected.category || "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoVisibility")}<input value={statusLabel(uiLang, selected.privacy || selected.status)} readOnly /></label>
-                  <label>{t(uiLang, "videoScheduledAt")}<input value={selected.slot || "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoPublishedAt")}<input value={(selected.publishedAt || "").replace("T", " ") || "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoDuration")}<input value={selected.duration || "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoViews")}<input value={selected.views ?? "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoLikes")}<input value={selected.likes ?? "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoComments")}<input value={selected.comments ?? "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoCaptions")}<input value={selected.captions == null ? "—" : selected.captions ? t(uiLang, "yes") : t(uiLang, "no")} readOnly /></label>
-                  <label>{t(uiLang, "videoMadeForKids")}<input value={selected.madeForKids == null ? "—" : selected.madeForKids ? t(uiLang, "yes") : t(uiLang, "no")} readOnly /></label>
-                </div>
-                <div className="working-controls" aria-live="polite">
-                  {workingLoading ? <span>{t(uiLang, "workingLoading")}</span> : null}
-                  {workingStateKey ? (
-                    <strong className={`working-state ${workingStateKey}`}>
-                      {t(uiLang, workingStateLabels[workingStateKey])}
-                    </strong>
-                  ) : null}
-                  {workingVideo?.remoteMissing ? (
-                    <span role="alert">{t(uiLang, "workingRemoteMissing")}</span>
-                  ) : null}
-                  {workingError ? <span role="alert">{workingError}</span> : null}
-                  <button
-                    className="btn ghost"
-                    type="button"
-                    disabled={!workingVideo || workingLoading || workingSaving || (
-                      !Object.keys(workingEdits).length
-                      && !Object.values(workingVideo?.working || {}).some((value) => value !== null)
-                    )}
-                    onClick={resetWorkingToSnapshot}
-                  >
-                    {t(uiLang, "workingUseSnapshot")}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    disabled={!workingVideo || workingLoading || workingSaving || !Object.keys(workingEdits).length}
-                    onClick={saveWorkingVideo}
-                  >
-                    {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
-                  </button>
-                </div>
-                <div className="studio-actions">
-                  <button type="button" className="btn ghost" title={t(uiLang, "tipExportPage")} onClick={() => {
-                    const blob = new Blob([JSON.stringify({ videos, nextCursor }, null, 2)], { type: "application/json" });
-                    const a = document.createElement("a");
-                    a.href = URL.createObjectURL(blob);
-                    a.download = "catalog-page.json";
-                    a.click();
-                  }}>{t(uiLang, "exportCatalogPage")}</button>
-                </div>
-                <div className="previews">
-                  <div>
-                    <span>{t(uiLang, "previewDesktop")}</span>
-                    <div className="snip">
-                      {selected.thumb ? <img src={selected.thumb} alt="" /> : null}
-                      <b>{workingDraft?.title ?? catalogVideoDisplayTitle(selected)}</b>
-                      <p>{(workingDraft?.description ?? selected.description ?? "").slice(0, 90)}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <span>{t(uiLang, "previewMobile")}</span>
-                    <div className="snip mob">
-                      {selected.thumb ? <img src={selected.thumb} alt="" /> : null}
-                      <b>{workingDraft?.title ?? catalogVideoDisplayTitle(selected)}</b>
-                    </div>
-                  </div>
-                </div>
-                <button className="btn" type="button" disabled title={t(uiLang, "writeDisabled")}>
-                  {t(uiLang, "writeDisabled")}
-                </button>
-              </>
-            )}
-          </section>
+          <VideoInspector
+            uiLang={uiLang}
+            selected={selected}
+            workingLoading={workingLoading}
+            workingVideo={workingVideo}
+            workingDraft={workingDraft}
+            workingEdits={workingEdits}
+            workingSaving={workingSaving}
+            workingError={workingError}
+            workingStateKey={workingStateKey}
+            workingStateLabels={workingStateLabels}
+            updateWorkingField={updateWorkingField}
+            resetWorkingToSnapshot={resetWorkingToSnapshot}
+            saveWorkingVideo={saveWorkingVideo}
+            videos={videos}
+            nextCursor={nextCursor}
+            catalogStatus={catalogStatus}
+            playlists={playlists}
+            playlistsLoading={playlistsLoading}
+            playlistsError={playlistsError}
+            retryPlaylists={() => setPlaylistRetry((current) => current + 1)}
+          />
         </div>
         </>
       ) : null}
 
-      {view === "playlists" ? (
-        <div className="studio">
-          <aside className="studio-list">
-            <div className="studio-tools">
-              <button className="chip" type="button" disabled title={t(uiLang, "playlistCreateSoon")}>
-                {t(uiLang, "playlistCreateSoon")}
+      {view === "calendar" ? (
+        <main className="calendar-workspace">
+          <section className="calendar-panel">
+            <header className="calendar-heading">
+              <h1>{t(uiLang, "calendarTab")}</h1>
+              <div className="cal-nav">
+                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
+                <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
+              </div>
+            </header>
+            <div className="calendar-tools">
+              <input className="search" aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
+              <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label={t(uiLang, "tipFilterCatalog")}>
+                {FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}
+              </select>
+            </div>
+            <div className="calendar-status" role="status" aria-live="polite">
+              <strong>{t(uiLang, ({
+                NOT_IMPORTED: "catalogNotImported", LOADING: "catalogLoading", PARTIAL: "catalogPartial",
+                COMPLETE: "catalogComplete", STALE: "catalogStale", ERROR: "catalogError", EMPTY: "catalogEmpty",
+              })[catalogStatus.state] || "catalogUnknown")}</strong>
+              {catalogStatus.video_count > 0 ? <span>{t(uiLang, "catalogCacheCount", { count: catalogStatus.video_count })}</span> : null}
+              {err ? <span className="calendar-error" role="alert">{err}</span> : null}
+            </div>
+            <div className="cal" role="grid" aria-label={t(uiLang, "calendarTab")}>
+              {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
+              {cells.map((day, index) => {
+                const key = day ? localDateKey(day) : `empty-${index}`;
+                const items = day ? byDay[key] || [] : [];
+                return (
+                  <div key={key} className={`cal-cell ${day ? "" : "off"}`} role="gridcell">
+                    {day ? <b>{day.getDate()}</b> : null}
+                    {items.slice(0, 3).map((video) => (
+                      <button
+                        key={video.id}
+                        type="button"
+                        className={`cal-event ${video.id === selectedId ? "active" : ""}`}
+                        title={catalogVideoDisplayTitle(video)}
+                        onClick={() => setSelectedId(video.id)}
+                      >
+                        {catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+            {loadingCalendar ? <div className="empty" role="status">{t(uiLang, "catalogLoadingCalendar")}</div> : null}
+            {!loadingCalendar && !err && calendarVideos.length === 0 ? (
+              <div className="empty">
+                {catalogStatus.state === "NOT_IMPORTED"
+                  ? t(uiLang, "catalogImportPrompt")
+                  : ["COMPLETE", "EMPTY", "STALE"].includes(catalogStatus.state)
+                    ? t(uiLang, "calendarNoEvents")
+                    : null}
+              </div>
+            ) : null}
+            {calendarCursor ? (
+              <button className="btn ghost" type="button" disabled={loadingCalendar} onClick={loadMoreCalendar}>
+                {t(uiLang, "catalogLoadCalendar")}
               </button>
-            </div>
-            <div className="list">
-              {playlistsLoading ? (
-                <div className="empty" role="status">{t(uiLang, "playlistsLoading")}</div>
-              ) : null}
-              {playlistsError ? (
-                <div className="empty" role="alert">
-                  <p>{playlistsError}</p>
-                  <button className="btn ghost" type="button" onClick={() => setPlaylistRetry((n) => n + 1)}>
-                    {t(uiLang, "playlistsRetry")}
-                  </button>
-                </div>
-              ) : null}
-              {!playlistsLoading && !playlistsError ? playlists.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`item ${p.id === pickedPl ? "active" : ""}`}
-                  onClick={() => setPickedPl(p.id)}
-                >
-                  <div className="item-title">{p.title}</div>
-                </button>
-              )) : null}
-              {!playlistsLoading && !playlistsError && !playlists.length ? (
-                <div className="empty">{t(uiLang, "emptyPlaylists")}</div>
-              ) : null}
-            </div>
-          </aside>
-          <section className="studio-card">
-            {playlistsLoading ? (
-              <div className="empty" role="status">{t(uiLang, "playlistsLoading")}</div>
-            ) : playlistsError ? (
-              <div className="empty" role="alert">{playlistsError}</div>
-            ) : !playlist ? (
-              <div className="empty">{t(uiLang, "selectPlaylist")}</div>
-            ) : (
-              <>
-                {playlist.thumb ? <img className="cover" src={playlist.thumb} alt="" /> : null}
-                <h2>{playlist.title}</h2>
-                <div className="meta-grid">
-                  <label>{t(uiLang, "videoTitle")}<input value={playlist.title} readOnly /></label>
-                  <label>{t(uiLang, "playlistVideoCount")}<input value={playlist.itemCount ?? "—"} readOnly /></label>
-                  <label className="wide">{t(uiLang, "videoDescription")}<textarea value={playlist.description || ""} readOnly /></label>
-                  <label>{t(uiLang, "channelCreated")}<input value={playlist.publishedAt || "—"} readOnly /></label>
-                  <label>{t(uiLang, "videoVisibility")}<input value={playlist.privacy || "—"} readOnly /></label>
-                </div>
-                <div className="studio-actions">
-                  <label className="btn ghost file-btn" title={t(uiLang, "playlistCreateSoon")}>{t(uiLang, "playlistThumbnailAlt")}<input type="file" accept="image/*" hidden disabled /></label>
-                  <button type="button" className="btn" disabled title={t(uiLang, "playlistCreateSoon")}>{t(uiLang, "playlistCreateSoon")}</button>
-                </div>
-              </>
-            )}
+            ) : null}
           </section>
-        </div>
-      ) : null}
-
-      {view === "grid" ? (
-        <div className="studio-grid">
-          <div className="cal-nav">
-            <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
-            <strong>
-              {month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}
-            </strong>
-            <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
-          </div>
-          <div className="cal">
-            {WEEKDAY_KEYS.map((key) => (
-              <div key={key} className="cal-h">{t(uiLang, key)}</div>
-            ))}
-            {cells.map((day, i) => {
-              const key = day ? day.toISOString().slice(0, 10) : `e${i}`;
-              const items = day ? byDay[key] || [] : [];
-              return (
-                <div key={key} className={`cal-cell ${day ? "" : "off"}`}>
-                  {day ? <b>{day.getDate()}</b> : null}
-                  {items.slice(0, 3).map((v) => (
-                    <span key={v.id} title={v.title}>{v.title}</span>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-          {loadingCalendar ? <div className="empty">{t(uiLang, "catalogLoadingCalendar")}</div> : null}
-          {calendarCursor ? (
-            <button className="btn ghost" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={loadingCalendar} onClick={loadMoreCalendar}>
-              {t(uiLang, "catalogLoadCalendar")}
-            </button>
-          ) : null}
-        </div>
+          <VideoInspector
+            uiLang={uiLang}
+            selected={selected}
+            workingLoading={workingLoading}
+            workingVideo={workingVideo}
+            workingDraft={workingDraft}
+            workingEdits={workingEdits}
+            workingSaving={workingSaving}
+            workingError={workingError}
+            workingStateKey={workingStateKey}
+            workingStateLabels={workingStateLabels}
+            updateWorkingField={updateWorkingField}
+            resetWorkingToSnapshot={resetWorkingToSnapshot}
+            saveWorkingVideo={saveWorkingVideo}
+            videos={videos}
+            nextCursor={nextCursor}
+            catalogStatus={catalogStatus}
+            playlists={playlists}
+            playlistsLoading={playlistsLoading}
+            playlistsError={playlistsError}
+            retryPlaylists={() => setPlaylistRetry((current) => current + 1)}
+          />
+        </main>
       ) : null}
     </div>
   );

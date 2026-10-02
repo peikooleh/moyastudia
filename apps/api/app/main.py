@@ -2,6 +2,7 @@ import base64
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Literal
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from . import db as database
 from .db import get_db
@@ -26,6 +27,7 @@ from .models import (
 from .security import (
     clear_session_cookie,
     consume_oauth_state,
+    consume_youtube_oauth_state,
     create_oauth_state,
     create_session,
     get_current_user,
@@ -103,6 +105,16 @@ def _require_google_configuration() -> None:
         raise HTTPException(503, "Google OAuth is not configured")
 
 
+def _oauth_status_redirect(path: str, parameter: str, status: str, state: str = ""):
+    query = urlencode({parameter: status})
+    response = RedirectResponse(
+        f"{settings.frontend_origin}{path}?{query}", status_code=303
+    )
+    if state:
+        clear_oauth_state_cookie(response, state)
+    return response
+
+
 @app.get("/auth/session")
 def auth_session(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
@@ -116,7 +128,11 @@ def auth_session(request: Request, db: Session = Depends(get_db)):
     )
     youtube_connected = (
         db.query(GoogleConnection.id)
-        .filter(GoogleConnection.user_id == user.id, GoogleConnection.is_active.is_(True))
+        .filter(
+            GoogleConnection.user_id == user.id,
+            GoogleConnection.is_active.is_(True),
+            GoogleConnection.encrypted_refresh_token != "",
+        )
         .first()
         is not None
     )
@@ -132,7 +148,10 @@ def auth_session(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/auth/google/login")
 def google_login(db: Session = Depends(get_db)):
-    _require_google_configuration()
+    try:
+        _require_google_configuration()
+    except HTTPException:
+        return _oauth_status_redirect("/", "auth_error", "provider_unavailable")
     url, state = yt.identity_authorization_url()
     _, browser_binding = create_oauth_state(db, "google_identity", value=state)
     response = RedirectResponse(url)
@@ -145,22 +164,28 @@ def google_callback(
     request: Request,
     code: str = "",
     state: str = "",
+    error: str = "",
     db: Session = Depends(get_db),
 ):
     browser_binding = request.cookies.get(oauth_state_cookie_name(state), "") if state else ""
-    if not code or not state or not browser_binding or not consume_oauth_state(
+    if not state or not browser_binding or not consume_oauth_state(
         db, state, "google_identity", browser_binding
     ):
-        raise HTTPException(400, "invalid or expired OAuth state")
+        return _oauth_status_redirect("/", "auth_error", "invalid_state", state)
+    if error:
+        status = "cancelled" if error == "access_denied" else "provider_failed"
+        return _oauth_status_redirect("/", "auth_error", status, state)
+    if not code:
+        return _oauth_status_redirect("/", "auth_error", "invalid_state", state)
     try:
         credentials = yt.exchange_identity_code(code, state)
         claims = yt.verify_identity_token(credentials.id_token or "")
-    except Exception as exc:
-        raise HTTPException(400, "Google authentication failed") from exc
+    except Exception:
+        return _oauth_status_redirect("/", "auth_error", "identity_failed", state)
 
     subject = claims.get("sub")
     if not subject:
-        raise HTTPException(400, "Google identity is missing a subject")
+        return _oauth_status_redirect("/", "auth_error", "identity_failed", state)
     identity = (
         db.query(Identity)
         .filter(Identity.provider == "google", Identity.subject == subject)
@@ -194,13 +219,16 @@ def google_callback(
 @app.post("/auth/logout", dependencies=[Depends(require_same_origin)])
 def logout(
     request: Request,
-    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     value = request.cookies.get(settings.session_cookie_name, "")
-    session = db.query(UserSession).filter(
-        UserSession.token_hash == hash_secret(value), UserSession.user_id == user.id
-    ).one_or_none()
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.token_hash == hash_secret(value))
+        .one_or_none()
+        if value
+        else None
+    )
     if session is not None:
         db.delete(session)
         db.commit()
@@ -210,14 +238,58 @@ def logout(
 
 
 @app.get("/auth/youtube/login")
-def youtube_login(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _require_google_configuration()
+def youtube_login(
+    request: Request,
+    consent_required: bool = Query(False),
+    reconnect_connection_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+):
+    user = get_optional_user(request, db)
+    if user is None:
+        return _oauth_status_redirect("/", "auth_error", "session_expired")
+    try:
+        _require_google_configuration()
+    except HTTPException:
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "provider_unavailable"
+        )
     try:
         validate_encryption_key()
-    except TokenEncryptionError as exc:
-        raise HTTPException(503, str(exc)) from exc
-    url, state = yt.youtube_authorization_url()
-    _, browser_binding = create_oauth_state(db, "youtube_connection", user.id, state)
+    except TokenEncryptionError:
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "token_configuration"
+        )
+    reconnect_connection = None
+    state_purpose = "youtube_connection"
+    if reconnect_connection_id is not None:
+        reconnect_connection = (
+            db.query(GoogleConnection)
+            .filter(
+                GoogleConnection.id == reconnect_connection_id,
+                GoogleConnection.user_id == user.id,
+            )
+            .one_or_none()
+        )
+        if reconnect_connection is None:
+            return _oauth_status_redirect(
+                "/cabinet", "connection_error", "connection_unavailable"
+            )
+        state_purpose = f"youtube_connection_reauthorize:{reconnect_connection.id}"
+    has_usable_connection = (
+        db.query(GoogleConnection.id)
+        .filter(
+            GoogleConnection.user_id == user.id,
+            GoogleConnection.is_active.is_(True),
+            GoogleConnection.encrypted_refresh_token != "",
+        )
+        .first()
+        is not None
+    )
+    force_consent = bool(
+        consent_required or reconnect_connection is not None or not has_usable_connection
+    )
+    url, state = yt.youtube_authorization_url(force_consent=force_consent)
+    _, browser_binding = create_oauth_state(db, state_purpose, user.id, state)
     response = RedirectResponse(url)
     set_oauth_state_cookie(response, state, browser_binding)
     return response
@@ -228,33 +300,81 @@ def youtube_callback(
     request: Request,
     code: str = "",
     state: str = "",
+    error: str = "",
     db: Session = Depends(get_db),
 ):
     user = get_optional_user(request, db)
     if user is None:
-        raise HTTPException(401, "authentication required")
+        return _oauth_status_redirect("/", "auth_error", "session_expired", state)
     browser_binding = request.cookies.get(oauth_state_cookie_name(state), "") if state else ""
-    if not code or not state or not consume_oauth_state(
-        db, state, "youtube_connection", browser_binding, user.id
-    ):
-        raise HTTPException(400, "invalid or expired OAuth state")
+    oauth_purpose = (
+        consume_youtube_oauth_state(db, state, browser_binding, user.id)
+        if state and browser_binding
+        else None
+    )
+    if oauth_purpose is None:
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "invalid_state", state
+        )
+    reconnect_connection = None
+    if oauth_purpose.startswith("youtube_connection_reauthorize:"):
+        connection_id_text = oauth_purpose.partition(":")[2]
+        if not connection_id_text.isdigit():
+            return _oauth_status_redirect(
+                "/cabinet", "connection_error", "invalid_state", state
+            )
+        reconnect_connection = (
+            db.query(GoogleConnection)
+            .filter(
+                GoogleConnection.id == int(connection_id_text),
+                GoogleConnection.user_id == user.id,
+            )
+            .one_or_none()
+        )
+        if reconnect_connection is None:
+            return _oauth_status_redirect(
+                "/cabinet", "connection_error", "connection_unavailable", state
+            )
+    if error:
+        status = "cancelled" if error == "access_denied" else "provider_failed"
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", status, state
+        )
+    if not code:
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "invalid_state", state
+        )
     try:
         credentials = yt.exchange_youtube_code(code, state)
         claims = yt.verify_identity_token(credentials.id_token or "")
-    except Exception as exc:
-        raise HTTPException(502, "YouTube connection failed") from exc
+    except Exception:
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "connection_failed", state
+        )
 
     google_subject = claims.get("sub")
     if not google_subject:
-        raise HTTPException(400, "Google connection is missing a subject")
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "connection_failed", state
+        )
+    if reconnect_connection and google_subject != reconnect_connection.google_subject:
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "reauthorize_account_mismatch", state
+        )
     connection = (
         db.query(GoogleConnection)
         .filter(GoogleConnection.google_subject == google_subject)
         .one_or_none()
     )
     if connection is not None and connection.user_id != user.id:
-        raise HTTPException(409, "Google account is connected to another MoyaStudia user")
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "connection_conflict", state
+        )
     if connection is None:
+        if not credentials.refresh_token:
+            return _oauth_status_redirect(
+                "/cabinet", "connection_error", "consent_required", state
+            )
         connection = GoogleConnection(
             user_id=user.id,
             google_subject=google_subject,
@@ -264,15 +384,23 @@ def youtube_callback(
         db.add(connection)
         db.flush()
     if credentials.refresh_token:
-        connection.encrypted_refresh_token = encrypt_refresh_token(credentials.refresh_token)
+        try:
+            connection.encrypted_refresh_token = encrypt_refresh_token(credentials.refresh_token)
+        except TokenEncryptionError:
+            return _oauth_status_redirect(
+                "/cabinet", "connection_error", "token_configuration", state
+            )
     elif not connection.encrypted_refresh_token:
-        raise HTTPException(400, "Google did not return a refresh token; reconnect with consent")
+        return _oauth_status_redirect(
+            "/cabinet", "connection_error", "consent_required", state
+        )
     connection.email = claims.get("email") or connection.email
     connection.is_active = True
 
     db.commit()
     response = RedirectResponse(
-        settings.frontend_origin + f"/cabinet?select_connection={connection.id}",
+        settings.frontend_origin
+        + f"/cabinet?{urlencode({'select_connection': connection.id, 'connection_status': 'connected'})}",
         status_code=303,
     )
     clear_oauth_state_cookie(response, state)
@@ -288,6 +416,19 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
         .order_by(Channel.id.desc())
         .all()
     )
+    catalog_video_counts = (
+        dict(
+            db.query(Video.channel_id, func.count(Video.id))
+            .filter(
+                Video.channel_id.in_([row.id for row in rows]),
+                Video.youtube_video_id.is_not(None),
+            )
+            .group_by(Video.channel_id)
+            .all()
+        )
+        if rows
+        else {}
+    )
     return [
         {
             "id": row.id,
@@ -300,8 +441,45 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
             "description": getattr(row, "description", "") or "",
             "yt_published_at": getattr(row, "yt_published_at", "") or "",
             "subscriber_count": int(getattr(row, "subscriber_count", 0) or 0),
+            "catalog_video_count": catalog_video_counts.get(row.id, 0),
+            "hidden_subscribers": None,
         }
         for row in rows
+    ]
+
+
+@app.get("/google-connections")
+def list_google_connections(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    connections = (
+        db.query(GoogleConnection)
+        .options(selectinload(GoogleConnection.channels))
+        .filter(GoogleConnection.user_id == user.id)
+        .order_by(GoogleConnection.id.desc())
+        .all()
+    )
+    return [
+        {
+            "id": connection.id,
+            "email": connection.email or "",
+            "status": (
+                "connected"
+                if connection.is_active and connection.encrypted_refresh_token
+                else "reauthorization_required"
+            ),
+            "channel_count": len(connection.channels),
+            "channels": [
+                {
+                    "id": channel.id,
+                    "youtube_channel_id": channel.youtube_channel_id,
+                    "title": channel.title,
+                    "thumbnail_url": channel.thumbnail_url or "",
+                }
+                for channel in connection.channels
+            ],
+        }
+        for connection in connections
     ]
 
 
@@ -331,7 +509,7 @@ def _available_youtube_channels(connection: GoogleConnection) -> list[dict]:
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, "YouTube channel discovery failed") from exc
 
 
 @app.get("/google-connections/{connection_id}/available-channels")
@@ -541,7 +719,8 @@ def _encode_video_cursor(
         displayed_date = video.youtube_scheduled_at or video.youtube_published_at
         value = displayed_date.isoformat() if displayed_date else None
     elif sort == "title":
-        value = (video.youtube_title or "").lower()
+        effective_title = video.title if video.title is not None else video.youtube_title
+        value = (effective_title or "").lower()
     else:
         value = "scheduled" if video.youtube_scheduled_at else (video.youtube_visibility or "unknown")
     payload = {
@@ -661,6 +840,9 @@ def _claim_catalog_page(db: Session, channel_id: int) -> str:
 def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
+    snapshot = _working_video_snapshot(video)
+    working = {field: getattr(video, field) for field in ("title", "description", "tags")}
+    dirty_fields = _working_dirty_fields(snapshot, working)
     return {
         "id": video.id,
         "youtubeId": video.youtube_video_id,
@@ -687,6 +869,8 @@ def _video_catalog_item(video: Video) -> dict:
         ),
         "availability": video.availability_status,
         "remoteMissing": video.availability_status == "remote_missing",
+        "dirty": any(dirty_fields.values()),
+        "dirtyFields": dirty_fields,
         "thumb": video.youtube_thumbnail_url or "",
         "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
         "duration": video.youtube_duration or "",
@@ -703,6 +887,15 @@ def _working_video_snapshot(video: Video) -> dict[str, str | None]:
         "title": video.youtube_title,
         "description": video.youtube_description,
         "tags": None if video.youtube_tags is None else ", ".join(video.youtube_tags),
+    }
+
+
+def _working_dirty_fields(
+    snapshot: dict[str, str | None], working: dict[str, str | None]
+) -> dict[str, bool]:
+    return {
+        field: working[field] is not None and working[field] != snapshot[field]
+        for field in ("title", "description", "tags")
     }
 
 
@@ -723,10 +916,7 @@ def _video_working_item(video: Video) -> dict:
         field: working[field] if working[field] is not None else snapshot[field]
         for field in ("title", "description", "tags")
     }
-    dirty_fields = {
-        field: working[field] is not None and working[field] != snapshot[field]
-        for field in ("title", "description", "tags")
-    }
+    dirty_fields = _working_dirty_fields(snapshot, working)
     conflict_fields = {
         field: (
             working[field] is not None
@@ -791,8 +981,13 @@ def channel_videos(
         Video.youtube_video_id.is_not(None),
     )
     if q:
+        effective_title = func.coalesce(Video.title, Video.youtube_title)
+        effective_description = func.coalesce(Video.description, Video.youtube_description)
         query = query.filter(
-            or_(Video.youtube_title.ilike(f"%{q}%"), Video.youtube_description.ilike(f"%{q}%"))
+            or_(
+                effective_title.ilike(f"%{q}%"),
+                effective_description.ilike(f"%{q}%"),
+            )
         )
     displayed_date = func.coalesce(Video.youtube_scheduled_at, Video.youtube_published_at)
     if date_from is not None:
@@ -851,7 +1046,7 @@ def channel_videos(
         .first()
     )
     if sort == "title":
-        sort_expression = func.lower(func.coalesce(Video.youtube_title, ""))
+        sort_expression = func.lower(func.coalesce(Video.title, Video.youtube_title, ""))
         query = query.order_by(sort_expression.asc(), Video.id.asc())
     elif sort == "status":
         sort_expression = func.lower(status_expression)

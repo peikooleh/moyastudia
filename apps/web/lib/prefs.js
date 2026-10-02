@@ -32,12 +32,39 @@ export const THEMES = [
 const defaults = {
   uiLang: "auto",
   theme: "auto",
+  accountUserId: "",
   onboarded: false,
   channelLangs: {},
   selectedChannelId: "",
   dailyEdits: 20,
   dailyUploads: 10,
 };
+
+export function accountPrefsForUser(userId) {
+  return {
+    accountUserId: String(userId || ""),
+    onboarded: false,
+    selectedChannelId: "",
+    channelLangs: {},
+  };
+}
+
+export function channelPreferencesForAvailableChannels(prefs, channels) {
+  const availableIds = new Set(channels.map((channel) => String(channel.id)));
+  const currentSelected = String(prefs.selectedChannelId || "");
+  const selectedChannelId = availableIds.has(currentSelected)
+    ? currentSelected
+    : String(channels[0]?.id || "");
+  const channelLangs = Object.fromEntries(
+    Object.entries(prefs.channelLangs || {}).filter(([channelId]) => availableIds.has(channelId)),
+  );
+  const currentLanguages = prefs.channelLangs || {};
+  const sameLanguages = Object.keys(channelLangs).length === Object.keys(currentLanguages).length
+    && Object.entries(channelLangs).every(([channelId, language]) => currentLanguages[channelId] === language);
+
+  if (selectedChannelId === currentSelected && sameLanguages) return null;
+  return { selectedChannelId, channelLangs };
+}
 
 export function loadPrefs() {
   try {

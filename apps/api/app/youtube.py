@@ -42,11 +42,11 @@ def identity_authorization_url() -> tuple[str, str]:
     return url, state
 
 
-def youtube_authorization_url() -> tuple[str, str]:
+def youtube_authorization_url(force_consent: bool = False) -> tuple[str, str]:
     flow = _flow(YOUTUBE_SCOPES, settings.google_youtube_redirect_uri)
     url, _state = flow.authorization_url(
         access_type="offline",
-        prompt="consent",
+        prompt="consent select_account" if force_consent else "select_account",
     )
     return url, _state
 

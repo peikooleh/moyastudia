@@ -3,7 +3,7 @@ import hashlib
 import secrets
 
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy import delete
+from sqlalchemy import delete, or_
 from sqlalchemy.orm import Session
 
 from .db import get_db
@@ -62,6 +62,27 @@ def consume_oauth_state(
     consumed = db.execute(statement.returning(OAuthState.state_hash)).first() is not None
     db.commit()
     return consumed
+
+
+def consume_youtube_oauth_state(
+    db: Session,
+    value: str,
+    browser_binding: str,
+    user_id: str,
+) -> str | None:
+    statement = delete(OAuthState).where(
+        OAuthState.state_hash == hash_secret(value),
+        OAuthState.browser_binding_hash == hash_secret(browser_binding),
+        OAuthState.user_id == user_id,
+        OAuthState.expires_at > datetime.now(timezone.utc),
+        or_(
+            OAuthState.purpose == "youtube_connection",
+            OAuthState.purpose.like("youtube_connection_reauthorize:%"),
+        ),
+    ).returning(OAuthState.purpose)
+    purpose = db.execute(statement).scalar_one_or_none()
+    db.commit()
+    return purpose
 
 
 def create_session(db: Session, user_id: str) -> str:
