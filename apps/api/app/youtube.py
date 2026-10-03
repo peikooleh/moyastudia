@@ -236,6 +236,87 @@ def list_playlists(refresh_token: str, youtube_channel_id: str) -> list[dict]:
     return out
 
 
+def list_playlist_items(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    page_token: str | None = None,
+    limit: int = 50,
+) -> dict:
+    service = service_for(refresh_token)
+    playlist_response = service.playlists().list(
+        part="snippet",
+        id=playlist_id,
+        maxResults=1,
+    ).execute()
+    playlists = playlist_response.get("items") or []
+    if not playlists or (playlists[0].get("snippet") or {}).get("channelId") != youtube_channel_id:
+        raise LookupError("playlist does not belong to the selected channel")
+
+    page_kwargs = {
+        "part": "snippet,contentDetails,status",
+        "playlistId": playlist_id,
+        "maxResults": min(max(limit, 1), 50),
+    }
+    if page_token:
+        page_kwargs["pageToken"] = page_token
+    response = service.playlistItems().list(**page_kwargs).execute()
+    items = []
+    for item in response.get("items") or []:
+        snippet = item.get("snippet") or {}
+        content = item.get("contentDetails") or {}
+        resource = snippet.get("resourceId") or {}
+        video_id = content.get("videoId") or resource.get("videoId")
+        if not video_id:
+            continue
+        items.append(
+            {
+                "videoId": video_id,
+                "title": snippet.get("title") or "",
+                "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
+                "position": snippet.get("position"),
+                "privacy": (item.get("status") or {}).get("privacyStatus") or "",
+            }
+        )
+    video_ids = [item["videoId"] for item in items]
+    snapshots = {}
+    if video_ids:
+        video_response = service.videos().list(
+            part="snippet,status,contentDetails,statistics",
+            id=",".join(video_ids),
+        ).execute()
+        for video in video_response.get("items") or []:
+            snippet = video.get("snippet") or {}
+            status = video.get("status") or {}
+            content = video.get("contentDetails") or {}
+            statistics = video.get("statistics") or {}
+            title = snippet.get("title") or ""
+            snapshots[video["id"]] = {
+                "youtubeId": video["id"],
+                "title": title,
+                "effectiveTitle": title,
+                "description": snippet.get("description") or "",
+                "tags": ", ".join(snippet.get("tags") or []),
+                "category": snippet.get("categoryId") or "",
+                "language": snippet.get("defaultLanguage") or snippet.get("defaultAudioLanguage") or "",
+                "privacy": status.get("privacyStatus") or "",
+                "status": status.get("privacyStatus") or "unknown",
+                "availability": "available",
+                "remoteMissing": False,
+                "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
+                "publishedAt": snippet.get("publishedAt") or "",
+                "duration": content.get("duration") or "",
+                "views": _optional_int(statistics.get("viewCount")),
+                "likes": _optional_int(statistics.get("likeCount")),
+                "comments": _optional_int(statistics.get("commentCount")),
+                "captions": _optional_bool(content.get("caption")),
+                "madeForKids": _optional_bool(status.get("madeForKids", status.get("selfDeclaredMadeForKids"))),
+            }
+    for item in items:
+        item["videoSnapshot"] = snapshots.get(item["videoId"])
+    return {"items": items, "nextPageToken": response.get("nextPageToken")}
+
+
 def list_videos(
     refresh_token: str,
     youtube_channel_id: str,

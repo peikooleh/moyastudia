@@ -110,7 +110,7 @@ class Video(Base):
     internal_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     youtube_visibility: Mapped[str | None] = mapped_column(String(32), nullable=True)
     youtube_upload_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
     working_base_title: Mapped[str | None] = mapped_column(String(255), nullable=True)

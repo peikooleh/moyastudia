@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   accountPrefsForUser,
   channelPreferencesForAvailableChannels,
+  channelDisplayContext,
+  channelDisplayLabel,
   prefsAfterChannelRemoval,
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
@@ -16,14 +18,28 @@ import {
   finishCatalogSync,
   isCurrentCatalogRequest,
   mapPlaylistForStudio,
+  playlistItemsUrl,
   playlistsForChannel,
   resetWorkingVideoPatch,
   shouldResumeCatalogSync,
   shouldShowCatalogContinue,
   tryStartCatalogSync,
+  unicodeCharacterCount,
   workingVideoPatch,
   workingVideoStatusKey,
+  youtubeMetadataLimit,
+  youtubeTagsCharacterCount,
+  youtubeVideoCategoryName,
 } from "../lib/catalog-state.mjs";
+
+test("channel labels distinguish equal titles with stable YouTube IDs", () => {
+  const first = { id: 7, title: "MOYAMOVA", youtube_channel_id: "UCo_Srxy3jqF4PbuxgldLpWA" };
+  const second = { id: 6, title: "MOYAMOVA", youtube_channel_id: "UChUFZoc6nnrzqPCsKQx5xmw" };
+
+  assert.notEqual(channelDisplayLabel(first), channelDisplayLabel(second));
+  assert.equal(channelDisplayLabel(first), "MOYAMOVA · UCo_Srxy3jqF4PbuxgldLpWA");
+  assert.equal(channelDisplayContext({ id: 3, title: "Channel" }), "ID 3");
+});
 
 test("logout request succeeds only for an OK response", async () => {
   assert.equal(await requestLogout(async () => ({ ok: true })), true);
@@ -193,6 +209,13 @@ test("playlist rows from the previous channel are hidden immediately on channel 
   assert.deepEqual(playlistsForChannel(state, ""), []);
 });
 
+test("playlist item URLs encode IDs and page tokens", () => {
+  assert.equal(
+    playlistItemsUrl(7, "playlist/one", "token + value"),
+    "/channels/7/playlists/playlist%2Fone/items?page_token=token+%2B+value",
+  );
+});
+
 test("catalog list prefers the effective local title and preserves explicit empty values", () => {
   assert.equal(catalogVideoDisplayTitle({ title: "Snapshot", effectiveTitle: "Local" }), "Local");
   assert.equal(catalogVideoDisplayTitle({ title: "Snapshot", effectiveTitle: "" }), "");
@@ -201,6 +224,44 @@ test("catalog list prefers the effective local title and preserves explicit empt
     title: "",
     tags: null,
   });
+});
+
+test("YouTube metadata limits keep Unicode and byte accounting distinct", () => {
+  assert.equal(unicodeCharacterCount("A😀Б"), 3);
+  assert.deepEqual(youtubeMetadataLimit("title", "x".repeat(100)), {
+    limit: 100,
+    used: 100,
+    unit: "characters",
+    nearLimit: true,
+    exceedsLimit: false,
+    hasUnsupportedCharacters: false,
+  });
+  assert.equal(youtubeMetadataLimit("description", "😀".repeat(1251)).exceedsLimit, true);
+  assert.equal(youtubeMetadataLimit("title", "<draft>").hasUnsupportedCharacters, true);
+});
+
+test("YouTube tag limits count separators and quote tags containing spaces", () => {
+  assert.equal(youtubeTagsCharacterCount("alpha, two words,omega"), 23);
+  assert.equal(youtubeMetadataLimit("tags", "x".repeat(500)).exceedsLimit, false);
+  assert.equal(youtubeMetadataLimit("tags", "x".repeat(501)).exceedsLimit, true);
+});
+
+test("working metadata patches preserve values beyond YouTube limits", () => {
+  const title = "x".repeat(300);
+  const description = "😀".repeat(1300);
+  const tags = "tag,".repeat(130);
+
+  assert.deepEqual(workingVideoPatch(4, { title, description, tags }), {
+    revision: 4,
+    title,
+    description,
+    tags,
+  });
+});
+
+test("known YouTube category IDs display human-readable names", () => {
+  assert.equal(youtubeVideoCategoryName("27"), "Education");
+  assert.equal(youtubeVideoCategoryName("999"), "");
 });
 
 test("local editing status distinguishes modified, saved, and conflict states", () => {

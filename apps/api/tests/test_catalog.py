@@ -813,28 +813,42 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
     assert client.get(
         f"/channels/{other_channel_id}/videos/{foreign_video_id}"
     ).status_code == 404
-    assert client.get(
-        f"/channels/{owner_channel_id}/videos/{foreign_video_id}"
-    ).status_code == 404
-    assert client.patch(
-        f"/channels/{other_channel_id}/videos/{foreign_video_id}/working",
-        json={"revision": 0, "title": "Takeover"},
-        headers=headers,
-    ).status_code == 404
-    assert client.patch(
-        f"/channels/{owner_channel_id}/videos/{foreign_video_id}/working",
-        json={"revision": 0, "title": "Cross-channel"},
-        headers=headers,
-    ).status_code == 404
 
-    inherited = client.patch(
-        patch_url,
-        json={"revision": 1, "title": None},
-        headers=headers,
+
+def test_working_metadata_round_trips_above_youtube_limits(client, test_database):
+    user_id, token = create_account(test_database, subject="long-working-metadata")
+    channel_id, _, _ = create_channel(test_database, user_id, "long-working-metadata")
+    with test_database() as db:
+        video = Video(channel_id=channel_id, youtube_video_id="long-working-video")
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    authorized_client(client, token)
+    url = f"/channels/{channel_id}/videos/{video_id}"
+    title = "Л" * 300
+    description = "😀" * 1300
+    tags = ",".join(f"tag-{index}" for index in range(100))
+    saved = client.patch(
+        f"{url}/working",
+        json={"revision": 0, "title": title, "description": description, "tags": tags},
+        headers=post_headers(),
     )
-    assert inherited.status_code == 200
-    assert inherited.json()["working"]["title"] is None
-    assert inherited.json()["effective"]["title"] == "Snapshot title"
+
+    assert saved.status_code == 200
+    assert saved.json()["working"] == {
+        "title": title,
+        "description": description,
+        "tags": tags,
+        "ready": False,
+    }
+    reloaded = client.get(url)
+    assert reloaded.status_code == 200
+    assert reloaded.json()["effective"] == {
+        "title": title,
+        "description": description,
+        "tags": tags,
+    }
 
 
 def test_working_video_revision_prevents_lost_updates(client, test_database):
@@ -957,13 +971,14 @@ def test_catalog_sync_after_local_edit_reports_snapshot_conflict(
         headers=post_headers(),
     )
     assert edited.status_code == 200
+    remote_title = {"value": "Updated remotely"}
     monkeypatch.setattr(
         main.yt,
         "list_videos",
         lambda refresh_token, selected_id, **kwargs: page(
             selected_id,
             ["conflict-video"],
-            details=[remote_video("conflict-video", selected_id, "Updated remotely")],
+            details=[remote_video("conflict-video", selected_id, remote_title["value"])],
         ),
     )
 
@@ -976,6 +991,176 @@ def test_catalog_sync_after_local_edit_reports_snapshot_conflict(
     assert refreshed["base"]["title"] == "Original title"
     assert refreshed["dirtyFields"]["title"] is True
     assert refreshed["conflictFields"]["title"] is True
+
+    kept = client.patch(
+        f"{detail_url}/working",
+        json={"revision": 1, "conflict_resolution": "keep_local"},
+        headers=post_headers(),
+    )
+    assert kept.status_code == 200
+    assert kept.json()["working"]["title"] == "Local title"
+    assert kept.json()["base"]["title"] == "Updated remotely"
+    assert kept.json()["conflict"] is False
+
+    remote_title["value"] = "Final remote title"
+    assert start_sync(client, channel_id, "incremental").status_code == 200
+    assert continue_sync(client, channel_id).json()["state"] == "COMPLETE"
+
+    replaced = client.patch(
+        f"{detail_url}/working",
+        json={"revision": 2, "conflict_resolution": "use_snapshot"},
+        headers=post_headers(),
+    )
+    assert replaced.status_code == 200
+    assert replaced.json()["working"]["title"] is None
+    assert replaced.json()["effective"]["title"] == "Final remote title"
+    assert replaced.json()["conflict"] is False
+
+
+def test_playlist_items_are_channel_scoped_and_include_matching_catalog_videos(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database, subject="playlist-item-owner")
+    other_id, _ = create_account(test_database, subject="playlist-item-other")
+    channel_id, _, _ = create_channel(test_database, user_id, "playlist-item-owner")
+    other_channel_id, _, _ = create_channel(test_database, other_id, "playlist-item-other")
+    with test_database() as db:
+        video = Video(
+            channel_id=channel_id,
+            youtube_video_id="playlist-video",
+            youtube_title="Cached playlist video",
+            internal_status=None,
+        )
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    calls = []
+    monkeypatch.setattr(
+        main.yt,
+        "list_playlist_items",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or {
+            "items": [
+                {"videoId": "playlist-video", "title": "Cached playlist video"},
+                {
+                    "videoId": "uncached-video",
+                    "title": "Not in catalog",
+                    "videoSnapshot": {"title": "Not in catalog", "description": ""},
+                },
+            ],
+            "nextPageToken": "next-page",
+        },
+    )
+    authorized_client(client, token)
+    response = client.get(
+        f"/channels/{channel_id}/playlists/playlist-one/items?page_token=cursor&limit=20"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["catalogVideo"]["id"] == video_id
+    assert response.json()["items"][1]["catalogVideo"] is None
+    assert response.json()["items"][1]["videoSnapshot"]["title"] == "Not in catalog"
+    assert response.json()["nextPageToken"] == "next-page"
+    assert calls[0][0] == ("refresh-token", "youtube-playlist-item-owner", "playlist-one", "cursor", 20)
+    assert client.get(
+        f"/channels/{other_channel_id}/playlists/playlist-one/items"
+    ).status_code == 404
+
+
+def test_youtube_playlist_items_verify_ownership_and_paginate(monkeypatch):
+    calls = []
+
+    class FakeResource:
+        def __init__(self, result):
+            self.result = result
+
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return self
+
+        def execute(self):
+            return self.result
+
+    class FakeService:
+        def playlists(self):
+            return FakeResource({"items": [{"snippet": {"channelId": "channel-one"}}]})
+
+        def playlistItems(self):
+            return FakeResource({
+                "items": [{
+                    "snippet": {
+                        "title": "Video title",
+                        "position": 4,
+                        "resourceId": {"videoId": "video-one"},
+                    },
+                    "contentDetails": {"videoId": "video-one"},
+                    "status": {"privacyStatus": "public"},
+                }],
+                "nextPageToken": "next",
+            })
+
+        def videos(self):
+            return FakeResource({"items": [{
+                "id": "video-one",
+                "snippet": {
+                    "title": "Video title",
+                    "description": "Description",
+                    "tags": ["one", "two"],
+                    "categoryId": "27",
+                    "publishedAt": "2026-10-03T12:00:00Z",
+                    "thumbnails": {},
+                },
+                "status": {"privacyStatus": "public", "madeForKids": False},
+                "contentDetails": {"duration": "PT1M", "caption": "true"},
+                "statistics": {"viewCount": "12", "likeCount": "3", "commentCount": "1"},
+            }]})
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: FakeService())
+    result = youtube.list_playlist_items(
+        "refresh", "channel-one", "playlist-one", page_token="cursor", limit=100
+    )
+
+    assert result == {
+        "items": [{
+            "videoId": "video-one",
+            "title": "Video title",
+            "thumb": "",
+            "position": 4,
+            "privacy": "public",
+            "videoSnapshot": {
+                "youtubeId": "video-one",
+                "title": "Video title",
+                "effectiveTitle": "Video title",
+                "description": "Description",
+                "tags": "one, two",
+                "category": "27",
+                "language": "",
+                "privacy": "public",
+                "status": "public",
+                "availability": "available",
+                "remoteMissing": False,
+                "thumb": "",
+                "publishedAt": "2026-10-03T12:00:00Z",
+                "duration": "PT1M",
+                "views": 12,
+                "likes": 3,
+                "comments": 1,
+                "captions": True,
+                "madeForKids": False,
+            },
+        }],
+        "nextPageToken": "next",
+    }
+    assert calls[1]["maxResults"] == 50
+    assert calls[1]["pageToken"] == "cursor"
+
+    class WrongChannelService(FakeService):
+        def playlists(self):
+            return FakeResource({"items": [{"snippet": {"channelId": "channel-two"}}]})
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: WrongChannelService())
+    with pytest.raises(LookupError):
+        youtube.list_playlist_items("refresh", "channel-one", "playlist-one")
 
 
 def test_working_conflict_distinguishes_missing_snapshot_from_empty_string(

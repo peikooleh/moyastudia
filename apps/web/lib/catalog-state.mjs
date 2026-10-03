@@ -35,8 +35,97 @@ export function playlistsForChannel(state, channelId) {
   return state.items || [];
 }
 
+export function playlistItemsUrl(channelId, playlistId, pageToken = "") {
+  const params = new URLSearchParams();
+  if (pageToken) params.set("page_token", pageToken);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return `/channels/${channelId}/playlists/${encodeURIComponent(playlistId)}/items${suffix}`;
+}
+
 export function catalogVideoDisplayTitle(video) {
   return video?.effectiveTitle ?? video?.title ?? "";
+}
+
+export const YOUTUBE_METADATA_LIMITS = Object.freeze({
+  title: 100,
+  descriptionBytes: 5000,
+  tags: 500,
+});
+
+const VIDEO_CATEGORY_NAMES = Object.freeze({
+  1: "Film & Animation",
+  2: "Autos & Vehicles",
+  10: "Music",
+  15: "Pets & Animals",
+  17: "Sports",
+  18: "Short Movies",
+  19: "Travel & Events",
+  20: "Gaming",
+  21: "Videoblogging",
+  22: "People & Blogs",
+  23: "Comedy",
+  24: "Entertainment",
+  25: "News & Politics",
+  26: "Howto & Style",
+  27: "Education",
+  28: "Science & Technology",
+  29: "Nonprofits & Activism",
+  30: "Movies",
+  31: "Anime/Animation",
+  32: "Action/Adventure",
+  33: "Classics",
+  34: "Comedy",
+  35: "Documentary",
+  36: "Drama",
+  37: "Family",
+  38: "Foreign",
+  39: "Horror",
+  40: "Sci-Fi/Fantasy",
+  41: "Thriller",
+  42: "Shorts",
+  43: "Shows",
+  44: "Trailers",
+});
+
+export function youtubeVideoCategoryName(categoryId) {
+  return VIDEO_CATEGORY_NAMES[String(categoryId ?? "")] || "";
+}
+
+export function unicodeCharacterCount(value) {
+  return Array.from(String(value ?? "")).length;
+}
+
+export function utf8ByteLength(value) {
+  return new TextEncoder().encode(String(value ?? "")).length;
+}
+
+export function youtubeTagsCharacterCount(value) {
+  const tags = String(value ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+  return tags.reduce(
+    (total, tag, index) => total + unicodeCharacterCount(tag) + (tag.includes(" ") ? 2 : 0) + (index ? 1 : 0),
+    0,
+  );
+}
+
+export function youtubeMetadataLimit(field, value) {
+  const text = String(value ?? "");
+  const config = {
+    title: { limit: YOUTUBE_METADATA_LIMITS.title, used: unicodeCharacterCount(text), unit: "characters" },
+    description: { limit: YOUTUBE_METADATA_LIMITS.descriptionBytes, used: utf8ByteLength(text), unit: "bytes" },
+    tags: { limit: YOUTUBE_METADATA_LIMITS.tags, used: youtubeTagsCharacterCount(text), unit: "characters" },
+  }[field];
+  if (!config) return null;
+
+  return {
+    ...config,
+    nearLimit: config.used >= config.limit * 0.9 && config.used <= config.limit,
+    exceedsLimit: config.used > config.limit,
+    hasUnsupportedCharacters: field !== "tags" && /[<>]/.test(text),
+  };
 }
 
 export function workingVideoPatch(revision, changes) {

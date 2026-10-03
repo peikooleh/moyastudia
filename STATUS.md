@@ -1,3 +1,50 @@
+# Stage 3 Current Handoff - 2026-10-03
+
+This entry supersedes older "current status" and next-step text below. Historical records remain unchanged.
+
+## Completed
+
+- Stage 3 sections 3-14 are implemented. Title/Description/Tags have larger multiline editors, bounded heights, internal scrolling, preserved YouTube counters and validation states, and no automatic truncation. Local `videos.title` is `Text`; `youtube_title` and `working_base_title` remain `String(255)`. Migration `0005_working_title_text` changes only the local working title and protects downgrade if long drafts exist.
+- The Inspector keeps supported working fields editable, presents other metadata/statistics read-only, maps known category IDs to names, and omits raw technical JSON/export.
+- Playlists has its own Studio workspace. Playlist items use the existing Video Inspector; cached catalog videos have local working state, while uncached videos are read-only snapshots. No YouTube write operation or new playlist persistence model was added.
+- Cabinet channel changes require confirmation. Channels is the add/select flow; Connections presents Google account/access state and reauthorization. Snapshot conflict actions appear only for actual conflicts and change local state only.
+- The Studio header no longer contains a channel switcher; Cabinet remains the active-channel selection UI. Studio navigation order is Videos → Calendar → Playlists.
+- Section 14 source review retained the existing catalog/calendar loading, empty, error, stale/partial, selected, conflict, and unavailable states; playlist loading, empty, error, and uncached states are represented.
+- No commit or push was performed.
+
+## Section 15 Responsive verification
+
+- Verified the authenticated app with the real Google OAuth session, real channel/catalog/playlist API data, and no mocks or interception at desktop 1440x900, tablet 768x1024, mobile portrait 390x844, and mobile landscape 844x390.
+- Fixed the observed desktop/tablet catalog growth: `.studio` now fits the area below the header and catalog controls; the video list and Inspector have independent vertical scrolling. Mobile portrait retains the list-above-Inspector layout and its bounded list scroll.
+- Made same-title channels distinguishable using the already returned YouTube channel ID in Cabinet channel/connection cards, discovery options, and Cabinet switch confirmation. The Studio header channel switcher was subsequently removed; no API request, channel ID, ownership, or persisted data changed.
+- Added a localized no-results message for empty search/filter results, distinct from an actually empty channel and an unimported catalog.
+- Tablet and mobile-landscape Inspector fields now use the available Inspector width in one column; desktop field layout remains two-column.
+- Real stale-state behavior was inspected: catalog status can report `STALE` with `can_continue=true` after a successful sync ages past 15 minutes. With no `last_error_code`, the UI correctly offers Check for new videos / Full reconciliation rather than Continue. No state-machine change was made.
+- §15 viewport/layout findings are resolved and verified. A real working conflict/dirty video and over-limit metadata value were not present in the 138-video catalog, so those specific states remain unverified rather than being synthesized.
+
+## Section 16 Browser flow
+
+- Verified the real authenticated flow through Cabinet, Studio/Videos, live catalog search/filter/sort, Playlist workspace, cached playlist video to the shared Inspector, uncached playlist video to read-only Inspector, channel context, and live channel discovery. Discovery was canceled without changing channel data.
+- Real catalog: 138 cached videos; 9 playlists on the selected channel. No YouTube write or sync action was triggered.
+
+## Validation
+
+- Backend: **77 passed** in the previously reported full run; not rerun for the responsive fixes.
+- Frontend catalog tests: **26 passed** in the targeted run after the channel-label helper change.
+- `npm run lint` and `npm run build`: previously passed with existing warnings; not rerun for the responsive fixes.
+- Editor diagnostics: no errors in the changed frontend files.
+- No full test, lint, build, or repository diff-check run was performed during the responsive-fix pass.
+
+## Remaining
+
+- Section 15 layout verification is complete at the four recorded viewports. Real conflict/dirty state and over-limit warnings remain unverified because no suitable real records were available.
+- Section 16 real authenticated browser flow is verified as recorded above.
+- Full automated checks were not rerun after responsive fixes; see Validation. No commit or push has been performed.
+
+## Migration
+
+- Revision `0005_working_title_text` follows `0004_video_working_readiness`; it changes only `videos.title`. Downgrade refuses to narrow a stored local title longer than 255 characters.
+
 # MoyaStudia — Current Status
 
 ## Stage 2.5 — Current Status
@@ -279,7 +326,7 @@ Current branch: `main`. This handoff records the completed Google Identity and Y
 
 - `apps/web`: Next.js 15.5.27 App Router, React 19.3.0. `app/` contains landing, onboarding, Cabinet, Studio and shared UI; `lib/` contains API/preferences/localization/catalog helpers.
 - `apps/api`: FastAPI, SQLAlchemy and Google OAuth/YouTube client. `app/main.py` owns routes and authorization; `app/youtube.py` owns Google/YouTube API calls; `security.py` owns sessions/OAuth state; `tokens.py` encrypts refresh tokens.
-- `apps/api/migrations/versions`: Alembic revisions `0001_foundation`, `0002_video_catalog`, and `0003_video_working_state`. Revision `0003` is covered by SQLite migration tests; PostgreSQL deployment has not been verified.
+- `apps/api/migrations/versions`: Alembic revisions `0001_foundation`, `0002_video_catalog`, `0003_video_working_state`, and `0004_video_working_readiness`. Revision `0003` is covered by SQLite migration tests; PostgreSQL deployment has not been verified.
 - Tests: `apps/api/tests`; `apps/web/tests/studio-catalog.test.mjs`.
 - CI: `.github/workflows/ci.yml` runs backend pytest and frontend catalog tests, lint and build on pull requests.
 
@@ -373,7 +420,7 @@ The application is read-only with respect to YouTube. Full Cabinet/Studio flows 
 
 1. Remove the temporary OAuth diagnostic code from `apps/api/app/main.py` after the successful real OAuth verification.
 2. Add “Remove channel from MoyaStudia” without deleting the YouTube channel or its content; define and verify cleanup of local connection, channel, and cache data, then test reconnection.
-3. Improve the interface.
+3. Continue the interface work from the prompt: the Title / Description / Tags metadata limits are implemented; remaining UI work is still pending.
 4. Separately complete retrieval of full playlist data and membership.
 
 ## Handoff instructions
@@ -477,9 +524,9 @@ Stage 1 Foundation реализован: Google identity MoyaStudia, серве�
 
 ## Окружение разработки автора
 
-Windows, PowerShell. Git: `C:\Program Files\Git\cmd\git.exe`.  
-API venv: `D:\GITHUB\moyastudia\apps\api\.venv` (Python 3.12).  
-Web: `D:\GITHUB\moyastudia\apps\web`, Next 14.2.15.  
+Windows, PowerShell. Git: `C:\Program Files\Git\cmd\git.exe`.
+API venv: `D:\GITHUB\moyastudia\apps\api\.venv` (Python 3.12).
+Web: `D:\GITHUB\moyastudia\apps\web`, Next.js 15.5.27.
 Не использовать корневой `.venv` репозитория и не запускать `npm` из `apps\`.
 
 ## Запись 2026-09-30 — frontend security/dependency upgrade
@@ -598,3 +645,27 @@ Security:
 - Limitations: migration has not been tested/applied against PostgreSQL; frontend tests cover helpers rather than rendered React UI integration; YouTube write-back is not implemented.
 - Files in the Stage 4 completion commit: `STATUS.md`, `apps/api/app/main.py`, `apps/api/tests/test_catalog.py`, `apps/web/app/globals.css`, `apps/web/app/studio.js`, `apps/web/lib/catalog-state.mjs`, `apps/web/lib/i18n.js`, `apps/web/tests/studio-catalog.test.mjs`. The only remaining modified file is the pre-existing tracked `промпт.txt`; it is intentionally excluded.
 - Next task: validate `0003_video_working_state` upgrade on a disposable PostgreSQL database; afterward, validate the subsequent `0004_video_working_readiness` upgrade on the same disposable database. Do not run either check against production.
+## Запись 2026-10-03 — YouTube metadata limits in Studio
+
+### Title / Description / Tags
+
+- [x] Studio editor теперь показывает лимиты YouTube для локальных working-полей `title`, `description` и `tags`.
+- [x] Title считается в Unicode characters; лимит — 100 символов.
+- [x] Description считается в UTF-8 bytes через `TextEncoder`; лимит — 5000 bytes.
+- [x] Tags считаются с учётом разделителей и дополнительных символов для тегов, содержащих пробелы; лимит — 500.
+- [x] Для Title и Description отображается отдельное предупреждение при наличии `<` или `>`, поскольку такие символы не допускаются YouTube в соответствующих metadata fields.
+- [x] UI показывает обычное состояние, предупреждение при приближении к лимиту и ошибку при превышении.
+- [x] Введённые данные не обрезаются автоматически.
+- [x] Превышение YouTube-лимита не запрещает сохранение локального MoyaStudia draft; UI явно сообщает, что такой draft остаётся локальным.
+- [x] Backend-контракт working state не изменялся.
+- [x] Добавлены unit-тесты для Unicode/UTF-8 byte accounting, граничных значений Title/Description/Tags и правил подсчёта тегов.
+- [x] Изменения ограничены frontend Studio, catalog helper, localization и соответствующими тестами.
+
+### Validation
+
+- `node --test tests\studio-catalog.test.mjs` — **22 passed, 0 failed**.
+- `npm run lint` — **passed**; остались существующие `<img>`/custom-font warnings и deprecated `next lint` warning.
+- `npm run build` — **passed**; production build успешно завершён.
+- `git diff --check` — требуется/выполнено отдельно перед commit.
+- Browser smoke: локальный Next.js dev server успешно запустился; полноценный authenticated Studio flow в этой сессии не выполнялся через изолированный API/session environment.
+- Commit/push не выполнялись.

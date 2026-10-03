@@ -29,6 +29,21 @@ export const THEMES = [
   { id: "dark", label: "dark" },
 ];
 
+export function channelDisplayContext(channel) {
+  return String(
+    channel?.handle
+    || channel?.custom_url
+    || channel?.youtube_channel_id
+    || (channel?.id != null ? `ID ${channel.id}` : ""),
+  );
+}
+
+export function channelDisplayLabel(channel) {
+  const title = String(channel?.title || "");
+  const context = channelDisplayContext(channel);
+  return [title, context].filter(Boolean).join(" · ");
+}
+
 const defaults = {
   uiLang: "auto",
   theme: "auto",

@@ -7,6 +7,8 @@ import { t } from "../../lib/i18n";
 import {
   accountPrefsForUser,
   CHANNEL_LANGS,
+  channelDisplayContext,
+  channelDisplayLabel,
   channelPreferencesForAvailableChannels,
   prefsAfterChannelRemoval,
   UI_LANGS,
@@ -61,6 +63,7 @@ export default function CabinetPage() {
     }
     if (params.get("connection_status") === "connected") {
       setConnectionNotice(t(uiLang, "connectionSaved"));
+      setTab("channels");
     }
     if (oauthError || params.has("connection_status")) router.replace("/cabinet");
   }, [router, uiLang]);
@@ -328,12 +331,6 @@ export default function CabinetPage() {
   if (session === undefined || !session.authenticated) return null;
 
   const ch = channels?.find((channel) => String(channel.id) === String(prefs.selectedChannelId)) || channels?.[0];
-  const connectGoogleUrl = apiUrl(
-    connectionError === "oauthConsentRequired"
-      ? "/auth/youtube/login?consent_required=true"
-      : "/auth/youtube/login",
-  );
-
   return (
     <Shell>
       {channels === null || channelsError ? (
@@ -374,6 +371,9 @@ export default function CabinetPage() {
                 {connectionError ? (
                   <p className="selection-error" role="alert">{t(uiLang, connectionError)}</p>
                 ) : null}
+                {connectionError === "oauthConsentRequired" ? (
+                  <a className="btn ghost" href={apiUrl("/auth/youtube/login?consent_required=true")}>{t(uiLang, "oauthConsentRetry")}</a>
+                ) : null}
                 {connectionNotice ? <p className="selection-notice" role="status">{connectionNotice}</p> : null}
                 <div className="connection-list">
                   {connections === null ? <p role="status">{t(uiLang, "loadingConnections")}</p> : null}
@@ -394,13 +394,10 @@ export default function CabinetPage() {
                       </div>
                       {connection.channels.length ? (
                         <ul className="connection-channels">
-                          {connection.channels.map((channel) => <li key={channel.id}>{channel.title}</li>)}
+                          {connection.channels.map((channel) => <li key={channel.id}>{channelDisplayLabel(channel)}</li>)}
                         </ul>
                       ) : <p>{t(uiLang, "connectionNoChannels")}</p>}
                       <div className="actions">
-                        <button className="btn ghost" type="button" disabled={connectionsError || connection.status !== "connected"} onClick={() => selectConnectionChannels(connection.id)}>
-                          {t(uiLang, "selectConnectionChannels")}
-                        </button>
                         {connection.status === "reauthorization_required" ? (
                           <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
                             {t(uiLang, "reauthorizeConnection")}
@@ -411,7 +408,6 @@ export default function CabinetPage() {
                   ))}
                   {connections?.length === 0 && !connectionsError ? <p className="empty-block">{t(uiLang, "noConnections")}</p> : null}
                 </div>
-                <a className="btn ghost" href={connectGoogleUrl}>{t(uiLang, connections?.length ? "connectAnother" : "connectBtn")}</a>
               </div>
             ) : null}
 
@@ -435,7 +431,10 @@ export default function CabinetPage() {
                           <label className={`channel-discovery-option ${selected ? "selected" : ""}`} key={channel.youtube_channel_id}>
                             <input type="checkbox" checked={selected} aria-label={channel.title} onChange={() => setSelectedYoutubeIds((current) => selected ? current.filter((id) => id !== channel.youtube_channel_id) : [...current, channel.youtube_channel_id])} />
                             {channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
-                            <span><strong>{channel.title}</strong></span>
+                            <span>
+                              <strong>{channel.title}</strong>
+                              <small>{channelDisplayContext(channel)}</small>
+                            </span>
                           </label>
                         );
                       })}
@@ -475,10 +474,20 @@ export default function CabinetPage() {
                               ? t(uiLang, "catalogVideoCount", { count: profile.catalog_video_count })
                               : "";
                           return (
-                            <button key={item.id} type="button" className={`channel-option ${selected ? "on" : ""}`} aria-pressed={selected} onClick={() => update({ selectedChannelId: String(item.id) })}>
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`channel-option ${selected ? "on" : ""}`}
+                              aria-pressed={selected}
+                              onClick={() => {
+                                if (selected || !window.confirm(t(uiLang, "confirmChannelSwitch", { channel: channelDisplayLabel(item) }))) return;
+                                update({ selectedChannelId: String(item.id) });
+                              }}
+                            >
                               {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : <span className="avatar" aria-hidden="true">{(item.title || "?").slice(0, 1)}</span>}
                               <span className="channel-option-copy">
                                 <strong>{item.title}</strong>
+                                <small>{channelDisplayContext(item)}</small>
                                 {subscriberCount ? <small>{subscriberCount}</small> : null}
                                 {videoCount ? <small>{videoCount}</small> : null}
                               </span>
@@ -492,12 +501,12 @@ export default function CabinetPage() {
                     ))}
                     {connectionsError ? <p className="selection-error" role="alert">{t(uiLang, "connectionsLoadError")}</p> : null}
                   </div>
-                  <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, "connectAnother")}</a>
+                  <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
                   {ch ? (
                     <article className="chan-card">
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
-                        <div><h2>{ch.title}</h2><span>{t(uiLang, "selected")}</span></div>
+                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "selected")}</span></div>
                       </header>
                       <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
                         <select value={prefs.channelLangs[String(ch.id)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [String(ch.id)]: event.target.value } })}>
@@ -514,7 +523,7 @@ export default function CabinetPage() {
                       <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                     </article>
                   ) : null}
-                  {!channels.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noChannelsSaved")}</h2><p>{t(uiLang, "channelListHint")}</p><a className="btn" href={connectGoogleUrl}>{t(uiLang, "connectBtn")}</a></div> : null}
+                  {!channels.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noChannelsSaved")}</h2><p>{t(uiLang, "channelListHint")}</p></div> : null}
                 </div>
               </div>
             ) : null}

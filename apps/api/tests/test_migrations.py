@@ -3,6 +3,7 @@ import os
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
+import pytest
 
 
 def test_foundation_migration_discards_prototype_records(tmp_path):
@@ -114,6 +115,9 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
     video_columns = {column["name"]: column for column in inspector.get_columns("videos")}
     assert video_columns["internal_status"]["nullable"] is True
     assert video_columns["title"]["nullable"] is True
+    assert str(video_columns["title"]["type"]).upper() == "TEXT"
+    assert str(video_columns["working_base_title"]["type"]).upper() == "VARCHAR(255)"
+    assert str(video_columns["youtube_title"]["type"]).upper() == "VARCHAR(255)"
     assert video_columns["description"]["nullable"] is True
     assert video_columns["tags"]["nullable"] is True
     assert "youtube_title" in video_columns
@@ -182,6 +186,13 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
             text("SELECT working_ready FROM videos WHERE id = 7")
         ).scalar_one()) is False
     reupgraded_engine.dispose()
+
+    with migrated_engine.begin() as connection:
+        connection.execute(text("UPDATE videos SET title = :title WHERE id = 7"), {"title": "x" * 300})
+    with pytest.raises(RuntimeError, match="longer titles exist"):
+        command.downgrade(config, "0004_video_working_readiness")
+    with migrated_engine.begin() as connection:
+        connection.execute(text("UPDATE videos SET title = 'Working title' WHERE id = 7"))
 
     command.downgrade(config, "0001_foundation")
     downgraded_engine = create_engine(database_url)

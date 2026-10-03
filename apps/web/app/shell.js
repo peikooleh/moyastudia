@@ -82,7 +82,8 @@ export function Shell({ children }) {
 
   useEffect(() => {
     const syncWorkspaceView = () => {
-      setWorkspaceView(new URLSearchParams(window.location.search).get("view") === "calendar" ? "calendar" : "videos");
+      const requestedView = new URLSearchParams(window.location.search).get("view");
+      setWorkspaceView(["calendar", "playlists"].includes(requestedView) ? requestedView : "videos");
     };
     syncWorkspaceView();
     window.addEventListener("popstate", syncWorkspaceView);
@@ -91,7 +92,7 @@ export function Shell({ children }) {
 
   function navigateWorkspace(view) {
     setWorkspaceView(view);
-    router.push(view === "calendar" ? "/?view=calendar" : "/?view=videos");
+    router.push(view === "videos" ? "/?view=videos" : `/?view=${view}`);
   }
 
   const syncStatusKey = channelError
@@ -116,26 +117,6 @@ export function Shell({ children }) {
           <img src="/logo.svg" alt="" className="brand-mark" />
           {t(uiLang, "brand")}
         </Link>
-        <label className="channel-picker">
-          {channel?.thumbnail_url ? (
-            <img src={channel.thumbnail_url} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="avatar" aria-hidden="true">{channel?.title?.slice(0, 1) || "?"}</span>
-          )}
-          <select
-            value={channel ? String(channel.id) : ""}
-            aria-label={t(uiLang, "channels")}
-            disabled={!channels.length}
-            onChange={(event) => update({ selectedChannelId: event.target.value })}
-          >
-            {channelError ? <option value="">{t(uiLang, "studioChannelLoadError")}</option> : null}
-            {!channelError && channelsLoading ? <option value="">{t(uiLang, "catalogLoading")}</option> : null}
-            {!channelError && !channelsLoading && !channels.length ? <option value="">{t(uiLang, "noChannelsSaved")}</option> : null}
-            {channels.map((item) => (
-              <option key={item.id} value={String(item.id)}>{item.title}</option>
-            ))}
-          </select>
-        </label>
         <nav className="workspace-nav" aria-label={t(uiLang, "studio")}>
           <button
             type="button"
@@ -144,6 +125,14 @@ export function Shell({ children }) {
             onClick={() => navigateWorkspace("videos")}
           >
             {t(uiLang, "videos")}
+          </button>
+          <button
+            type="button"
+            className={workspaceView === "playlists" ? "active" : ""}
+            aria-current={workspaceView === "playlists" ? "page" : undefined}
+            onClick={() => navigateWorkspace("playlists")}
+          >
+            {t(uiLang, "playlistsTab")}
           </button>
           <button
             type="button"

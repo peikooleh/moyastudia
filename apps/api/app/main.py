@@ -63,10 +63,11 @@ class VideoWorkingPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     revision: int = Field(ge=0)
-    title: str | None = Field(default=None, max_length=255)
+    title: str | None = None
     description: str | None = None
     tags: str | None = None
     ready: bool = False
+    conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
 
 app.add_middleware(
@@ -1137,23 +1138,38 @@ def patch_channel_video_working(
             detail={"code": "stale_revision", "current": _video_working_item(video)},
         )
 
-    changed_fields = patch.model_fields_set - {"revision"}
-    if not changed_fields:
-        raise HTTPException(422, "provide at least one working field")
-
     snapshot = _working_video_snapshot(video)
     values = {}
-    for field in changed_fields:
-        value = getattr(patch, field)
-        if field == "ready":
-            values["working_ready"] = value
-            continue
-        values[field] = value
-        base_field = f"working_base_{field}"
-        if value is None:
-            values[base_field] = None
-        elif getattr(video, field) is None:
-            values[base_field] = snapshot[field]
+    changed_fields = patch.model_fields_set - {"revision", "conflict_resolution"}
+    if patch.conflict_resolution:
+        if changed_fields:
+            raise HTTPException(422, "conflict resolution cannot include working fields")
+        current = _video_working_item(video)
+        conflicted_fields = [
+            field for field, has_conflict in current["conflictFields"].items() if has_conflict
+        ]
+        if not conflicted_fields:
+            raise HTTPException(409, "video has no conflicts to resolve")
+        for field in conflicted_fields:
+            if patch.conflict_resolution == "use_snapshot":
+                values[field] = None
+                values[f"working_base_{field}"] = None
+            else:
+                values[f"working_base_{field}"] = snapshot[field]
+    else:
+        if not changed_fields:
+            raise HTTPException(422, "provide at least one working field")
+        for field in changed_fields:
+            value = getattr(patch, field)
+            if field == "ready":
+                values["working_ready"] = value
+                continue
+            values[field] = value
+            base_field = f"working_base_{field}"
+            if value is None:
+                values[base_field] = None
+            elif getattr(video, field) is None:
+                values[base_field] = snapshot[field]
 
     values["working_revision"] = Video.working_revision + 1
     updated = (
@@ -1396,6 +1412,51 @@ def channel_playlists(
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
         raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/channels/{channel_id}/playlists/{playlist_id}/items")
+def channel_playlist_items(
+    channel_id: int,
+    playlist_id: str,
+    page_token: str | None = None,
+    limit: int = Query(50, ge=1, le=50),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        result = yt.list_playlist_items(
+            token, channel.youtube_channel_id, playlist_id, page_token, limit
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "playlist not found for selected channel") from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+    video_ids = [item["videoId"] for item in result["items"]]
+    catalog_items = {}
+    if video_ids:
+        cached_videos = (
+            db.query(Video)
+            .filter(
+                Video.channel_id == channel.id,
+                Video.youtube_video_id.in_(video_ids),
+            )
+            .all()
+        )
+        catalog_items = {
+            video.youtube_video_id: _video_catalog_item(video) for video in cached_videos
+        }
+    return {
+        **result,
+        "items": [
+            {**item, "catalogVideo": catalog_items.get(item["videoId"])}
+            for item in result["items"]
+        ],
+    }
 
 
 @app.post(
