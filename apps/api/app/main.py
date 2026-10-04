@@ -1293,7 +1293,9 @@ def publish_channel_video_metadata(
 ):
     if not user.write_mode_enabled:
         raise HTTPException(403, detail={"code": "write_mode_off"})
-    # Serialize publishes for this video so two requests cannot send the same revision twice.\n    video = _catalog_video_or_404(db, user, channel_id, video_id, for_update=True)\n    if video.working_revision != request.revision:
+    # Serialize publishes for this video so two requests cannot send the same revision twice.
+    video = _catalog_video_or_404(db, user, channel_id, video_id, for_update=True)
+    if video.working_revision != request.revision:
         raise HTTPException(409, detail={"code": "stale_revision", "current": _video_working_item(video)})
     current = _video_working_item(video)
     if current["conflict"]:
