@@ -185,6 +185,8 @@ const dict = {
     playlistsTab: "Playlists",
     confirmChannelSwitch: "Switch Studio to {channel}?",
     playlistCount: "{count} playlists",
+    playlistSearch: "Search playlists",
+    playlistSearchEmpty: "No playlists match this search.",
     playlistVideoCountWithCount: "{count} videos",
     untitledPlaylist: "Untitled playlist",
     playlistItemsLoading: "Loading playlist videos...",
