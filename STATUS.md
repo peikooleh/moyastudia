@@ -49,6 +49,18 @@
 - The YouTube Analytics API must be enabled for the Google Cloud project. Current Google documentation for `reports.query` requires `youtube.readonly`, which the existing YouTube connection already requests.
 - Added owner/auth coverage for the analytics summary endpoint.
 
+## W4 implementation — in PR #2
+
+- Added the first real YouTube mutation: metadata update for one explicitly selected catalog video only.
+- Supported fields are title, description, tags and video language. Language is now a local working-draft field and a Studio dropdown rather than a disabled raw code.
+- Added migration `0008_video_working_language` for local/base language state.
+- Added guarded `POST /channels/{channel_id}/videos/{video_id}/publish-metadata`: authentication, same-origin, ownership, Write Mode ON, exact working revision, no unresolved conflict, available remote video, server-side metadata validation and 50-unit tracked quota preflight are required before YouTube is contacted.
+- Remote update uses `videos.update(part=snippet)` and preserves the existing YouTube category ID because YouTube requires category ID when updating snippet metadata.
+- Successful remote writes replace the local YouTube snapshot and clear the published local working copy. Failed remote writes leave the local draft intact.
+- W4 requests YouTube `youtube.force-ssl` in addition to `youtube.readonly`. Existing connections created before W4 must be reauthorized before the first write; the UI reports that requirement instead of silently failing.
+- Added backend coverage for Write Mode OFF, stale revision, same-origin enforcement and successful single-video snapshot update.
+- Bulk operations, playlist writes and all YouTube delete operations remain unavailable. W4 exposes no delete endpoint.
+
 ## Known debt before/while implementing
 
 - `studio.js`, `globals.css` and `i18n.js` are large; split only along feature boundaries needed by the next stage rather than doing a broad rewrite.
