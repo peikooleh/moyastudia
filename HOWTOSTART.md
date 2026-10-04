@@ -48,7 +48,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ```powershell
 alembic upgrade head
 
-`head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`) and `0007_user_write_mode` (server-authoritative Write Mode, default OFF). Apply migrations before starting this branch; the application does not create these schema changes automatically.
+`head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`), `0007_user_write_mode` (server-authoritative Write Mode, default OFF), and `0008_video_working_language` (local/base video language draft fields). Apply migrations before starting this branch; the application does not create these schema changes automatically.
 
 For the Statistics watch-time card, enable **YouTube Analytics API** in the same Google Cloud project as the existing YouTube Data API credentials. The app queries `estimatedMinutesWatched` with the existing read-only YouTube connection; if Analytics is unavailable, the card stays empty rather than estimating watch time.
 ```
@@ -136,3 +136,8 @@ npm run build
 | Сайт без лого/баннера | перезапуск API + refresh-profile, не путать venv |
 
 Остановка: Ctrl+C в каждом терминале.
+
+
+### W4 YouTube write permission
+
+W4 adds single-video metadata writes through `videos.update`. YouTube connections authorized before W4 only have the previous read permission, so reconnect/reauthorize the YouTube connection before testing the first write. The current OAuth request keeps `youtube.readonly` and adds `youtube.force-ssl`; no bulk or delete operation is exposed by MoyaStudia in W4.
