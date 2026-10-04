@@ -379,6 +379,8 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
+  const [writeMode, setWriteMode] = useState({ enabled: false, youtube_writes_available: false });
+  const [writeModeBusy, setWriteModeBusy] = useState(false);
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -398,6 +400,46 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     playlistContents.channelId === channelId
     && playlistContents.playlistId === selectedPlaylistId
   ) ? playlistContents : null;
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/write-mode")
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "write mode unavailable");
+        if (!cancelled) setWriteMode(data);
+      })
+      .catch(() => {
+        if (!cancelled) setWriteMode({ enabled: false, youtube_writes_available: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleWriteMode() {
+    if (writeModeBusy) return;
+    const nextEnabled = !writeMode.enabled;
+    if (nextEnabled && !window.confirm(t(uiLang, "writeModeConfirm"))) return;
+    setWriteModeBusy(true);
+    try {
+      const response = await apiFetch("/write-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: nextEnabled,
+          confirmation: nextEnabled ? "enable_youtube_writes" : null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "writeModeUpdateError"));
+      setWriteMode(data);
+    } catch (error) {
+      setErr(String(error.message || error));
+    } finally {
+      setWriteModeBusy(false);
+    }
+  }
+
   useEffect(() => {
     const requestId = ++channelRequestId.current;
     syncRunId.current += 1;
@@ -1035,11 +1077,20 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     <div className="studio-wrap">
       <div className="studio-mode-placeholder">
         <span id="write-mode-label" className="mode-switch-label">{t(uiLang, "writeMode")}</span>
-        <button className="mode-switch" type="button" role="switch" aria-checked="false" aria-labelledby="write-mode-label" aria-describedby="write-mode-description" disabled>
+        <button
+          className="mode-switch"
+          type="button"
+          role="switch"
+          aria-checked={writeMode.enabled}
+          aria-labelledby="write-mode-label"
+          aria-describedby="write-mode-description"
+          disabled={writeModeBusy}
+          onClick={toggleWriteMode}
+        >
           <span aria-hidden="true" />
         </button>
-        <span className="mode-coming-later">{t(uiLang, "comingLater")}</span>
-        <p id="write-mode-description">{t(uiLang, "writeModeDescription")}</p>
+        <span className="mode-coming-later">{writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}</span>
+        <p id="write-mode-description">{t(uiLang, writeMode.enabled ? "writeModeArmedDescription" : "writeModeDescription")}</p>
       </div>
       {view === "videos" ? (
         <header className="workspace-heading">
