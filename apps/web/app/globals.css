@@ -1212,6 +1212,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .video-properties fieldset { display: grid; gap: 7px; margin: 0 0 12px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; }
 .video-properties fieldset label { color: var(--text); font-size: 12px; }
 .video-properties fieldset small, .video-properties > p, .write-action-help { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.captions-settings { align-content: start; }
+.captions-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; }
+.captions-status strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.captions-upload { width: 100%; margin-top: 2px; }
 .video-properties > p { margin: 12px 0 0; }
 .working-controls .write-action-help { flex-basis: 100%; }
 
