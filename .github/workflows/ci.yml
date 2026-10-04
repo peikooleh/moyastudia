@@ -18,8 +18,10 @@ jobs:
           cache-dependency-path: apps/api/requirements.txt
       - run: python -m pip install -r requirements.txt
         working-directory: apps/api
-      - run: pytest
+            - run: python -m pytest
         working-directory: apps/api
+        env:
+          PYTHONPATH: .
 
   web:
     runs-on: ubuntu-latest
