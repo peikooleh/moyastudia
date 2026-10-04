@@ -1,7 +1,8 @@
+import Link from "next/link";
 export default function PrivacyPage() {
   return (
     <main className="legal-page">
-      <a href="/" className="legal-back">← MoyaStudia</a>
+      <Link href="/" className="legal-back">← MoyaStudia</Link>
       <h1>Privacy</h1>
       <p>MoyaStudia uses account and YouTube channel data only to provide the connected workspace and its features.</p>
       <h2>Connected accounts</h2>
