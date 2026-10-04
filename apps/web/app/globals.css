@@ -1532,3 +1532,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     width: 72px;
   }
 }
+
+
+/* A11: rich Calendar day rows, consistent with Statistics and Playlists. */
+.calendar-day-drawer li > button {
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+}
+.calendar-day-thumb {
+  display: block;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--bg-hover);
+}
+.calendar-day-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.calendar-day-copy strong {
+  font-weight: 600;
+  line-height: 1.3;
+}
+.calendar-day-copy small {
+  color: var(--muted);
+}
+@media (max-width: 720px) {
+  .calendar-day-drawer li > button {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 9px;
+  }
+  .calendar-day-thumb {
+    width: 76px;
+  }
+}
