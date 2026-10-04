@@ -9,6 +9,7 @@ import {
   CHANNEL_LANGS,
   channelDisplayContext,
   channelDisplayLabel,
+  channelPreferenceKey,
   channelPreferencesForAvailableChannels,
   prefsAfterChannelRemoval,
   UI_LANGS,
@@ -411,7 +412,7 @@ export default function CabinetPage() {
                         <button className="btn ghost" type="button" onClick={() => setConnectionsRetry((value) => value + 1)}>{t(uiLang, "retry")}</button>
                       </div>
                     ) : null}
-                    {connections?.map((connection) => (
+                    {connections?.filter((connection) => connection.channels.length > 0).map((connection) => (
                       <section className="channel-group" key={connection.id}>
                         <header>
                           <div className="channel-group-account">
@@ -476,7 +477,7 @@ export default function CabinetPage() {
                         <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "selected")}</span></div>
                       </header>
                       <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
-                        <select value={prefs.channelLangs[String(ch.id)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [String(ch.id)]: event.target.value } })}>
+                        <select value={prefs.channelLangs[channelPreferenceKey(ch)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [channelPreferenceKey(ch)]: event.target.value } })}>
                           <option value="">{t(uiLang, "notSet")}</option>
                           {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
                         </select>
