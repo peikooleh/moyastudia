@@ -186,7 +186,7 @@ function VideoInspector({
       <section className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label>
+          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-title"
             rows={2}
@@ -200,7 +200,7 @@ function VideoInspector({
         </div>
         <div className="description-metadata-layout">
         <div className={`editor-field description-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label>
+          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-description"
             rows={10}
@@ -214,7 +214,7 @@ function VideoInspector({
         </div>
         </div>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label>
+          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-tags"
             rows={4}
