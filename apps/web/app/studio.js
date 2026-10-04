@@ -379,6 +379,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
+  const [channelAnalytics, setChannelAnalytics] = useState(null);
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -398,6 +399,26 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     playlistContents.channelId === channelId
     && playlistContents.playlistId === selectedPlaylistId
   ) ? playlistContents : null;
+  useEffect(() => {
+    if (!channelId) {
+      setChannelAnalytics(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    apiFetch(`/channels/${channelId}/analytics/summary`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("analytics unavailable");
+        return response.json();
+      })
+      .then((data) => {
+        if (!controller.signal.aborted) setChannelAnalytics(data);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setChannelAnalytics(null);
+      });
+    return () => controller.abort();
+  }, [channelId]);
+
   useEffect(() => {
     const requestId = ++channelRequestId.current;
     syncRunId.current += 1;
@@ -1483,11 +1504,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             <span>{t(uiLang, "statisticsLoadedVideos", { loaded: statistics.loadedVideoCount, total: catalogTotal })}</span>
           </header>
           <div className="statistics-cards">
-            {[["videoViews", statistics.views, statistics.viewsCount], ["videoLikes", statistics.likes, statistics.likesCount], ["videoComments", statistics.comments, statistics.commentsCount]].map(([key, value, count]) => (
+            {[["videoViews", statistics.views, statistics.viewsCount], ["videoLikes", statistics.likes, statistics.likesCount], ["videoComments", statistics.comments, statistics.commentsCount], ["statisticsWatchTime", channelAnalytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(channelAnalytics.estimated_minutes_watched / 60) }) : "—", null]].map(([key, value, count]) => (
               <article key={key}>
                 <h2>{t(uiLang, key)}</h2>
                 <strong>{value == null ? "—" : value.toLocaleString(t(uiLang, "calendarLocale"))}</strong>
-                <small>{t(uiLang, "statisticsMetricCount", { count })}</small>
+                {count != null ? <small>{t(uiLang, "statisticsMetricCount", { count })}</small> : null}
               </article>
             ))}
           </div>
