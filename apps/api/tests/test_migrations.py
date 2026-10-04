@@ -132,7 +132,7 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
     assert video_columns["working_ready"]["nullable"] is False
     assert "working_revision" in video_columns
     assert "availability_status" in video_columns
-    assert "channel_catalog_syncs" in inspector.get_table_names()
+    assert "channel_catalog_syncs" in inspector.get_table_names()\n    assert "local_playlists" in inspector.get_table_names()
     with migrated_engine.connect() as connection:
         video = connection.execute(
             text(
