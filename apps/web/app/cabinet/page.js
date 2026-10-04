@@ -364,6 +364,15 @@ export default function CabinetPage() {
                   <label>{t(uiLang, "email")}</label>
                   <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
                 </div>
+                <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
+                  <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
+                  <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
+                  <div className="ai-connection-grid">
+                    <label>{t(uiLang, "aiProvider")}<select disabled defaultValue=""><option value="">{t(uiLang, "aiNotConnected")}</option><option>OpenAI</option><option>Google Gemini</option><option>Anthropic</option></select></label>
+                    <label>{t(uiLang, "aiModel")}<input disabled value="" placeholder="—" readOnly /></label>
+                    <label>{t(uiLang, "aiApiKey")}<input disabled type="password" value="" placeholder="••••••••••••" readOnly /></label>
+                  </div>
+                </section>
               </div>
             ) : null}
 
@@ -508,15 +517,7 @@ export default function CabinetPage() {
                   <div><h2>{t(uiLang, "uiLangTitle")}</h2><div className="opt-list">{PICK_LANGS.map((language) => <button key={language.id} type="button" className={`opt ${prefs.uiLang === language.id ? "on" : ""}`} onClick={() => update({ uiLang: language.id })}><span className="radio" />{language.label}</button>)}</div></div>
                   <div><h2>{t(uiLang, "themeTitle")}</h2><ThemePicker /></div>
                 </div>
-                <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
-                  <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
-                  <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
-                  <div className="ai-connection-grid">
-                    <label>{t(uiLang, "aiProvider")}<select disabled defaultValue=""><option value="">{t(uiLang, "aiNotConnected")}</option><option>OpenAI</option><option>Google Gemini</option><option>Anthropic</option></select></label>
-                    <label>{t(uiLang, "aiModel")}<input disabled value="" placeholder="—" readOnly /></label>
-                    <label>{t(uiLang, "aiApiKey")}<input disabled type="password" value="" placeholder="••••••••••••" readOnly /></label>
-                  </div>
-                </section>
+
               </div>
             ) : null}
           </section>
