@@ -18,6 +18,16 @@
 - Implementation order is W1 boundaries → W2 quota ledger on reads → W3 server Write Mode → W4 single-video metadata write → W5 thumbnail/status/scheduling → W6 playlists → W7 connection lifecycle → W8 AI → W9 uploads/drafts.
 - Each W-stage must update STATUS/documentation and pass relevant tests/CI before merge.
 
+## W1/W2 implementation — in PR #2
+
+- Added Alembic revision `0006_youtube_quota_usage` and `YouTubeQuotaUsage` ledger rows attributed to user/connection/channel while quota totals are aggregated at the shared Google Cloud project scope.
+- Central YouTube request execution now records each instrumented request attempt as success or provider error with operation/bucket/cost. Existing channel discovery/profile, catalog sync, playlist list/items and video snapshot reads are instrumented.
+- Added authenticated `GET /quota/today` with Pacific-Time quota window, bucket limits, tracked usage, estimated remaining and an explicit `authoritative_google_balance: false` marker.
+- Studio header now shows the real tracked general-bucket usage (for example `API-квота 12 / 10000`) and explains that Google project usage may differ.
+- Added quota tests for Pacific reset boundaries, authentication, aggregation and the dated operation-cost reference; migration coverage includes the new table.
+- No YouTube write scope or write endpoint is enabled. W3 remains the next stage after W1/W2 is validated and merged.
+- PR #2 is intentionally draft while CI and final review run.
+
 ## Known debt before/while implementing
 
 - `studio.js`, `globals.css` and `i18n.js` are large; split only along feature boundaries needed by the next stage rather than doing a broad rewrite.
