@@ -575,21 +575,29 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
     const controller = new AbortController();
     setPlaylistState({ channelId, items: [], loading: true, error: "" });
-    apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(
-            (typeof data?.detail === "string" && data.detail)
-              || t(uiLangRef.current, "playlistsLoadError"),
-          );
+    Promise.all([
+      apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal }),
+      apiFetch(`/channels/${channelId}/local-playlists`, { signal: controller.signal }),
+    ])
+      .then(async ([remoteResponse, localResponse]) => {
+        const [remoteRows, localRows] = await Promise.all([remoteResponse.json(), localResponse.json()]);
+        if (!remoteResponse.ok) {
+          throw new Error((typeof remoteRows?.detail === "string" && remoteRows.detail) || t(uiLangRef.current, "playlistsLoadError"));
         }
-        return data;
+        if (!localResponse.ok) throw new Error(localRows.detail || t(uiLangRef.current, "playlistsLoadError"));
+        return { remoteRows, localRows };
       })
-      .then((rows) => {
+      .then(({ remoteRows, localRows }) => {
         if (controller.signal.aborted) return;
-        const items = Array.isArray(rows) ? rows.map(mapPlaylistForStudio) : [];
-        setPlaylistState({ channelId, items, loading: false, error: "" });
+        const remoteItems = Array.isArray(remoteRows) ? remoteRows.map(mapPlaylistForStudio) : [];
+        const localItems = Array.isArray(localRows) ? localRows.map((row) => ({
+          id: row.id, title: row.title, description: "", thumb: "", publishedAt: "", privacy: "private",
+          itemCount: row.videoIds?.length || 0, localOnly: true,
+        })) : [];
+        const memberships = {};
+        localRows.forEach((row) => { memberships[row.id] = row.videoIds || []; });
+        setLocalPlaylistMemberships(memberships);
+        setPlaylistState({ channelId, items: [...localItems, ...remoteItems], loading: false, error: "" });
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
@@ -911,6 +919,19 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         next[playlist.id] = [...membership];
       });
       return next;
+    });
+    const localTargets = playlists.filter((playlist) => playlist.localOnly);
+    localTargets.forEach((playlist) => {
+      const currentMembership = new Set(localPlaylistMemberships[playlist.id] || []);
+      videoIds.forEach((videoId) => {
+        if (targets.has(playlist.id)) currentMembership.add(videoId);
+        else currentMembership.delete(videoId);
+      });
+      apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(playlist.id)}/membership`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_ids: [...currentMembership] }),
+      }).catch(() => {});
     });
     setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
     setPlaylistMembershipEditor(null);
@@ -1412,10 +1433,19 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               const title = newPlaylistTitle.trim();
               if (!title) return;
               const localId = `local-${Date.now()}`;
-              setPlaylistState((current) => ({ ...current, channelId, items: [{ id: localId, title, itemCount: 0, privacy: "private", localOnly: true }, ...current.items] }));
-              setSelectedPlaylistId(localId);
-              setNewPlaylistTitle("");
-              setPlaylistIdCopyStatus(t(uiLang, "playlistCreatedLocally"));
+              apiFetch(`/channels/${channelId}/local-playlists`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ local_id: localId, title }),
+              }).then(async (response) => {
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistCreateError"));
+                setPlaylistState((current) => ({ ...current, channelId, items: [{ id: data.id, title: data.title, itemCount: 0, privacy: "private", localOnly: true }, ...current.items] }));
+                setLocalPlaylistMemberships((current) => ({ ...current, [data.id]: data.videoIds || [] }));
+                setSelectedPlaylistId(data.id);
+                setNewPlaylistTitle("");
+                setPlaylistIdCopyStatus(t(uiLang, "playlistCreatedLocally"));
+              }).catch((error) => setPlaylistIdCopyStatus(String(error.message || error)));
             }}>
               <input className="search" type="text" value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder={t(uiLang, "playlistNewTitle")} aria-label={t(uiLang, "playlistNewTitle")} maxLength={150} />
               <button className="btn" type="submit">+ {t(uiLang, "playlistCreate")}</button>
