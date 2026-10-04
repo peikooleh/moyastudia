@@ -1237,3 +1237,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .studio-list .list { max-height: min(38vh, 21rem); overflow-x: hidden; overflow-y: auto; }
   .video-summary-thumbnail > img, .video-summary-thumbnail > .item-thumb { width: 100%; }
 }
+
+
+/* A3: Calendar navigation and bounded day-overflow details. */
+.calendar-heading .cal-nav { flex-wrap: wrap; }
+.calendar-today { min-width: 72px; }
+.calendar-panel .cal-cell.today { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, var(--bg)); }
+.calendar-panel .cal-cell.today > b { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding-inline: 5px; border-radius: 999px; background: var(--accent); color: var(--bg); }
+.calendar-day-details { max-height: min(38vh, 320px); overflow: hidden; }
+.calendar-day-details ul { max-height: min(30vh, 250px); overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 720px) {
+  .calendar-heading .cal-nav { width: 100%; justify-content: space-between; }
+  .calendar-today { order: 4; flex-basis: 100%; }
+  .calendar-day-details { max-height: min(42vh, 300px); }
+  .calendar-day-details ul { max-height: min(33vh, 230px); }
+}
