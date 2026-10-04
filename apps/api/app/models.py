@@ -93,6 +93,7 @@ class Channel(Base):
     videos: Mapped[list["Video"]] = relationship(
         back_populates="channel", cascade="all, delete-orphan"
     )
+    local_playlists: Mapped[list["LocalPlaylist"]] = relationship(back_populates="channel", cascade="all, delete-orphan")
     catalog_sync: Mapped["ChannelCatalogSync | None"] = relationship(
         back_populates="channel", cascade="all, delete-orphan", uselist=False
     )
@@ -150,6 +151,21 @@ class Video(Base):
     )
 
     channel: Mapped[Channel] = relationship(back_populates="videos")
+
+
+class LocalPlaylist(Base):
+    __tablename__ = "local_playlists"
+    __table_args__ = (UniqueConstraint("channel_id", "local_id", name="uq_local_playlist_channel_local_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    local_id: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(150))
+    video_ids: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    channel: Mapped[Channel] = relationship(back_populates="local_playlists")
 
 
 class ChannelCatalogSync(Base):
