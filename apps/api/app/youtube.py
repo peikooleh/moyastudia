@@ -1,4 +1,6 @@
 from collections.abc import Callable
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -91,9 +93,22 @@ def service_for(refresh_token: str):
 
 
 QuotaRecorder = Callable[[str, str], None]
+_current_quota_recorder: ContextVar[QuotaRecorder | None] = ContextVar(
+    "youtube_quota_recorder", default=None
+)
+
+
+@contextmanager
+def quota_recording(recorder: QuotaRecorder):
+    token = _current_quota_recorder.set(recorder)
+    try:
+        yield
+    finally:
+        _current_quota_recorder.reset(token)
 
 
 def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
+    recorder = recorder or _current_quota_recorder.get()
     try:
         response = request.execute()
     except Exception:
