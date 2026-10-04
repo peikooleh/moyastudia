@@ -50,7 +50,10 @@ def test_quota_endpoint_requires_authentication(client):
 
 def test_quota_operation_buckets_match_current_reference():
     assert quota.operation_cost("channels.list") == ("general", 1)
-    assert quota.operation_cost("videos.update") == ("general", 50)\n    assert quota.operation_cost("captions.insert") == ("general", 400)\n    assert quota.operation_cost("captions.update") == ("general", 450)\n    assert quota.operation_cost("videos.delete") == ("general", 50)
+    assert quota.operation_cost("videos.update") == ("general", 50)
+    assert quota.operation_cost("captions.insert") == ("general", 400)
+    assert quota.operation_cost("captions.update") == ("general", 450)
+    assert quota.operation_cost("videos.delete") == ("general", 50)
     assert quota.operation_cost("search.list") == ("search", 1)
     assert quota.operation_cost("videos.insert") == ("video_upload", 1)
 
