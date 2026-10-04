@@ -235,7 +235,6 @@ function VideoInspector({
         <fieldset disabled><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" checked={selected.madeForKids === true} readOnly /> {t(uiLang, "audienceKids")}</label><label><input type="radio" checked={selected.madeForKids === false} readOnly /> {t(uiLang, "audienceNotKids")}</label></fieldset>
         <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly disabled /></label>
         <fieldset disabled><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={selected.captions === true} readOnly /> {t(uiLang, selected.captions ? "yes" : "no")}</label></fieldset>
-        <p>{t(uiLang, "writeModeDescription")}</p>
       </section>
 
       <div className="working-controls" aria-live="polite">
@@ -323,7 +322,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo }) {
   );
 }
 
-export function Studio({ view = "videos", onViewChange = () => {}, writeMode = { enabled: false } }) {
+export function Studio({ view = "videos", onViewChange = () => {} }) {
   const { prefs, uiLang } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
   const [videos, setVideos] = useState([]);
