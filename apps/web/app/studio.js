@@ -166,12 +166,10 @@ function VideoInspector({
   const [copyStatus, setCopyStatus] = useState("");
   const [localCategory, setLocalCategory] = useState("");
   const [localAudience, setLocalAudience] = useState("");
-  const [localCaptions, setLocalCaptions] = useState(false);
 
   useEffect(() => {
     setLocalCategory(selected?.category || "");
     setLocalAudience(selected?.madeForKids === true ? "kids" : selected?.madeForKids === false ? "not-kids" : "");
-    setLocalCaptions(selected?.captions === true);
   }, [selected?.id, selected?.category, selected?.madeForKids, selected?.captions]);
   if (!selected) {
     return <section className="video-inspector empty">{t(uiLang, "catalogSelectVideo")}</section>;
@@ -258,10 +256,17 @@ function VideoInspector({
 
       <section className="video-properties" aria-labelledby="video-properties-title">
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
+        <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
         <label>{t(uiLang, "videoCategory")}<select value={localCategory} onChange={(event) => setLocalCategory(event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <fieldset><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "kids"} onChange={() => setLocalAudience("kids")} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "not-kids"} onChange={() => setLocalAudience("not-kids")} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
-        <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
-        <fieldset><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={localCaptions} onChange={(event) => setLocalCaptions(event.target.checked)} /> {t(uiLang, localCaptions ? "yes" : "no")}</label></fieldset>
+        <fieldset className="captions-settings">
+          <legend>{t(uiLang, "videoCaptions")}</legend>
+          <div className="captions-status">
+            <span>{t(uiLang, "captionsYoutubeStatus")}</span>
+            <strong>{t(uiLang, selected.captions === true ? "captionsPresent" : selected.captions === false ? "captionsNotDetected" : "captionsUnknown")}</strong>
+          </div>
+          <button className="btn ghost captions-upload" type="button" disabled title={t(uiLang, "captionsUploadLater")}>+ {t(uiLang, "captionsAddFile")}</button>
+        </fieldset>
       </section>
 
       <div className="working-controls" aria-live="polite">
