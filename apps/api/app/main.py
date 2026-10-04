@@ -46,6 +46,7 @@ from .tokens import (
     encrypt_refresh_token,
     validate_encryption_key,
 )
+from . import quota as quota_service
 from . import youtube as yt
 
 app = FastAPI(title="MoyaStudia API")
@@ -114,6 +115,14 @@ def _oauth_status_redirect(path: str, parameter: str, status: str, state: str = 
     if state:
         clear_oauth_state_cookie(response, state)
     return response
+
+
+@app.get("/quota/today")
+def quota_today(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return quota_service.quota_summary(db, user.id)
 
 
 @app.get("/auth/session")
@@ -502,11 +511,33 @@ def _google_connection_or_404(
     return connection
 
 
-def _available_youtube_channels(connection: GoogleConnection) -> list[dict]:
+def _quota_recorder(
+    db: Session,
+    user: User,
+    connection: GoogleConnection | None = None,
+    channel: Channel | None = None,
+):
+    def record(operation: str, outcome: str) -> None:
+        quota_service.record_usage(
+            db,
+            user_id=user.id,
+            google_connection_id=connection.id if connection else None,
+            channel_id=channel.id if channel else None,
+            operation=operation,
+            outcome=outcome,
+        )
+    return record
+
+
+def _available_youtube_channels(
+    connection: GoogleConnection, db: Session, user: User
+) -> list[dict]:
     try:
         token = decrypt_refresh_token(connection.encrypted_refresh_token)
         credentials = yt.creds_from_refresh(token)
-        return yt.list_available_channels(credentials)
+        return yt.list_available_channels(
+            credentials, recorder=_quota_recorder(db, user, connection)
+        )
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -526,7 +557,7 @@ def available_channels(
             "title": item["title"],
             "thumbnail_url": item["thumbnail_url"],
         }
-        for item in _available_youtube_channels(connection)
+        for item in _available_youtube_channels(connection, db, user)
     ]
 
 
@@ -547,7 +578,7 @@ def save_channel_selection(
         raise HTTPException(422, "Select at least one available YouTube channel")
 
     selected_ids = list(dict.fromkeys(selection.youtube_channel_ids))
-    available = _available_youtube_channels(connection)
+    available = _available_youtube_channels(connection, db, user)
     available_by_id = {item["youtube_channel_id"]: item for item in available}
     if any(channel_id not in available_by_id for channel_id in selected_ids):
         raise HTTPException(422, "One or more selected channels are not available")
@@ -1270,6 +1301,7 @@ def continue_catalog_sync(
             page_token=sync.next_page_token,
             uploads_playlist_id=sync.uploads_playlist_id,
             limit=50,
+            recorder=_quota_recorder(db, user, channel.google_connection, channel),
         )
         if page["next_page_token"] and page["next_page_token"] == sync.next_page_token:
             raise RuntimeError("YouTube returned a non-advancing page token")
@@ -1407,7 +1439,11 @@ def channel_playlists(
     row = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
-        return yt.list_playlists(token, row.youtube_channel_id)
+        return yt.list_playlists(
+            token,
+            row.youtube_channel_id,
+            recorder=_quota_recorder(db, user, row.google_connection, row),
+        )
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -1427,7 +1463,12 @@ def channel_playlist_items(
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
         result = yt.list_playlist_items(
-            token, channel.youtube_channel_id, playlist_id, page_token, limit
+            token,
+            channel.youtube_channel_id,
+            playlist_id,
+            page_token,
+            limit,
+            recorder=_quota_recorder(db, user, channel.google_connection, channel),
         )
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
@@ -1472,7 +1513,11 @@ def refresh_profile(
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
         creds = yt.creds_from_refresh(token)
-        info = yt.fetch_channel(creds, row.youtube_channel_id)
+        info = yt.fetch_channel(
+            creds,
+            row.youtube_channel_id,
+            recorder=_quota_recorder(db, user, row.google_connection, row),
+        )
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
