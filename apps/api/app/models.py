@@ -30,6 +30,8 @@ class User(Base):
     google_connections: Mapped[list["GoogleConnection"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    write_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
