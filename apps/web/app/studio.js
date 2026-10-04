@@ -937,6 +937,27 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setPlaylistMembershipEditor(null);
   }
 
+  async function deleteLocalPlaylist() {
+    if (!selectedPlaylist?.localOnly) return;
+    if (!window.confirm(t(uiLang, "playlistDeleteLocalConfirm"))) return;
+    setPlaylistIdCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistDeleteLocalError"));
+      setPlaylistState((current) => ({ ...current, items: current.items.filter((playlist) => playlist.id !== selectedPlaylist.id) }));
+      setLocalPlaylistMemberships((current) => {
+        const next = { ...current };
+        delete next[selectedPlaylist.id];
+        return next;
+      });
+      setSelectedPlaylistId("");
+      setPlaylistIdCopyStatus(t(uiLang, "playlistDeletedLocally"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
   async function copyPlaylistId() {
     if (!selectedPlaylist?.id) return;
     try {
@@ -1490,7 +1511,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
                       {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
                     </div>
-                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{!selectedPlaylist.localOnly ? <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a> : null}</div> : null}
+                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{selectedPlaylist.localOnly ? <button className="text-button danger-text" type="button" onClick={deleteLocalPlaylist}>{t(uiLang, "playlistDeleteLocal")}</button> : <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a>}</div> : null}
                   </div>
                   {playlistIdCopyStatus ? <span className="playlist-copy-status" role="status">{playlistIdCopyStatus}</span> : null}
                 </div>
