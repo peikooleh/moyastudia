@@ -1134,6 +1134,7 @@ def test_youtube_playlist_items_verify_ownership_and_paginate(monkeypatch):
 
     assert result == {
         "items": [{
+            "playlistItemId": "",
             "videoId": "video-one",
             "title": "Video title",
             "thumb": "",
