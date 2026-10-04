@@ -112,9 +112,14 @@ export function Shell({ children }) {
           confirmation: nextEnabled ? "enable_youtube_writes" : null,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "writeModeUpdateError"));
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setWriteMode((current) => ({ ...current, error: data.detail || t(uiLang, "writeModeUpdateError") }));
+        return;
+      }
       setWriteMode(data);
+    } catch {
+      setWriteMode((current) => ({ ...current, error: t(uiLang, "writeModeUpdateError") }));
     } finally {
       setWriteModeBusy(false);
     }
