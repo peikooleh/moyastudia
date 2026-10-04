@@ -374,6 +374,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistPage, setPlaylistPage] = useState(0);
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
+  const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
+  const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("date");
   const [query, setQuery] = useState("");
@@ -807,6 +809,49 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       else next.delete(videoId);
       return next;
     });
+  }
+
+  function openPlaylistMembershipEditor(mode) {
+    if (!selectedPlaylistVideoIds.size) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
+      return;
+    }
+    const targets = new Set();
+    if (selectedPlaylistId) targets.add(selectedPlaylistId);
+    Object.entries(localPlaylistMemberships).forEach(([playlistId, videoIds]) => {
+      if ([...selectedPlaylistVideoIds].every((videoId) => videoIds.includes(videoId))) targets.add(playlistId);
+    });
+    setPlaylistMembershipEditor({ mode, targets });
+  }
+
+  function togglePlaylistMembershipTarget(playlistId, checked) {
+    setPlaylistMembershipEditor((current) => {
+      if (!current) return current;
+      const targets = new Set(current.targets);
+      if (checked) targets.add(playlistId);
+      else targets.delete(playlistId);
+      return { ...current, targets };
+    });
+  }
+
+  function applyLocalPlaylistMemberships() {
+    if (!playlistMembershipEditor) return;
+    const videoIds = [...selectedPlaylistVideoIds];
+    const targets = playlistMembershipEditor.targets;
+    setLocalPlaylistMemberships((current) => {
+      const next = { ...current };
+      playlists.forEach((playlist) => {
+        const membership = new Set(next[playlist.id] || []);
+        videoIds.forEach((videoId) => {
+          if (targets.has(playlist.id)) membership.add(videoId);
+          else membership.delete(videoId);
+        });
+        next[playlist.id] = [...membership];
+      });
+      return next;
+    });
+    setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
+    setPlaylistMembershipEditor(null);
   }
 
   async function copyPlaylistId() {
@@ -1384,11 +1429,29 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
                 <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
-                  <button type="button" title={t(uiLang, "playlistAddToPlaylist")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "playlistWritesWithWriteMode"))}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
-                  <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "playlistWritesWithWriteMode"))}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistAddToPlaylist")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
                   <button type="button" disabled title={t(uiLang, "playlistRemoveFromPlaylist")}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
+              {playlistMembershipEditor ? (
+                <div className="playlist-membership-editor" role="dialog" aria-label={t(uiLang, "playlistMembershipTitle")}>
+                  <strong>{t(uiLang, "playlistMembershipTitle")}</strong>
+                  <p>{t(uiLang, "playlistMembershipHelp")}</p>
+                  <div className="playlist-membership-list">
+                    {playlists.map((playlist) => (
+                      <label key={playlist.id}>
+                        <input type="checkbox" checked={playlistMembershipEditor.targets.has(playlist.id)} onChange={(event) => togglePlaylistMembershipTarget(playlist.id, event.target.checked)} />
+                        <span>{playlist.title || t(uiLang, "untitledPlaylist")}{playlist.localOnly ? ` · ${t(uiLang, "playlistLocalBadge")}` : ""}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="playlist-membership-actions">
+                    <button className="btn ghost" type="button" onClick={() => setPlaylistMembershipEditor(null)}>{t(uiLang, "cancel")}</button>
+                    <button className="btn" type="button" onClick={applyLocalPlaylistMemberships}>{t(uiLang, "applyLocally")}</button>
+                  </div>
+                </div>
+              ) : null}
               <label className="playlist-page-size">
                 {t(uiLang, "playlistPageSize")}
                 <select value={playlistPageSize} onChange={(event) => {
