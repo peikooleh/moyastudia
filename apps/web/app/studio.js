@@ -179,6 +179,7 @@ function VideoInspector({
             <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button>{selected.youtubeId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(selected.youtubeId)}`} target="_blank" rel="noreferrer">{t(uiLang, "openVideo")}</a> : null}</dd></div>
           </dl>
           {copyStatus ? <span role="status">{copyStatus}</span> : null}
+          {selected.youtubeId ? <div className="video-preview"><iframe src={`https://www.youtube.com/embed/${encodeURIComponent(selected.youtubeId)}?rel=0`} title={t(uiLang, "videoPreview")} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
           {workingVideo?.dirty ? <span className="item-change">{t(uiLang, "workingModified")}</span> : null}
         </div>
       </header>
@@ -233,7 +234,7 @@ function VideoInspector({
         <label>{t(uiLang, "videoCategory")}<select value={categoryValue} disabled><option value={categoryValue}>{categoryValue}</option></select></label>
         <fieldset disabled><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" checked={selected.madeForKids === true} readOnly /> {t(uiLang, "audienceKids")}</label><label><input type="radio" checked={selected.madeForKids === false} readOnly /> {t(uiLang, "audienceNotKids")}</label></fieldset>
         <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly disabled /></label>
-        <fieldset disabled><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={selected.captions === true} readOnly /> {t(uiLang, selected.captions ? "yes" : "no")}</label><small>{t(uiLang, "subtitlesComingLater")}</small></fieldset>
+        <fieldset disabled><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={selected.captions === true} readOnly /> {t(uiLang, selected.captions ? "yes" : "no")}</label></fieldset>
         <p>{t(uiLang, "writeModeDescription")}</p>
       </section>
 
@@ -277,7 +278,6 @@ function VideoInspector({
           {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
         </button>
         <button className="btn youtube-write-action" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "saveToYoutube")}</button>
-        <span className="write-action-help">{t(uiLang, "writeModeDescription")}</span>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
@@ -323,7 +323,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo }) {
   );
 }
 
-export function Studio({ view = "videos", onViewChange = () => {} }) {
+export function Studio({ view = "videos", onViewChange = () => {}, writeMode = { enabled: false } }) {
   const { prefs, uiLang } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
   const [videos, setVideos] = useState([]);
@@ -379,8 +379,6 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
-  const [writeMode, setWriteMode] = useState({ enabled: false, youtube_writes_available: false });
-  const [writeModeBusy, setWriteModeBusy] = useState(false);
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -400,46 +398,6 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     playlistContents.channelId === channelId
     && playlistContents.playlistId === selectedPlaylistId
   ) ? playlistContents : null;
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch("/write-mode")
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "write mode unavailable");
-        if (!cancelled) setWriteMode(data);
-      })
-      .catch(() => {
-        if (!cancelled) setWriteMode({ enabled: false, youtube_writes_available: false });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function toggleWriteMode() {
-    if (writeModeBusy) return;
-    const nextEnabled = !writeMode.enabled;
-    if (nextEnabled && !window.confirm(t(uiLang, "writeModeConfirm"))) return;
-    setWriteModeBusy(true);
-    try {
-      const response = await apiFetch("/write-mode", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled: nextEnabled,
-          confirmation: nextEnabled ? "enable_youtube_writes" : null,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "writeModeUpdateError"));
-      setWriteMode(data);
-    } catch (error) {
-      setErr(String(error.message || error));
-    } finally {
-      setWriteModeBusy(false);
-    }
-  }
-
   useEffect(() => {
     const requestId = ++channelRequestId.current;
     syncRunId.current += 1;
@@ -1075,23 +1033,6 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   }
   return (
     <div className="studio-wrap">
-      <div className="studio-mode-placeholder">
-        <span id="write-mode-label" className="mode-switch-label">{t(uiLang, "writeMode")}</span>
-        <button
-          className="mode-switch"
-          type="button"
-          role="switch"
-          aria-checked={writeMode.enabled}
-          aria-labelledby="write-mode-label"
-          aria-describedby="write-mode-description"
-          disabled={writeModeBusy}
-          onClick={toggleWriteMode}
-        >
-          <span aria-hidden="true" />
-        </button>
-        <span className="mode-coming-later">{writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}</span>
-        <p id="write-mode-description">{t(uiLang, writeMode.enabled ? "writeModeArmedDescription" : "writeModeDescription")}</p>
-      </div>
       {view === "videos" ? (
         <header className="workspace-heading">
           <h1>{t(uiLang, "videos")}</h1>
@@ -1541,7 +1482,6 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             <h1>{t(uiLang, "statisticsTab")}</h1>
             <span>{t(uiLang, "statisticsLoadedVideos", { loaded: statistics.loadedVideoCount, total: catalogTotal })}</span>
           </header>
-          <p className="statistics-note">{t(uiLang, "statisticsSnapshotNote")}</p>
           <div className="statistics-cards">
             {[["videoViews", statistics.views, statistics.viewsCount], ["videoLikes", statistics.likes, statistics.likesCount], ["videoComments", statistics.comments, statistics.commentsCount]].map(([key, value, count]) => (
               <article key={key}>
@@ -1551,7 +1491,6 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               </article>
             ))}
           </div>
-          <p className="statistics-coverage">{t(uiLang, "statisticsCoverage", { count: statistics.loadedVideoCount })}</p>
           <div className="statistics-toolbar">
             <input className="search" type="search" value={statisticsQuery} onChange={(event) => setStatisticsQuery(event.target.value)} placeholder={t(uiLang, "statisticsSearch")} aria-label={t(uiLang, "statisticsSearch")} />
             <label><span>{t(uiLang, "statisticsStatus")}</span><select value={statisticsStatus} onChange={(event) => setStatisticsStatus(event.target.value)}>{FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}</select></label>
