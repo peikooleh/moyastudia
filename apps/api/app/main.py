@@ -80,7 +80,7 @@ class VideoWorkingPatch(BaseModel):
     title: str | None = None
     description: str | None = None
     tags: str | None = None
-    language: str | None = Field(default=None, max_length=32)
+    language: str | None = Field(default=None, max_length=32, pattern=r"^$|^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
     ready: bool = False
     conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
@@ -1290,6 +1290,9 @@ def publish_channel_video_metadata(
     tags_text = current["effective"]["tags"] or ""
     language = (current["effective"]["language"] or "").strip() or None
     tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+    tags_cost = sum(len(tag) + (2 if " " in tag else 0) + (1 if index else 0) for index, tag in enumerate(tags))
+    if tags_cost > 500:
+        raise HTTPException(422, detail={"code": "invalid_tags"})
     if not title or len(title) > 100 or "<" in title or ">" in title:
         raise HTTPException(422, detail={"code": "invalid_title"})
     if len(description.encode("utf-8")) > 5000 or "<" in description or ">" in description:
