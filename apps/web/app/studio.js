@@ -185,8 +185,6 @@ function VideoInspector({
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
-  const categoryName = youtubeVideoCategoryName(selected.category);
-  const categoryValue = categoryName || (selected.category ? t(uiLang, "videoCategoryUnknown", { id: selected.category }) : "—");
 
   return (
     <section className="video-inspector" aria-label={t(uiLang, "selectedVideo")}>
