@@ -18,6 +18,10 @@ export function catalogVideoWorkingUrl(channelId, videoId) {
   return `${catalogVideoDetailUrl(channelId, videoId)}/working`;
 }
 
+export function catalogVideoPublishUrl(channelId, videoId) {
+  return `${catalogVideoDetailUrl(channelId, videoId)}/publish-metadata`;
+}
+
 export function mapPlaylistForStudio(playlist) {
   return {
     id: typeof playlist?.id === "string" ? playlist.id : "",
@@ -172,7 +176,7 @@ export function workingVideoPatch(revision, changes) {
 
 export function resetWorkingVideoPatch(video) {
   const changes = {};
-  for (const field of ["title", "description", "tags"]) {
+  for (const field of ["title", "description", "tags", "language"]) {
     if (video?.working?.[field] !== null && video?.working?.[field] !== undefined) {
       changes[field] = null;
     }
