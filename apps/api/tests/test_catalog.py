@@ -761,11 +761,13 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "Snapshot title",
         "description": "Snapshot description",
         "tags": "snapshot, tags",
+        "language": "",
     }
     assert detail.json()["working"] == {
         "title": None,
         "description": None,
         "tags": None,
+        "language": None,
         "ready": False,
     }
     assert detail.json()["effective"] == detail.json()["snapshot"]
@@ -790,6 +792,7 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "",
         "description": "Local description",
         "tags": "local, tags",
+        "language": None,
         "ready": False,
     }
     assert saved_item["effective"]["title"] == ""
@@ -840,6 +843,7 @@ def test_working_metadata_round_trips_above_youtube_limits(client, test_database
         "title": title,
         "description": description,
         "tags": tags,
+        "language": None,
         "ready": False,
     }
     reloaded = client.get(url)
