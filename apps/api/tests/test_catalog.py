@@ -224,12 +224,14 @@ def test_catalog_rows_include_dirty_state_for_every_video(client, test_database)
         "title": True,
         "description": False,
         "tags": False,
+        "language": False,
     }
     assert items["unchanged"]["dirty"] is False
     assert items["unchanged"]["dirtyFields"] == {
         "title": False,
         "description": False,
         "tags": False,
+        "language": False,
     }
 
 
@@ -761,7 +763,7 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "Snapshot title",
         "description": "Snapshot description",
         "tags": "snapshot, tags",
-        "language": "",
+        "language": None,
     }
     assert detail.json()["working"] == {
         "title": None,
@@ -852,6 +854,7 @@ def test_working_metadata_round_trips_above_youtube_limits(client, test_database
         "title": title,
         "description": description,
         "tags": tags,
+        "language": "",
     }
 
 
