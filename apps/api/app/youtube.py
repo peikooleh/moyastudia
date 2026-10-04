@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token
@@ -88,6 +90,21 @@ def service_for(refresh_token: str):
     return build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
 
 
+QuotaRecorder = Callable[[str, str], None]
+
+
+def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
+    try:
+        response = request.execute()
+    except Exception:
+        if recorder:
+            recorder(operation, "youtube_error")
+        raise
+    if recorder:
+        recorder(operation, "success")
+    return response
+
+
 def _pick_thumb(thumbs: dict) -> str:
     for key in ("high", "medium", "default", "standard", "maxres"):
         url = (thumbs.get(key) or {}).get("url")
@@ -119,14 +136,14 @@ def _pick_banner(image: dict) -> str:
     return ""
 
 
-def fetch_channel(creds: Credentials, youtube_channel_id: str = "") -> dict:
+def fetch_channel(creds: Credentials, youtube_channel_id: str = "", recorder: QuotaRecorder | None = None) -> dict:
     service = build("youtube", "v3", credentials=creds)
     kwargs = {"part": "snippet,contentDetails,brandingSettings,statistics"}
     if youtube_channel_id:
         kwargs["id"] = youtube_channel_id
     else:
         kwargs["mine"] = True
-    resp = service.channels().list(**kwargs).execute()
+    resp = _execute(service.channels().list(**kwargs), "channels.list", recorder)
     items = resp.get("items") or []
     if not items:
         return {
@@ -163,17 +180,21 @@ def fetch_channel(creds: Credentials, youtube_channel_id: str = "") -> dict:
     }
 
 
-def list_available_channels(creds: Credentials) -> list[dict]:
+def list_available_channels(creds: Credentials, recorder: QuotaRecorder | None = None) -> list[dict]:
     service = build("youtube", "v3", credentials=creds)
     channels = []
     page_token = None
     while True:
-        response = service.channels().list(
-            part="snippet,brandingSettings,statistics",
-            mine=True,
-            maxResults=50,
-            pageToken=page_token,
-        ).execute()
+        response = _execute(
+            service.channels().list(
+                part="snippet,brandingSettings,statistics",
+                mine=True,
+                maxResults=50,
+                pageToken=page_token,
+            ),
+            "channels.list",
+            recorder,
+        )
         for item in response.get("items") or []:
             snippet = item.get("snippet") or {}
             stats = item.get("statistics") or {}
@@ -196,7 +217,7 @@ def list_available_channels(creds: Credentials) -> list[dict]:
     return channels
 
 
-def list_playlists(refresh_token: str, youtube_channel_id: str) -> list[dict]:
+def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
     service = service_for(refresh_token)
     out = []
     token = None
@@ -206,12 +227,16 @@ def list_playlists(refresh_token: str, youtube_channel_id: str) -> list[dict]:
             if token in seen_page_tokens:
                 raise RuntimeError("YouTube playlists pagination token repeated")
             seen_page_tokens.add(token)
-        resp = service.playlists().list(
-            part="snippet,status,contentDetails",
-            channelId=youtube_channel_id,
-            maxResults=50,
-            pageToken=token,
-        ).execute()
+        resp = _execute(
+            service.playlists().list(
+                part="snippet,status,contentDetails",
+                channelId=youtube_channel_id,
+                maxResults=50,
+                pageToken=token,
+            ),
+            "playlists.list",
+            recorder,
+        )
         for item in resp.get("items") or []:
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
@@ -242,13 +267,14 @@ def list_playlist_items(
     playlist_id: str,
     page_token: str | None = None,
     limit: int = 50,
+    recorder: QuotaRecorder | None = None,
 ) -> dict:
     service = service_for(refresh_token)
-    playlist_response = service.playlists().list(
+    playlist_response = _execute(service.playlists().list(
         part="snippet",
         id=playlist_id,
         maxResults=1,
-    ).execute()
+    ), "playlists.list", recorder)
     playlists = playlist_response.get("items") or []
     if not playlists or (playlists[0].get("snippet") or {}).get("channelId") != youtube_channel_id:
         raise LookupError("playlist does not belong to the selected channel")
@@ -260,7 +286,7 @@ def list_playlist_items(
     }
     if page_token:
         page_kwargs["pageToken"] = page_token
-    response = service.playlistItems().list(**page_kwargs).execute()
+    response = _execute(service.playlistItems().list(**page_kwargs), "playlistItems.list", recorder)
     items = []
     for item in response.get("items") or []:
         snippet = item.get("snippet") or {}
@@ -281,10 +307,14 @@ def list_playlist_items(
     video_ids = [item["videoId"] for item in items]
     snapshots = {}
     if video_ids:
-        video_response = service.videos().list(
-            part="snippet,status,contentDetails,statistics",
-            id=",".join(video_ids),
-        ).execute()
+        video_response = _execute(
+            service.videos().list(
+                part="snippet,status,contentDetails,statistics",
+                id=",".join(video_ids),
+            ),
+            "videos.list",
+            recorder,
+        )
         for video in video_response.get("items") or []:
             snippet = video.get("snippet") or {}
             status = video.get("status") or {}
@@ -323,6 +353,7 @@ def list_videos(
     page_token: str | None = None,
     uploads_playlist_id: str | None = None,
     limit: int = 50,
+    recorder: QuotaRecorder | None = None,
 ) -> dict:
     if not youtube_channel_id:
         raise ValueError("youtube_channel_id is required")
@@ -331,11 +362,15 @@ def list_videos(
     service = build("youtube", "v3", credentials=credentials)
 
     if uploads_playlist_id is None:
-        channel_response = service.channels().list(
-            part="contentDetails",
-            id=youtube_channel_id,
-            maxResults=1,
-        ).execute()
+        channel_response = _execute(
+            service.channels().list(
+                part="contentDetails",
+                id=youtube_channel_id,
+                maxResults=1,
+            ),
+            "channels.list",
+            recorder,
+        )
         channel_items = channel_response.get("items") or []
         if not channel_items or channel_items[0].get("id") != youtube_channel_id:
             raise LookupError("selected YouTube channel is unavailable to this connection")
@@ -354,7 +389,7 @@ def list_videos(
     }
     if page_token:
         page_kwargs["pageToken"] = page_token
-    playlist_response = service.playlistItems().list(**page_kwargs).execute()
+    playlist_response = _execute(service.playlistItems().list(**page_kwargs), "playlistItems.list", recorder)
     video_ids = list(
         dict.fromkeys(
             item.get("contentDetails", {}).get("videoId")
@@ -365,10 +400,14 @@ def list_videos(
 
     videos = []
     if video_ids:
-        video_response = service.videos().list(
-            part="snippet,status,contentDetails,statistics",
-            id=",".join(video_ids),
-        ).execute()
+        video_response = _execute(
+            service.videos().list(
+                part="snippet,status,contentDetails,statistics",
+                id=",".join(video_ids),
+            ),
+            "videos.list",
+            recorder,
+        )
         for item in video_response.get("items") or []:
             snippet = item.get("snippet") or {}
             status = item.get("status") or {}
