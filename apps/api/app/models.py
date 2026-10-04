@@ -173,6 +173,30 @@ class ChannelCatalogSync(Base):
     channel: Mapped[Channel] = relationship(back_populates="catalog_sync")
 
 
+class YouTubeQuotaUsage(Base):
+    __tablename__ = "youtube_quota_usage"
+    __table_args__ = (
+        Index("ix_youtube_quota_usage_user_occurred", "user_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    google_connection_id: Mapped[int | None] = mapped_column(
+        ForeignKey("google_connections.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    channel_id: Mapped[int | None] = mapped_column(
+        ForeignKey("channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    operation: Mapped[str] = mapped_column(String(64))
+    bucket: Mapped[str] = mapped_column(String(32), default="general")
+    units: Mapped[int] = mapped_column(default=1)
+    request_count: Mapped[int] = mapped_column(default=1)
+    outcome: Mapped[str] = mapped_column(String(32))
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
