@@ -1297,7 +1297,8 @@ def publish_channel_video_metadata(
         raise HTTPException(422, detail={"code": "invalid_title"})
     if len(description.encode("utf-8")) > 5000 or "<" in description or ">" in description:
         raise HTTPException(422, detail={"code": "invalid_description"})
-    if quota_service.quota_summary(db)["buckets"]["general"]["estimated_remaining"] < 50:
+    quota = quota_service.quota_summary(db)
+    if quota["buckets"]["general"]["estimated_remaining"] < quota_service.operation_cost("videos.update")[1]:
         raise HTTPException(429, detail={"code": "quota_preflight_failed"})
 
     channel = _channel_or_404(db, user, channel_id)
