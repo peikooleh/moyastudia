@@ -986,6 +986,14 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     byDay[key].push(v);
   });
   const calendarDayItems = byDay[calendarDetailDay] || [];
+  const todayKey = localDateKey(new Date());
+  const monthHasToday = month.getFullYear() === new Date().getFullYear() && month.getMonth() === new Date().getMonth();
+
+  function showCalendarToday() {
+    const today = new Date();
+    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setCalendarDetailDay(localDateKey(today));
+  }
   return (
     <div className="studio-wrap">
       <div className="studio-mode-placeholder">
@@ -1321,6 +1329,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             <header className="calendar-heading">
               <h1>{t(uiLang, "calendarTab")}</h1>
               <div className="cal-nav">
+                <button type="button" className="btn ghost calendar-today" onClick={showCalendarToday}>{t(uiLang, "calendarToday")}</button>
                 <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
                 <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
@@ -1346,8 +1355,8 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                 const key = day ? localDateKey(day) : `empty-${index}`;
                 const items = day ? byDay[key] || [] : [];
                 return (
-                  <div key={key} className={`cal-cell ${day ? "" : "off"}`} role="gridcell">
-                    {day ? <b>{day.getDate()}</b> : null}
+                  <div key={key} className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`} role="gridcell">
+                    {day ? <b aria-current={monthHasToday && localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
                     {items.slice(0, 2).map((video) => (
                       <button
                         key={video.id}
@@ -1363,7 +1372,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                       </button>
                     ))}
                     {items.length > 2 ? (
-                      <button className="calendar-more-events" type="button" onClick={() => setCalendarDetailDay(key)}>
+                      <button className="calendar-more-events" type="button" onClick={() => setCalendarDetailDay((current) => current === key ? "" : key)}>
                         {t(uiLang, "calendarShowMore", { count: items.length - 2 })}
                       </button>
                     ) : null}
@@ -1372,7 +1381,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               })}
             </div>
             {calendarDetailDay ? (
-              <section className="calendar-day-details" aria-labelledby="calendar-day-title">
+              <section className="calendar-day-details" aria-labelledby="calendar-day-title" tabIndex={-1}>
                 <header>
                   <h2 id="calendar-day-title">{t(uiLang, "calendarDayVideos", { date: calendarDetailDay })}</h2>
                   <button className="text-button" type="button" onClick={() => setCalendarDetailDay("")}>{t(uiLang, "close")}</button>
