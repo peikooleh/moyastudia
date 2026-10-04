@@ -1490,3 +1490,45 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max-height: none;
   }
 }
+
+
+/* A10: richer Statistics rows, aligned with playlist/video catalog presentation. */
+.statistics-video-link {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.statistics-video-link:hover span {
+  color: var(--accent);
+}
+.statistics-video-thumb {
+  display: block;
+  width: 88px;
+  aspect-ratio: 16 / 9;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--bg-hover);
+}
+.statistics-video-link > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .statistics-video-link {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 9px;
+  }
+  .statistics-video-thumb {
+    width: 72px;
+  }
+}
