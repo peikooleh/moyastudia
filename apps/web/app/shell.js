@@ -20,6 +20,7 @@ export function Shell({ children }) {
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [channelError, setChannelError] = useState(false);
   const [catalogStatus, setCatalogStatus] = useState(null);
+  const [quota, setQuota] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +78,29 @@ export function Shell({ children }) {
         if (!controller.signal.aborted) setCatalogStatus({ state: "UNAVAILABLE" });
       });
     return () => controller.abort();
+  }, [channel?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadQuota = () => {
+      apiFetch("/quota/today")
+        .then(async (response) => {
+          if (!response.ok) throw new Error("quota unavailable");
+          return response.json();
+        })
+        .then((value) => {
+          if (!cancelled) setQuota(value);
+        })
+        .catch(() => {
+          if (!cancelled) setQuota(null);
+        });
+    };
+    loadQuota();
+    window.addEventListener("focus", loadQuota);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", loadQuota);
+    };
   }, [channel?.id]);
 
   const [workspaceView, setWorkspaceView] = useState("videos");
@@ -156,6 +180,12 @@ export function Shell({ children }) {
           <span>{t(uiLang, "syncStatus")}</span>
           <strong>{t(uiLang, syncStatusKey)}</strong>
         </div>
+        {quota?.buckets?.general ? (
+          <div className="sync-status quota-status" title={t(uiLang, "quotaTrackedTitle")}>
+            <span>{t(uiLang, "quotaTracked")}</span>
+            <strong>{quota.buckets.general.used} / {quota.buckets.general.limit}</strong>
+          </div>
+        ) : null}
         <div className="spacer" />
         <Link href="/cabinet" className="btn ghost cabinet-link">
           {t(uiLang, "cabinet")}
