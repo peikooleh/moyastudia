@@ -695,7 +695,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   useEffect(() => {
     setPlaylistPage(0);
     setSelectedPlaylistVideoIds(new Set());
-    setPlaylistIdCopyStatus("");
   }, [selectedPlaylistId]);
 
   useEffect(() => {
@@ -945,13 +944,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}`, { method: "DELETE" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistDeleteLocalError"));
-      setPlaylistState((current) => ({ ...current, items: current.items.filter((playlist) => playlist.id !== selectedPlaylist.id) }));
+      const deletedId = selectedPlaylist.id;
+      setPlaylistState((current) => ({ ...current, items: current.items.filter((playlist) => playlist.id !== deletedId) }));
       setLocalPlaylistMemberships((current) => {
         const next = { ...current };
-        delete next[selectedPlaylist.id];
+        delete next[deletedId];
         return next;
       });
-      setSelectedPlaylistId("");
+      setSelectedPlaylistId((current) => (current === deletedId ? "" : current));
+      setPlaylistRetry((current) => current + 1);
       setPlaylistIdCopyStatus(t(uiLang, "playlistDeletedLocally"));
     } catch (error) {
       setPlaylistIdCopyStatus(String(error.message || error));
