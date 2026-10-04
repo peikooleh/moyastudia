@@ -376,6 +376,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
   const [statisticsQuery, setStatisticsQuery] = useState("");
+  const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
@@ -969,8 +970,13 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const statisticsRows = [...videos]
     .filter((video) => {
       const needle = statisticsQuery.trim().toLocaleLowerCase();
-      if (!needle) return true;
-      return (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
+      const matchesQuery = !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
+      const effectiveStatus = video.remoteMissing
+        ? "remote_missing"
+        : video.availability === "unavailable"
+          ? "unavailable"
+          : video.status;
+      return matchesQuery && (statisticsStatus === "all" || effectiveStatus === statisticsStatus);
     })
     .sort((a, b) => {
       if (statisticsSort === "title") return (catalogVideoDisplayTitle(a) || "").localeCompare(catalogVideoDisplayTitle(b) || "", t(uiLang, "calendarLocale"));
@@ -1459,6 +1465,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
           <p className="statistics-coverage">{t(uiLang, "statisticsCoverage", { count: statistics.loadedVideoCount })}</p>
           <div className="statistics-toolbar">
             <input className="search" type="search" value={statisticsQuery} onChange={(event) => setStatisticsQuery(event.target.value)} placeholder={t(uiLang, "statisticsSearch")} aria-label={t(uiLang, "statisticsSearch")} />
+            <label><span>{t(uiLang, "statisticsStatus")}</span><select value={statisticsStatus} onChange={(event) => setStatisticsStatus(event.target.value)}>{FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}</select></label>
             <label><span>{t(uiLang, "statisticsSortBy")}</span><select value={statisticsSort} onChange={(event) => setStatisticsSort(event.target.value)}><option value="views">{t(uiLang, "videoViews")}</option><option value="likes">{t(uiLang, "videoLikes")}</option><option value="comments">{t(uiLang, "videoComments")}</option><option value="title">{t(uiLang, "videoTitle")}</option></select></label>
           </div>
           {err ? <p className="calendar-error" role="alert">{err}</p> : null}
