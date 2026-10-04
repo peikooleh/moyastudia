@@ -7,6 +7,7 @@ import {
   catalogVideoDisplayTitle,
   catalogVideoDetailUrl,
   catalogVideoWorkingUrl,
+  catalogVideoPublishUrl,
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
@@ -42,6 +43,13 @@ const SORTS = [
   { id: "date", key: "sortDate" },
   { id: "title", key: "sortTitle" },
   { id: "status", key: "sortStatus" },
+];
+
+const VIDEO_LANGUAGES = [
+  ["", "—"], ["de", "Deutsch"], ["en", "English"], ["ru", "Русский"], ["uk", "Українська"],
+  ["fr", "Français"], ["it", "Italiano"], ["es", "Español"], ["pl", "Polski"], ["pt", "Português"],
+  ["tr", "Türkçe"], ["nl", "Nederlands"], ["cs", "Čeština"], ["ro", "Română"], ["ja", "日本語"],
+  ["ko", "한국어"], ["zh", "中文"],
 ];
 
 const WEEKDAY_KEYS = ["dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat", "daySun"];
@@ -145,6 +153,8 @@ function VideoInspector({
   resetWorkingToSnapshot,
   saveWorkingVideo,
   resolveWorkingConflict,
+  publishWorkingVideo,
+  writeMode,
 }) {
   const [copyStatus, setCopyStatus] = useState("");
   if (!selected) {
@@ -155,6 +165,7 @@ function VideoInspector({
   const displayDate = selected.slot || selected.publishedAt || "";
   const description = workingDraft?.description ?? selected.description ?? "";
   const tags = workingDraft?.tags ?? selected.tags ?? "";
+  const language = workingDraft?.language ?? selected.language ?? "";
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
@@ -235,7 +246,7 @@ function VideoInspector({
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
         <label>{t(uiLang, "videoCategory")}<select value={categoryValue} disabled><option value={categoryValue}>{categoryValue}</option></select></label>
         <fieldset disabled><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" checked={selected.madeForKids === true} readOnly /> {t(uiLang, "audienceKids")}</label><label><input type="radio" checked={selected.madeForKids === false} readOnly /> {t(uiLang, "audienceNotKids")}</label></fieldset>
-        <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly disabled /></label>
+        <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
         <fieldset disabled><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={selected.captions === true} readOnly /> {t(uiLang, selected.captions ? "yes" : "no")}</label></fieldset>
       </section>
 
@@ -278,7 +289,7 @@ function VideoInspector({
         >
           {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
         </button>
-        <button className="btn youtube-write-action" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "saveToYoutube")}</button>
+        <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !workingVideo?.dirty || workingVideo?.conflict || workingSaving || Object.keys(workingEdits).length > 0} title={!writeMode?.enabled ? t(uiLang, "writeModeDescription") : Object.keys(workingEdits).length ? t(uiLang, "saveLocalBeforeYoutube") : ""} onClick={publishWorkingVideo}>{t(uiLang, "saveToYoutube")}</button>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
@@ -324,7 +335,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo }) {
   );
 }
 
-export function Studio({ view = "videos", onViewChange = () => {} }) {
+export function Studio({ view = "videos", onViewChange = () => {}, writeMode = { enabled: false } }) {
   const { prefs, uiLang } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
   const [videos, setVideos] = useState([]);
@@ -876,6 +887,44 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     }
   }
 
+  async function publishWorkingVideo() {
+    if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict || Object.keys(workingEdits).length) return;
+    if (!window.confirm(t(uiLang, "publishMetadataConfirm"))) return;
+    setWorkingSaving(true);
+    setWorkingError("");
+    try {
+      const response = await apiFetch(catalogVideoPublishUrl(channelId, workingVideo.id), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: workingVideo.revision }),
+      });
+      const data = await response.json();
+      if (response.status === 409 && data.detail?.current) {
+        setWorkingVideo(data.detail.current);
+        setWorkingDraft(data.detail.current.effective);
+        setWorkingSaveState("conflict");
+        throw new Error(t(uiLang, "workingRevisionError"));
+      }
+      if (!response.ok) {
+        const code = data.detail?.code;
+        if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+        if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
+        throw new Error(t(uiLang, "youtubePublishError"));
+      }
+      setWorkingVideo(data);
+      setWorkingDraft(data.effective);
+      setWorkingEdits({});
+      setWorkingSaveState("");
+      setWorkingDetailReload((current) => current + 1);
+      setCatalogReload((current) => current + 1);
+    } catch (error) {
+      setWorkingSaveState("error");
+      setWorkingError(String(error.message || error));
+    } finally {
+      setWorkingSaving(false);
+    }
+  }
+
   async function resolveWorkingConflict(resolution) {
     if (!workingVideo?.conflict || workingSaving) return;
     setWorkingSaving(true);
@@ -1229,6 +1278,8 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             resetWorkingToSnapshot={resetWorkingToSnapshot}
             saveWorkingVideo={saveWorkingVideo}
             resolveWorkingConflict={resolveWorkingConflict}
+            publishWorkingVideo={publishWorkingVideo}
+            writeMode={writeMode}
           />
         </div>
         </>
