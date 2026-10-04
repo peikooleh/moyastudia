@@ -145,7 +145,7 @@ def _oauth_status_redirect(path: str, parameter: str, status: str, state: str = 
 
 @app.get("/write-mode")
 def get_write_mode(user: User = Depends(get_current_user)):
-    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": False}
+    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": True}
 
 
 @app.put("/write-mode", dependencies=[Depends(require_same_origin)])
@@ -158,7 +158,7 @@ def set_write_mode(
         raise HTTPException(422, "Explicit Write Mode confirmation is required")
     user.write_mode_enabled = update.enabled
     db.commit()
-    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": False}
+    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": True}
 
 
 @app.get("/quota/today")
@@ -561,12 +561,17 @@ def _quota_recorder(
     connection: GoogleConnection | None = None,
     channel: Channel | None = None,
 ):
+    bind = db.get_bind()
+    user_id = user.id
+    connection_id = connection.id if connection else None
+    channel_id = channel.id if channel else None
+
     def record(operation: str, outcome: str) -> None:
-        quota_service.record_usage(
-            db,
-            user_id=user.id,
-            google_connection_id=connection.id if connection else None,
-            channel_id=channel.id if channel else None,
+        quota_service.record_usage_isolated(
+            bind,
+            user_id=user_id,
+            google_connection_id=connection_id,
+            channel_id=channel_id,
             operation=operation,
             outcome=outcome,
         )
