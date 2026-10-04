@@ -76,7 +76,7 @@ def record_usage(
     db.commit()
 
 
-def quota_summary(db: Session, user_id: str, now: datetime | None = None) -> dict:
+def quota_summary(db: Session, now: datetime | None = None) -> dict:
     start, end = quota_window(now)
     rows = (
         db.query(
@@ -86,7 +86,6 @@ def quota_summary(db: Session, user_id: str, now: datetime | None = None) -> dic
             func.max(YouTubeQuotaUsage.occurred_at),
         )
         .filter(
-            YouTubeQuotaUsage.user_id == user_id,
             YouTubeQuotaUsage.occurred_at >= start,
             YouTubeQuotaUsage.occurred_at < end,
         )
