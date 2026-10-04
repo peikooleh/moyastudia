@@ -1369,10 +1369,10 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             <header className="calendar-heading">
               <h1>{t(uiLang, "calendarTab")}</h1>
               <div className="cal-nav">
-                <button type="button" className="btn ghost calendar-today" onClick={showCalendarToday}>{t(uiLang, "calendarToday")}</button>
                 <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
                 <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
+                <button type="button" className="btn ghost calendar-today" onClick={showCalendarToday}>{t(uiLang, "calendarToday")}</button>
               </div>
             </header>
             <div className="calendar-tools">
@@ -1420,24 +1420,6 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                 );
               })}
             </div>
-            {calendarDetailDay ? (
-              <section className="calendar-day-details" aria-labelledby="calendar-day-title" tabIndex={-1}>
-                <header>
-                  <h2 id="calendar-day-title">{t(uiLang, "calendarDayVideos", { date: calendarDetailDay })}</h2>
-                  <button className="text-button" type="button" onClick={() => setCalendarDetailDay("")}>{t(uiLang, "close")}</button>
-                </header>
-                <ul>
-                  {calendarDayItems.map((video) => (
-                    <li key={video.id}>
-                      <button className={video.id === selectedId ? "active" : ""} type="button" aria-pressed={video.id === selectedId} onClick={() => setSelectedId(video.id)}>
-                        <span>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
-                        <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
             {loadingCalendar ? <div className="empty" role="status">{t(uiLang, "catalogLoadingCalendar")}</div> : null}
             {!loadingCalendar && !err && calendarVideos.length === 0 ? (
               <div className="empty">
@@ -1454,11 +1436,39 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               </button>
             ) : null}
           </section>
-          <CalendarEventDetails
-            uiLang={uiLang}
-            selected={calendarSelected}
-            workingVideo={workingVideo?.id === calendarSelected?.id ? workingVideo : null}
-          />
+          {calendarDetailDay ? (
+            <aside className="calendar-event-details calendar-day-drawer" aria-labelledby="calendar-day-title">
+              <header>
+                <h2 id="calendar-day-title">{t(uiLang, "calendarDayVideos", { date: calendarDetailDay })}</h2>
+                <button className="text-button" type="button" onClick={() => setCalendarDetailDay("")}>{t(uiLang, "close")}</button>
+              </header>
+              <ul>
+                {calendarDayItems.map((video) => (
+                  <li key={video.id}>
+                    <button
+                      className={video.id === selectedId ? "active" : ""}
+                      type="button"
+                      aria-pressed={video.id === selectedId}
+                      onClick={() => {
+                        setPlaylistSelectedVideo(null);
+                        setSelectedId(video.id);
+                        setCalendarDetailDay("");
+                      }}
+                    >
+                      <span>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
+                      <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          ) : (
+            <CalendarEventDetails
+              uiLang={uiLang}
+              selected={calendarSelected}
+              workingVideo={workingVideo?.id === calendarSelected?.id ? workingVideo : null}
+            />
+          )}
         </main>
       ) : null}
 
