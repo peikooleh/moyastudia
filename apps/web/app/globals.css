@@ -1717,3 +1717,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .danger-text { color: #d55; }
 .danger-text:hover { text-decoration: underline; }
+
+.playlist-picker-row,
+.playlist-video-row {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--text);
+}
+.playlist-picker-row:hover,
+.playlist-video-row:hover { background: var(--bg-hover); }
+.playlist-picker-row.active { background: var(--bg-hover); color: var(--text); }
+.playlist-list-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.playlist-selection-controls { grid-column: 1; min-width: 0; }
+.playlist-page-size { grid-column: 2; grid-row: 1; }
+.playlist-membership-editor { grid-column: 1 / -1; width: min(700px, 100%); justify-self: start; }
+@media (max-width: 720px) {
+  .playlist-list-controls { grid-template-columns: minmax(0, 1fr); }
+  .playlist-page-size { grid-column: 1; grid-row: auto; margin-left: 0; }
+}
