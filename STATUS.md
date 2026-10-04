@@ -784,3 +784,16 @@ Security:
 - `git diff --check` — требуется/выполнено отдельно перед commit.
 - Browser smoke: локальный Next.js dev server успешно запустился; полноценный authenticated Studio flow в этой сессии не выполнялся через изолированный API/session environment.
 - Commit/push не выполнялись.
+
+
+## Запись 2026-10-04 — pre-merge hardening Write Mode и local playlists
+
+- Quota telemetry изолирована от request/domain transaction: YouTube quota attempts теперь записываются отдельной SQLAlchemy Session и не могут своим `commit()` случайно закоммитить pending domain changes текущего запроса.
+- Аудит YouTube Data API вызовов: Data API reads/writes в `app/youtube.py` проходят через централизованный `_execute` и quota recorder; YouTube Analytics остаётся отдельным API и не включается в Data API ledger.
+- Текущая granular quota-модель повторно сверена с официальной документацией YouTube на 2026-10-04. Добавлены известные costs для будущих captions/channel/video-delete write paths; это только accounting constants, новые destructive endpoints не включены.
+- `GET/PUT /write-mode` теперь правдиво возвращает `youtube_writes_available: true`, поскольку W4 metadata publish уже реализован. Confirmation copy обновлён: Write Mode разрешает поддерживаемые write operations, но сам по себе ничего не отправляет.
+- W4 metadata publish сериализуется row lock по выбранному Video перед revision check, чтобы два параллельных запроса не отправили одну и ту же working revision дважды. Frontend дополнительно уже блокирует повторный submit через `workingSaving`.
+- Local playlist drafts теперь серверно персистентны через migration `0009_local_playlist_drafts`: create/list/membership/delete owner-scoped, mutations same-origin, reload браузера не должен терять draft/membership.
+- Добавлены backend tests для local playlist persistence, same-origin и cross-user ownership; migration test проверяет наличие `local_playlists`.
+- Исправлена локализация playlist removal: en/ru/uk keys снова находятся в своих языковых секциях, без duplicate-key override.
+- Реальные YouTube playlist mutations, thumbnail upload, captions upload и destructive video delete в этом hardening-проходе намеренно не включались. Их нужно делать отдельными write increments после merge текущей ветки.
