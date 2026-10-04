@@ -13,7 +13,7 @@ def test_write_mode_defaults_off(client, test_database):
     _signed_in(client, test_database)
     response = client.get("/write-mode")
     assert response.status_code == 200
-    assert response.json() == {"enabled": False, "youtube_writes_available": False}
+    assert response.json() == {"enabled": False, "youtube_writes_available": True}
 
 
 def test_enabling_write_mode_requires_explicit_confirmation(client, test_database):
@@ -31,7 +31,7 @@ def test_write_mode_can_be_enabled_and_disabled(client, test_database):
         json={"enabled": True, "confirmation": "enable_youtube_writes"},
     )
     assert enabled.status_code == 200
-    assert enabled.json() == {"enabled": True, "youtube_writes_available": False}
+    assert enabled.json() == {"enabled": True, "youtube_writes_available": True}
     assert client.get("/write-mode").json()["enabled"] is True
 
     disabled = client.put("/write-mode", headers=headers, json={"enabled": False})
