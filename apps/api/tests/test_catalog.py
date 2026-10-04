@@ -763,7 +763,7 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "Snapshot title",
         "description": "Snapshot description",
         "tags": "snapshot, tags",
-        "language": None,
+        "language": "",
     }
     assert detail.json()["working"] == {
         "title": None,
