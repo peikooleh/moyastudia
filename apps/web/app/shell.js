@@ -216,34 +216,36 @@ export function Shell({ children }) {
             {t(uiLang, "statisticsTab")}
           </button>
         </nav>
-        {!inCabinet ? (
-          <div className="header-write-mode">
-            <span>{t(uiLang, "writeMode")}</span>
-            <button
-              className="mode-switch"
-              type="button"
-              role="switch"
-              aria-checked={writeMode.enabled}
-              aria-label={t(uiLang, "writeMode")}
-              disabled={writeModeBusy}
-              onClick={toggleWriteMode}
-              title={writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}
-            >
-              <span aria-hidden="true" />
-            </button>
-          </div>
-        ) : null}
-        <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
-          <span>{t(uiLang, "syncStatus")}</span>
-          <strong>{t(uiLang, syncStatusKey)}</strong>
-        </div>
-        {quota?.buckets?.general ? (
-          <div className="sync-status quota-status" title={t(uiLang, "quotaTrackedTitle")}>
-            <span>{t(uiLang, "quotaTracked")}</span>
-            <strong>{quota.buckets.general.used} / {quota.buckets.general.limit}</strong>
-          </div>
-        ) : null}
         <div className="spacer" />
+        <div className="header-system-status">
+          {!inCabinet ? (
+            <div className="header-write-mode">
+              <span>{t(uiLang, "writeMode")}</span>
+              <button
+                className={`mode-switch ${writeMode.enabled ? "is-on" : "is-off"}`}
+                type="button"
+                role="switch"
+                aria-checked={writeMode.enabled ? "true" : "false"}
+                aria-label={t(uiLang, "writeMode")}
+                disabled={writeModeBusy}
+                onClick={toggleWriteMode}
+                title={writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}
+              >
+                <span aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+          <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
+            <span>{t(uiLang, "syncStatus")}</span>
+            <strong>{t(uiLang, syncStatusKey)}</strong>
+          </div>
+          {quota?.buckets?.general ? (
+            <div className="sync-status quota-status" title={t(uiLang, "quotaTrackedTitle")}>
+              <span>{t(uiLang, "quotaTracked")}</span>
+              <strong>{quota.buckets.general.used} / {quota.buckets.general.limit}</strong>
+            </div>
+          ) : null}
+        </div>
         <Link href="/cabinet" className="btn ghost cabinet-link">
           {t(uiLang, "cabinet")}
         </Link>
