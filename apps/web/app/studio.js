@@ -335,6 +335,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     error: "",
   });
   const [playlistRetry, setPlaylistRetry] = useState(0);
+  const [playlistQuery, setPlaylistQuery] = useState("");
   const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [playlistContents, setPlaylistContents] = useState({
     channelId: "",
@@ -388,6 +389,10 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
   const playlists = playlistsForChannel(playlistState, channelId);
+  const visiblePlaylists = playlists.filter((playlist) => {
+    const needle = playlistQuery.trim().toLocaleLowerCase();
+    return !needle || (playlist.title || "").toLocaleLowerCase().includes(needle);
+  });
   const currentPlaylistState = playlistState.channelId === channelId ? playlistState : null;
   const currentPlaylistContents = (
     playlistContents.channelId === channelId
@@ -1214,6 +1219,16 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               <h1>{t(uiLang, "playlistsTab")}</h1>
               <span>{t(uiLang, "playlistCount", { count: playlists.length })}</span>
             </header>
+            <div className="playlist-picker-search">
+              <input
+                className="search"
+                type="search"
+                value={playlistQuery}
+                onChange={(event) => setPlaylistQuery(event.target.value)}
+                placeholder={t(uiLang, "playlistSearch")}
+                aria-label={t(uiLang, "playlistSearch")}
+              />
+            </div>
             <div className="playlist-picker-list">
               {currentPlaylistState?.loading ? <p className="empty" role="status">{t(uiLang, "playlistsLoading")}</p> : null}
               {currentPlaylistState?.error ? (
@@ -1225,7 +1240,8 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               {!currentPlaylistState?.loading && !currentPlaylistState?.error && playlists.length === 0 ? (
                 <p className="empty">{t(uiLang, "emptyPlaylists")}</p>
               ) : null}
-              {playlists.map((playlist) => (
+              {!currentPlaylistState?.loading && !currentPlaylistState?.error && playlists.length > 0 && visiblePlaylists.length === 0 ? <p className="empty">{t(uiLang, "playlistSearchEmpty")}</p> : null}
+              {visiblePlaylists.map((playlist) => (
                 <button
                   key={playlist.id}
                   className={`playlist-picker-row ${playlist.id === selectedPlaylistId ? "active" : ""}`}
