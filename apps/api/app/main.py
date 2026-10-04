@@ -1632,6 +1632,37 @@ def channel_playlist_items(
     }
 
 
+@app.get("/channels/{channel_id}/playlist-memberships")
+def channel_playlist_memberships(
+    channel_id: int,
+    video_id: list[str] = Query(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    video_ids = list(dict.fromkeys(value for value in video_id if value))[:50]
+    if not video_ids:
+        return {"memberships": {}}
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(
+            _quota_recorder(db, user, channel.google_connection, channel)
+        ):
+            playlists = yt.list_playlists(token, channel.youtube_channel_id)
+            playlist_ids = [playlist["id"] for playlist in playlists]
+            memberships = yt.list_playlist_memberships(
+                token,
+                channel.youtube_channel_id,
+                playlist_ids,
+                video_ids,
+            )
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+    return {"memberships": memberships}
+
+
 @app.post(
     "/channels/{channel_id}/refresh-profile",
     dependencies=[Depends(require_same_origin)],
