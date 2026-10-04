@@ -166,8 +166,10 @@ function VideoInspector({
       <header className="video-summary">
         <div className="video-summary-thumbnail">
           {selected.thumb ? <img src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
-          <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "changeThumbnail")}</button>
-          <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "removeThumbnail")}</button>
+          <div className="thumbnail-actions">
+            <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "changeThumbnail")}</button>
+            <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "removeThumbnail")}</button>
+          </div>
         </div>
         <div className="video-summary-copy">
           <h2>{effectiveTitle || t(uiLang, "untitledVideo")}</h2>
@@ -179,9 +181,9 @@ function VideoInspector({
             <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button>{selected.youtubeId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(selected.youtubeId)}`} target="_blank" rel="noreferrer">{t(uiLang, "openVideo")}</a> : null}</dd></div>
           </dl>
           {copyStatus ? <span role="status">{copyStatus}</span> : null}
-          {selected.youtubeId ? <div className="video-preview"><iframe src={`https://www.youtube.com/embed/${encodeURIComponent(selected.youtubeId)}?rel=0`} title={t(uiLang, "videoPreview")} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
           {workingVideo?.dirty ? <span className="item-change">{t(uiLang, "workingModified")}</span> : null}
         </div>
+        {selected.youtubeId ? <div className="video-preview"><iframe src={`https://www.youtube.com/embed/${encodeURIComponent(selected.youtubeId)}?rel=0`} title={t(uiLang, "videoPreview")} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
       </header>
 
       <section className="inspector-edit" aria-labelledby="inspector-edit-title">
