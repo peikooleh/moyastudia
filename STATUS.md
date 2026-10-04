@@ -28,6 +28,16 @@
 - No YouTube write scope or write endpoint is enabled. W3 remains the next stage after W1/W2 is validated and merged.
 - PR #2 is intentionally draft while CI and final review run.
 
+## W3 implementation — in PR #2
+
+- Added Alembic revision `0007_user_write_mode`: each authenticated user has a server-persisted Write Mode flag, default OFF.
+- Added authenticated `GET /write-mode` and same-origin protected `PUT /write-mode`.
+- Enabling requires the explicit confirmation token `enable_youtube_writes`; disabling does not require confirmation.
+- API responses currently return `youtube_writes_available: false` intentionally. W3 arms the safety state only; it does not expose any YouTube mutation.
+- Studio's previous disabled Write Mode placeholder is now a real server-backed switch with EN/RU/UK confirmation copy and persisted state.
+- Existing `Save to YouTube`, thumbnail and playlist mutation controls remain disabled until their W4+ capability exists.
+- Added tests for default OFF, explicit confirmation, persistence/toggle behavior, authentication and same-origin enforcement, plus migration coverage.
+
 ## Known debt before/while implementing
 
 - `studio.js`, `globals.css` and `i18n.js` are large; split only along feature boundaries needed by the next stage rather than doing a broad rewrite.
