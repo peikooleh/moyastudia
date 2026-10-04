@@ -307,7 +307,10 @@ export default function CabinetPage() {
       setChannels(remainingChannels);
       const connectionsResponse = await apiFetch("/google-connections");
       if (connectionsResponse.ok) setConnections(await connectionsResponse.json());
-      update(prefsAfterChannelRemoval(prefs, removedId, remainingChannels));
+      const nextPrefs = prefsAfterChannelRemoval(prefs, removedId, remainingChannels);
+      const stablePreferenceKey = channelPreferenceKey(channel);
+      if (stablePreferenceKey !== removedId) delete nextPrefs.channelLangs[stablePreferenceKey];
+      update(nextPrefs);
       if (remainingChannels.length === 0) router.replace("/");
       else if (!refreshFailed) setSelectionNotice(t(uiLang, "removeChannelSuccess"));
     } catch (error) {
