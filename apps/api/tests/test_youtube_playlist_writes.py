@@ -2,10 +2,13 @@ from app import youtube as yt
 
 
 class _Request:
-    def __init__(self, response):
+    def __init__(self, response, error=None):
         self.response = response
+        self.error = error
 
     def execute(self):
+        if self.error is not None:
+            raise self.error
         return self.response
 
 
@@ -105,3 +108,21 @@ def test_remove_playlist_item_uses_membership_id_and_records_quota(monkeypatch):
 
     assert service.playlist_items_api.delete_calls == [{"id": "PLI-membership"}]
     assert recorded == [("playlistItems.delete", "success")]
+
+
+def test_execute_records_provider_error():
+    recorded = []
+    request = _Request({}, error=RuntimeError("provider failed"))
+
+    try:
+        yt._execute(
+            request,
+            "playlistItems.insert",
+            lambda operation, outcome: recorded.append((operation, outcome)),
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "provider failed"
+    else:
+        raise AssertionError("provider error must propagate")
+
+    assert recorded == [("playlistItems.insert", "youtube_error")]
