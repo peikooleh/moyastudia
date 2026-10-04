@@ -38,6 +38,10 @@ export function channelDisplayContext(channel) {
   );
 }
 
+export function channelPreferenceKey(channel) {
+  return String(channel?.youtube_channel_id || channel?.id || "");
+}
+
 export function channelDisplayLabel(channel) {
   const title = String(channel?.title || "");
   const context = channelDisplayContext(channel);
@@ -70,10 +74,14 @@ export function channelPreferencesForAvailableChannels(prefs, channels) {
   const selectedChannelId = availableIds.has(currentSelected)
     ? currentSelected
     : String(channels[0]?.id || "");
-  const channelLangs = Object.fromEntries(
-    Object.entries(prefs.channelLangs || {}).filter(([channelId]) => availableIds.has(channelId)),
-  );
   const currentLanguages = prefs.channelLangs || {};
+  const channelLangs = {};
+  channels.forEach((channel) => {
+    const stableKey = channelPreferenceKey(channel);
+    const legacyKey = String(channel.id);
+    const language = currentLanguages[stableKey] || currentLanguages[legacyKey];
+    if (stableKey && language) channelLangs[stableKey] = language;
+  });
   const sameLanguages = Object.keys(channelLangs).length === Object.keys(currentLanguages).length
     && Object.entries(channelLangs).every(([channelId, language]) => currentLanguages[channelId] === language);
 
