@@ -17,6 +17,7 @@ IDENTITY_SCOPES = [
 ]
 YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/youtube.readonly",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
 ]
