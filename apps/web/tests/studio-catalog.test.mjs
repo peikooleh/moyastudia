@@ -257,7 +257,7 @@ test("statistics summarize only metrics present in the loaded catalog rows", () 
 
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
   const keys = [
-    "more", "statisticsTab", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
+    "more", "statisticsTab", "calendarToday", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
     "writeMode", "comingLater", "readOnlySnapshot", "calendarEventDetails", "videoReadonlyMetadata",
     "calendarDayVideos", "playlistPageStatus", "statisticsCoverage", "statisticsMetricCount", "statisticsCatalogNotImported",
     "youtubeDescriptionByteRule",
