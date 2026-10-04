@@ -21,6 +21,8 @@ export function Shell({ children }) {
   const [channelError, setChannelError] = useState(false);
   const [catalogStatus, setCatalogStatus] = useState(null);
   const [quota, setQuota] = useState(null);
+  const [writeMode, setWriteMode] = useState({ enabled: false, youtube_writes_available: false });
+  const [writeModeBusy, setWriteModeBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +81,44 @@ export function Shell({ children }) {
       });
     return () => controller.abort();
   }, [channel?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/write-mode")
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "write mode unavailable");
+        if (!cancelled) setWriteMode(data);
+      })
+      .catch(() => {
+        if (!cancelled) setWriteMode({ enabled: false, youtube_writes_available: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleWriteMode() {
+    if (writeModeBusy) return;
+    const nextEnabled = !writeMode.enabled;
+    if (nextEnabled && !window.confirm(t(uiLang, "writeModeConfirm"))) return;
+    setWriteModeBusy(true);
+    try {
+      const response = await apiFetch("/write-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: nextEnabled,
+          confirmation: nextEnabled ? "enable_youtube_writes" : null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "writeModeUpdateError"));
+      setWriteMode(data);
+    } finally {
+      setWriteModeBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +216,23 @@ export function Shell({ children }) {
             {t(uiLang, "statisticsTab")}
           </button>
         </nav>
+        {!inCabinet ? (
+          <div className="header-write-mode">
+            <span>{t(uiLang, "writeMode")}</span>
+            <button
+              className="mode-switch"
+              type="button"
+              role="switch"
+              aria-checked={writeMode.enabled}
+              aria-label={t(uiLang, "writeMode")}
+              disabled={writeModeBusy}
+              onClick={toggleWriteMode}
+              title={writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
         <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
           <span>{t(uiLang, "syncStatus")}</span>
           <strong>{t(uiLang, syncStatusKey)}</strong>
@@ -194,7 +251,7 @@ export function Shell({ children }) {
       </header>
       <div className="shell-content">
         {typeof children === "function"
-          ? children({ view: workspaceView, onViewChange: navigateWorkspace })
+          ? children({ view: workspaceView, onViewChange: navigateWorkspace, writeMode })
           : children}
       </div>
       <footer className="app-footer">
