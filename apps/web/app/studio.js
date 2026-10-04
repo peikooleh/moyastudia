@@ -936,6 +936,33 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setPlaylistMembershipEditor(null);
   }
 
+  async function removeSelectedFromCurrentPlaylist() {
+    if (!selectedPlaylistVideoIds.size || !selectedPlaylist) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
+      return;
+    }
+    if (!selectedPlaylist.localOnly) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistRemoveYoutubeUnavailable"));
+      return;
+    }
+    const removedIds = new Set(selectedPlaylistVideoIds);
+    const nextVideoIds = (localPlaylistMemberships[selectedPlaylist.id] || []).filter((videoId) => !removedIds.has(videoId));
+    try {
+      const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}/membership`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_ids: nextVideoIds }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipSaveError"));
+      setLocalPlaylistMemberships((current) => ({ ...current, [selectedPlaylist.id]: data.videoIds || nextVideoIds }));
+      setSelectedPlaylistVideoIds(new Set());
+      setPlaylistIdCopyStatus(t(uiLang, "playlistRemovedLocally"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
   async function deleteLocalPlaylist() {
     if (!selectedPlaylist?.localOnly) return;
     if (!window.confirm(t(uiLang, "playlistDeleteLocalConfirm"))) return;
@@ -1545,7 +1572,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
                   <button type="button" title={t(uiLang, "playlistAddToPlaylist")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
-                  <button type="button" disabled title={t(uiLang, "playlistRemoveFromPlaylist")}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
+                  <button type="button" disabled={!selectedPlaylistVideoIds.size || !selectedPlaylist?.localOnly} title={selectedPlaylist?.localOnly ? t(uiLang, "playlistRemoveFromPlaylist") : t(uiLang, "playlistRemoveYoutubeUnavailable")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
               <label className="playlist-page-size">
