@@ -1,7 +1,8 @@
+import Link from "next/link";
 export default function TermsPage() {
   return (
     <main className="legal-page">
-      <a href="/" className="legal-back">← MoyaStudia</a>
+      <Link href="/" className="legal-back">← MoyaStudia</Link>
       <h1>Terms</h1>
       <p>MoyaStudia is currently a channel-management workspace under development.</p>
       <h2>Current capabilities</h2>
