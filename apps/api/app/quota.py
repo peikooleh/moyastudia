@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from .models import YouTubeQuotaUsage
@@ -74,6 +75,32 @@ def record_usage(
     )
     # Quota attempts must survive a later domain-operation failure.
     db.commit()
+
+
+def record_usage_isolated(
+    bind: Engine,
+    *,
+    user_id: str,
+    operation: str,
+    outcome: str,
+    google_connection_id: int | None = None,
+    channel_id: int | None = None,
+) -> None:
+    """Persist quota telemetry in its own transaction.
+
+    YouTube requests may happen while the caller has pending domain changes.
+    Keeping quota accounting in a separate Session prevents telemetry commits
+    from accidentally committing or rolling back the caller's transaction.
+    """
+    with Session(bind=bind) as quota_db:
+        record_usage(
+            quota_db,
+            user_id=user_id,
+            operation=operation,
+            outcome=outcome,
+            google_connection_id=google_connection_id,
+            channel_id=channel_id,
+        )
 
 
 def quota_summary(db: Session, now: datetime | None = None) -> dict:
