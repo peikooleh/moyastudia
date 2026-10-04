@@ -1493,7 +1493,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   onClick={() => setSelectedPlaylistId(playlist.id)}
                 >
                   {playlist.thumb ? <img src={playlist.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
-                  <span><strong>{playlist.title || t(uiLang, "untitledPlaylist")}</strong><small>{t(uiLang, "playlistVideoCountWithCount", { count: playlist.itemCount ?? "—" })}</small></span>
+                  <span><strong>{playlist.title || t(uiLang, "untitledPlaylist")}</strong><small>{t(uiLang, "playlistVideoCountWithCount", { count: playlist.localOnly ? (localPlaylistMemberships[playlist.id] || []).length : (playlist.itemCount ?? "—") })}</small></span>
                 </button>
               ))}
             </div>
@@ -1508,7 +1508,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   <div className="playlist-summary-footer">
                     <div className="playlist-summary-meta">
                       <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
-                      <span>{t(uiLang, "playlistVideoCountWithCount", { count: selectedPlaylist.itemCount ?? "—" })}</span>
+                      <span>{t(uiLang, "playlistVideoCountWithCount", { count: selectedPlaylist.localOnly ? (localPlaylistMemberships[selectedPlaylist.id] || []).length : (selectedPlaylist.itemCount ?? "—") })}</span>
                       {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
                       {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
                     </div>
