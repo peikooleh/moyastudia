@@ -1350,7 +1350,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               setPlaylistIdCopyStatus(t(uiLang, "playlistCreatedLocally"));
             }}>
               <input className="search" type="text" value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder={t(uiLang, "playlistNewTitle")} aria-label={t(uiLang, "playlistNewTitle")} maxLength={150} />
-              <button className="btn" type="submit" disabled={!newPlaylistTitle.trim()}>+ {t(uiLang, "playlistCreate")}</button>
+              <button className="btn" type="submit">+ {t(uiLang, "playlistCreate")}</button>
             </form>
             <div className="playlist-picker-list">
               {currentPlaylistState?.loading ? <p className="empty" role="status">{t(uiLang, "playlistsLoading")}</p> : null}
