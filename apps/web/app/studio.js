@@ -375,6 +375,8 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
+  const [statisticsQuery, setStatisticsQuery] = useState("");
+  const [statisticsSort, setStatisticsSort] = useState("views");
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -964,6 +966,22 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     || (currentPlaylistContents?.items?.length || 0) > (playlistPage + 1) * playlistPageSize;
   const calendarSelected = calendarVideos.find((video) => video.id === selectedId) || null;
   const statistics = cachedVideoMetricSummary(videos);
+  const statisticsRows = [...videos]
+    .filter((video) => {
+      const needle = statisticsQuery.trim().toLocaleLowerCase();
+      if (!needle) return true;
+      return (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
+    })
+    .sort((a, b) => {
+      if (statisticsSort === "title") return (catalogVideoDisplayTitle(a) || "").localeCompare(catalogVideoDisplayTitle(b) || "", t(uiLang, "calendarLocale"));
+      const metric = statisticsSort === "likes" ? "likes" : statisticsSort === "comments" ? "comments" : "views";
+      const av = Number(a[metric]);
+      const bv = Number(b[metric]);
+      if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
+      if (!Number.isFinite(av)) return 1;
+      if (!Number.isFinite(bv)) return -1;
+      return bv - av;
+    });
   const workingStateKey = workingVideoStatusKey(
     workingVideo,
     workingEdits,
@@ -1439,13 +1457,17 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             ))}
           </div>
           <p className="statistics-coverage">{t(uiLang, "statisticsCoverage", { count: statistics.loadedVideoCount })}</p>
+          <div className="statistics-toolbar">
+            <input className="search" type="search" value={statisticsQuery} onChange={(event) => setStatisticsQuery(event.target.value)} placeholder={t(uiLang, "statisticsSearch")} aria-label={t(uiLang, "statisticsSearch")} />
+            <label><span>{t(uiLang, "statisticsSortBy")}</span><select value={statisticsSort} onChange={(event) => setStatisticsSort(event.target.value)}><option value="views">{t(uiLang, "videoViews")}</option><option value="likes">{t(uiLang, "videoLikes")}</option><option value="comments">{t(uiLang, "videoComments")}</option><option value="title">{t(uiLang, "videoTitle")}</option></select></label>
+          </div>
           {err ? <p className="calendar-error" role="alert">{err}</p> : null}
           {!loadingVideos && videos.length === 0 ? <p className="empty">{t(uiLang, catalogStatus.state === "NOT_IMPORTED" ? "statisticsCatalogNotImported" : "statisticsEmpty")}</p> : null}
           <div className="statistics-table-wrap">
             <table className="statistics-table">
               <thead><tr><th>{t(uiLang, "videoTitle")}</th><th>{t(uiLang, "videoViews")}</th><th>{t(uiLang, "videoLikes")}</th><th>{t(uiLang, "videoComments")}</th></tr></thead>
               <tbody>
-                {videos.map((video) => (
+                {statisticsRows.map((video) => (
                   <tr key={video.id}>
                     <th scope="row"><button type="button" className="text-button" onClick={() => { setSelectedId(video.id); onViewChange("videos"); }}>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</button></th>
                     <td>{video.views ?? "—"}</td><td>{video.likes ?? "—"}</td><td>{video.comments ?? "—"}</td>
@@ -1454,6 +1476,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               </tbody>
             </table>
           </div>
+          {!loadingVideos && videos.length > 0 && statisticsRows.length === 0 ? <p className="empty statistics-empty">{t(uiLang, "statisticsNoResults")}</p> : null}
           {nextCursor ? <button className="btn ghost statistics-load-more" type="button" disabled={loadingMore} onClick={loadMoreCatalog}>{loadingMore ? t(uiLang, "catalogLoadingMore") : t(uiLang, "catalogLoadMore", { count: Math.max(catalogTotal - videos.length, 0) })}</button> : null}
         </main>
       ) : null}
