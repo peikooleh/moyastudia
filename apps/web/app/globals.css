@@ -951,7 +951,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .playlist-pagination > span { color: var(--muted); font-size: 12px; }
 .statistics-workspace { min-width: 0; padding: 0 24px 32px; }
 .statistics-workspace .workspace-heading { padding-inline: 0; }
-.statistics-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.statistics-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .statistics-cards article { min-width: 0; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .statistics-cards h2 { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .statistics-cards strong { overflow-wrap: anywhere; font-size: 22px; }
