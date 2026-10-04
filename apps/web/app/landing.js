@@ -58,7 +58,7 @@ export function Landing({ authError = "" }) {
           </div>
         </section>
       </main>
-      <section className="land-feats">
+      <section className="land-feats" aria-label={t(uiLang, "landFeaturesLabel")}>
         <div>
           <h2>{t(uiLang, "feat1")}</h2>
           <p>{t(uiLang, "feat1d")}</p>
@@ -72,6 +72,13 @@ export function Landing({ authError = "" }) {
           <p>{t(uiLang, "feat3d")}</p>
         </div>
       </section>
+      <footer className="app-footer land-footer">
+        <span>© {new Date().getFullYear()} {t(uiLang, "brand")}</span>
+        <nav aria-label={t(uiLang, "legalLinks")}>
+          <a href="/privacy">{t(uiLang, "privacy")}</a>
+          <a href="/terms">{t(uiLang, "terms")}</a>
+        </nav>
+      </footer>
     </div>
   );
 }
