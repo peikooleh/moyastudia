@@ -471,7 +471,7 @@ export default function CabinetPage() {
                                 {subscriberCount ? <small>{subscriberCount}</small> : null}
                                 {videoCount ? <small>{videoCount}</small> : null}
                               </span>
-                              <span className="channel-option-status">{selected ? t(uiLang, "selected") : t(uiLang, "tipSelectChannel")}</span>
+                              <span className="channel-option-status">{selected ? t(uiLang, "activeStudioChannel") : t(uiLang, "switchStudioChannel")}</span>
                             </button>
                           );
                         })}
@@ -486,7 +486,7 @@ export default function CabinetPage() {
                     <article className="chan-card">
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
-                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "selected")}</span></div>
+                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "activeStudioChannel")}</span></div>
                       </header>
                       <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
                         <select value={prefs.channelLangs[channelPreferenceKey(ch)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [channelPreferenceKey(ch)]: event.target.value } })}>
