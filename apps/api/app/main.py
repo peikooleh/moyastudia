@@ -1627,6 +1627,25 @@ def update_local_playlist_membership(
     return {"id": row.local_id, "title": row.title, "videoIds": row.video_ids}
 
 
+@app.delete("/channels/{channel_id}/local-playlists/{local_id}", dependencies=[Depends(require_same_origin)])
+def delete_local_playlist(
+    channel_id: int,
+    local_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    row = db.query(LocalPlaylist).filter(
+        LocalPlaylist.channel_id == channel.id,
+        LocalPlaylist.local_id == local_id,
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, "local playlist not found")
+    db.delete(row)
+    db.commit()
+    return {"deleted": True, "id": local_id}
+
+
 @app.get("/channels/{channel_id}/playlists")
 def channel_playlists(
     channel_id: int,
