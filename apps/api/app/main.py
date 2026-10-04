@@ -904,7 +904,7 @@ def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
     snapshot = _working_video_snapshot(video)
-    working = {field: getattr(video, field) for field in ("title", "description", "tags")}
+    working = {field: getattr(video, field) for field in ("title", "description", "tags", "language")}
     dirty_fields = _working_dirty_fields(snapshot, working)
     return {
         "id": video.id,
