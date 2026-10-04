@@ -1,4 +1,33 @@
-# Current Handoff — Studio UI/UX, 2026-10-04
+# Current Handoff — Functional Architecture, 2026-10-04
+
+## UI baseline closed
+
+- PR #1 was squash-merged into `main` as `da8b634` after green CI. The UI/UX polish phase is closed.
+- The current production-development baseline remains read-only with local working metadata. No YouTube write, AI provider call or upload was enabled by the architecture work below.
+- New design branch: `architecture-write-mode`.
+
+## Next phase baseline
+
+- Added [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md) as the implementation contract for W1–W9.
+- Write Mode will be server-authoritative and checked on every YouTube mutation; a disabled/enabled frontend button is not a security control.
+- First remote mutation will be single-video title/description/tags via `videos.update`, preserving local drafts on failure and using working revision/conflict checks.
+- Quota accounting will be a backend ledger around centralized YouTube execution. UI will explicitly label it as MoyaStudia-tracked usage rather than claiming Google's authoritative project balance.
+- Official YouTube quota rules were rechecked on 2026-10-04. Current documentation uses separate default daily buckets for `search.list` and `videos.insert` (100 calls each, 1 unit/call) and a 10,000-unit combined default allocation for other endpoints; ordinary reads are generally 1 unit and most mutations 50. Reset is midnight Pacific Time. Costs must remain dated/configurable and be reverified before implementation.
+- AI connections are optional future server-side integrations. API keys must be encrypted at rest and never stored in browser preferences or returned in plaintext. AI Improve actions produce suggestions/local draft changes only; they cannot directly write YouTube.
+- Google connection lifecycle will get explicit disconnect/revoke/reauthorize behavior; hiding an empty connection in Cabinet is not considered a real disconnect.
+- Implementation order is W1 boundaries → W2 quota ledger on reads → W3 server Write Mode → W4 single-video metadata write → W5 thumbnail/status/scheduling → W6 playlists → W7 connection lifecycle → W8 AI → W9 uploads/drafts.
+- Each W-stage must update STATUS/documentation and pass relevant tests/CI before merge.
+
+## Known debt before/while implementing
+
+- `studio.js`, `globals.css` and `i18n.js` are large; split only along feature boundaries needed by the next stage rather than doing a broad rewrite.
+- Existing `dailyEdits` / `dailyUploads` browser preferences are not YouTube quota and must not be reused as quota truth.
+- Channel language is browser-local; move it server-side only if cross-device persistence becomes a product requirement.
+- Legal pages remain launch placeholders and require separate legal/localization review.
+
+---
+
+# Previous Handoff — Studio UI/UX, 2026-10-04
 
 ## A1–A11 UI batch
 
