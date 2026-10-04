@@ -295,7 +295,7 @@ function VideoInspector({
             className="btn ghost"
             type="button"
             disabled={!workingVideo || workingLoading || workingSaving}
-            onClick={resetWorkingToSnapshot}
+            onClick={confirmResetWorkingToSnapshot}
           >
             {t(uiLang, "workingUseSnapshot")}
           </button>
@@ -367,6 +367,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   });
   const [playlistRetry, setPlaylistRetry] = useState(0);
   const [playlistQuery, setPlaylistQuery] = useState("");
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
   const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [playlistContents, setPlaylistContents] = useState({
     channelId: "",
@@ -868,6 +869,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setWorkingError("");
   }
 
+  function confirmResetWorkingToSnapshot() {
+    if (!window.confirm(t(uiLang, "discardChangesConfirm"))) return;
+    resetWorkingToSnapshot();
+  }
+
   async function saveWorkingVideo() {
     if (!workingVideo || !Object.keys(workingEdits).length || workingSaving) return;
     setWorkingSaving(true);
@@ -1317,6 +1323,19 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 aria-label={t(uiLang, "playlistSearch")}
               />
             </div>
+            <form className="playlist-create" onSubmit={(event) => {
+              event.preventDefault();
+              const title = newPlaylistTitle.trim();
+              if (!title) return;
+              const localId = `local-${Date.now()}`;
+              setPlaylistState((current) => ({ ...current, channelId, items: [{ id: localId, title, itemCount: 0, privacy: "private", localOnly: true }, ...current.items] }));
+              setSelectedPlaylistId(localId);
+              setNewPlaylistTitle("");
+              setPlaylistIdCopyStatus(t(uiLang, "playlistCreatedLocally"));
+            }}>
+              <input className="search" type="text" value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder={t(uiLang, "playlistNewTitle")} aria-label={t(uiLang, "playlistNewTitle")} maxLength={150} />
+              <button className="btn" type="submit" disabled={!newPlaylistTitle.trim()}>+ {t(uiLang, "playlistCreate")}</button>
+            </form>
             <div className="playlist-picker-list">
               {currentPlaylistState?.loading ? <p className="empty" role="status">{t(uiLang, "playlistsLoading")}</p> : null}
               {currentPlaylistState?.error ? (
