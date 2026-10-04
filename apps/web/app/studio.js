@@ -158,7 +158,6 @@ function VideoInspector({
   workingStateLabels,
   updateWorkingField,
   resetWorkingToSnapshot,
-  saveWorkingVideo,
   resolveWorkingConflict,
   publishWorkingVideo,
   writeMode,
@@ -1313,7 +1312,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             workingStateLabels={workingStateLabels}
             updateWorkingField={updateWorkingField}
             resetWorkingToSnapshot={resetWorkingToSnapshot}
-            saveWorkingVideo={saveWorkingVideo}
             resolveWorkingConflict={resolveWorkingConflict}
             publishWorkingVideo={publishWorkingVideo}
             writeMode={writeMode}
