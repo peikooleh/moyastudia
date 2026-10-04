@@ -376,6 +376,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
+  const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("date");
   const [query, setQuery] = useState("");
@@ -619,16 +620,28 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     const localPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId && playlist.localOnly);
     if (localPlaylist) {
       const memberIds = new Set(localPlaylistMemberships[selectedPlaylistId] || []);
-      const items = videos
-        .filter((video) => video.youtubeId && memberIds.has(video.youtubeId))
-        .map((video, index) => ({
-          videoId: video.youtubeId,
-          title: catalogVideoDisplayTitle(video),
-          thumb: video.thumb || "",
-          position: index,
-          privacy: video.privacy || "",
-          catalogVideo: video,
-        }));
+      const knownVideos = new Map();
+      videos.forEach((video) => {
+        if (video.youtubeId) knownVideos.set(video.youtubeId, video);
+      });
+      Object.entries(localPlaylistVideoCache).forEach(([videoId, video]) => {
+        if (!knownVideos.has(videoId)) knownVideos.set(videoId, video);
+      });
+      const items = [...memberIds]
+        .map((videoId, index) => {
+          const video = knownVideos.get(videoId);
+          if (!video) return null;
+          return {
+            videoId,
+            title: catalogVideoDisplayTitle(video),
+            thumb: video.thumb || "",
+            position: index,
+            privacy: video.privacy || "",
+            catalogVideo: video.id ? video : null,
+            videoSnapshot: video.id ? null : video,
+          };
+        })
+        .filter(Boolean);
       setPlaylistContents({
         channelId, playlistId: selectedPlaylistId, items, nextPageToken: "", loading: false, error: "",
       });
@@ -669,7 +682,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         }
       });
     return () => controller.abort();
-  }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, videos]);
+  }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, localPlaylistVideoCache, videos]);
 
   useEffect(() => {
     setPlaylistPage(0);
@@ -871,6 +884,22 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (!playlistMembershipEditor) return;
     const videoIds = [...selectedPlaylistVideoIds];
     const targets = playlistMembershipEditor.targets;
+    const knownItems = currentPlaylistContents?.items || [];
+    setLocalPlaylistVideoCache((current) => {
+      const next = { ...current };
+      knownItems.forEach((item) => {
+        if (videoIds.includes(item.videoId)) {
+          next[item.videoId] = item.catalogVideo || item.videoSnapshot || {
+            youtubeId: item.videoId,
+            title: item.title || "",
+            effectiveTitle: item.title || "",
+            thumb: item.thumb || "",
+            privacy: item.privacy || "",
+          };
+        }
+      });
+      return next;
+    });
     setLocalPlaylistMemberships((current) => {
       const next = { ...current };
       playlists.forEach((playlist) => {
