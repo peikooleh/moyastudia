@@ -1026,18 +1026,22 @@ def _video_working_item(video: Video) -> dict:
 
 
 def _catalog_video_or_404(
-    db: Session, user: User, channel_id: int, video_id: int
+    db: Session,
+    user: User,
+    channel_id: int,
+    video_id: int,
+    *,
+    for_update: bool = False,
 ) -> Video:
     channel = _channel_or_404(db, user, channel_id, require_token=False)
-    video = (
-        db.query(Video)
-        .filter(
-            Video.id == video_id,
-            Video.channel_id == channel.id,
-            Video.youtube_video_id.is_not(None),
-        )
-        .one_or_none()
+    query = db.query(Video).filter(
+        Video.id == video_id,
+        Video.channel_id == channel.id,
+        Video.youtube_video_id.is_not(None),
     )
+    if for_update:
+        query = query.with_for_update()
+    video = query.one_or_none()
     if video is None:
         raise HTTPException(404, "video not found")
     return video
@@ -1289,8 +1293,7 @@ def publish_channel_video_metadata(
 ):
     if not user.write_mode_enabled:
         raise HTTPException(403, detail={"code": "write_mode_off"})
-    video = _catalog_video_or_404(db, user, channel_id, video_id)
-    if video.working_revision != request.revision:
+    # Serialize publishes for this video so two requests cannot send the same revision twice.\n    video = _catalog_video_or_404(db, user, channel_id, video_id, for_update=True)\n    if video.working_revision != request.revision:
         raise HTTPException(409, detail={"code": "stale_revision", "current": _video_working_item(video)})
     current = _video_working_item(video)
     if current["conflict"]:
