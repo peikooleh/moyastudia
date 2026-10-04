@@ -616,6 +616,24 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       });
       return undefined;
     }
+    const localPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId && playlist.localOnly);
+    if (localPlaylist) {
+      const memberIds = new Set(localPlaylistMemberships[selectedPlaylistId] || []);
+      const items = videos
+        .filter((video) => video.youtubeId && memberIds.has(video.youtubeId))
+        .map((video, index) => ({
+          videoId: video.youtubeId,
+          title: catalogVideoDisplayTitle(video),
+          thumb: video.thumb || "",
+          position: index,
+          privacy: video.privacy || "",
+          catalogVideo: video,
+        }));
+      setPlaylistContents({
+        channelId, playlistId: selectedPlaylistId, items, nextPageToken: "", loading: false, error: "",
+      });
+      return undefined;
+    }
     const controller = new AbortController();
     setPlaylistContents({
       channelId, playlistId: selectedPlaylistId, items: [], nextPageToken: "", loading: true, error: "",
@@ -651,7 +669,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         }
       });
     return () => controller.abort();
-  }, [channelId, selectedPlaylistId, playlistContentsRetry, view]);
+  }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, videos]);
 
   useEffect(() => {
     setPlaylistPage(0);
