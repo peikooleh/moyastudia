@@ -1105,9 +1105,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   return (
     <div className="studio-wrap">
       {view === "videos" ? (
-        <header className="workspace-heading">
+        <header className="workspace-heading compact-workspace-heading">
           <h1>{t(uiLang, "videos")}</h1>
-          <span>{t(uiLang, "videoCount", { count: catalogTotal })}</span>
         </header>
       ) : null}
 
@@ -1137,10 +1136,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 : t(uiLang, "catalogUnknown")}
             </strong>
             {catalogStatus.video_count > 0 ? (
-              <span>{t(uiLang, "catalogCacheCount", { count: catalogStatus.video_count })}</span>
-            ) : null}
-            {["LOADING", "PARTIAL"].includes(catalogStatus.state) ? (
-              <span>{t(uiLang, "catalogScannedCount", { count: catalogStatus.scanned_count || 0 })}</span>
+              <span className="catalog-progress">{Math.min(catalogStatus.scanned_count || catalogStatus.video_count, catalogStatus.video_count)}/{catalogStatus.video_count}</span>
             ) : null}
             {catalogStatus.last_success_at ? (
               <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
@@ -1335,11 +1331,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-summary-copy">
                   <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2>
                   {selectedPlaylist.description ? <p>{selectedPlaylist.description}</p> : null}
-                  <div className="playlist-summary-meta">
-                    <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
-                    <span>{t(uiLang, "playlistVideoCountWithCount", { count: selectedPlaylist.itemCount ?? "—" })}</span>
-                    {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
-                    {selectedPlaylist.id ? <span className="playlist-id-tools"><span>{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button><a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a></span> : null}
+                  <div className="playlist-summary-footer">
+                    <div className="playlist-summary-meta">
+                      <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
+                      <span>{t(uiLang, "playlistVideoCountWithCount", { count: selectedPlaylist.itemCount ?? "—" })}</span>
+                      {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
+                      {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
+                    </div>
+                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button><a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a></div> : null}
                   </div>
                   {playlistIdCopyStatus ? <span className="playlist-copy-status" role="status">{playlistIdCopyStatus}</span> : null}
                 </div>
@@ -1369,12 +1368,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   {t(uiLang, "playlistSelectPage")}
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
-                <select className="playlist-bulk-select" aria-label={t(uiLang, "playlistBulkActions")} aria-describedby="playlist-bulk-help" defaultValue="">
-                  <option value="" disabled>{t(uiLang, "playlistBulkActions")}</option>
-                  <option value="add" disabled>{t(uiLang, "playlistAddToPlaylist")}</option>
-                  <option value="move" disabled>{t(uiLang, "playlistMoveToPlaylist")}</option>
-                  <option className="playlist-bulk-remove" value="remove" disabled>{t(uiLang, "playlistRemoveFromPlaylist")}</option>
-                </select>
+                <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
+                  <button type="button" disabled title={t(uiLang, "playlistAddToPlaylist")}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
+                  <button type="button" disabled title={t(uiLang, "playlistMoveToPlaylist")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
+                  <button type="button" disabled title={t(uiLang, "playlistRemoveFromPlaylist")}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
+                </div>
               </div>
               <label className="playlist-page-size">
                 {t(uiLang, "playlistPageSize")}
