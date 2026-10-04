@@ -16,7 +16,7 @@ IDENTITY_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 YOUTUBE_SCOPES = [
-    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
 ]
@@ -474,6 +474,44 @@ def list_videos(
         "video_ids": video_ids,
         "videos": videos,
         "next_page_token": playlist_response.get("nextPageToken"),
+    }
+
+
+def update_video_metadata(
+    refresh_token: str,
+    youtube_video_id: str,
+    *,
+    title: str,
+    description: str,
+    tags: list[str],
+    category_id: str,
+    language: str | None,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
+    snippet = {
+        "title": title,
+        "description": description,
+        "tags": tags,
+        "categoryId": category_id,
+    }
+    if language:
+        snippet["defaultLanguage"] = language
+    response = _execute(
+        service.videos().update(
+            part="snippet",
+            body={"id": youtube_video_id, "snippet": snippet},
+        ),
+        "videos.update",
+        recorder,
+    )
+    returned = response.get("snippet") or snippet
+    return {
+        "youtube_title": returned.get("title") or "",
+        "youtube_description": returned.get("description") or "",
+        "youtube_tags": returned.get("tags") or [],
+        "youtube_category_id": returned.get("categoryId") or category_id,
+        "youtube_default_language": returned.get("defaultLanguage"),
     }
 
 
