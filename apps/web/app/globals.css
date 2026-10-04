@@ -902,12 +902,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .metadata-summary { grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 4px 0 10px; padding: 10px 12px; border-left: 2px solid var(--line); }
 .metadata-summary dd { color: var(--muted); }
 .snapshot-field textarea { background: var(--bg); color: var(--muted); cursor: default; }
+.header-system-status { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; padding-left: 12px; border-left: 1px solid var(--line); }
 .header-write-mode { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .mode-switch-label { color: var(--text); font-weight: 600; }
 .mode-switch { display: inline-flex; align-items: center; justify-content: flex-start; width: 42px; height: 24px; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-hover); cursor: pointer; }
 .mode-switch span { display: block; flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); }
-.mode-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
-.mode-switch[aria-checked="true"] span { transform: translateX(16px); background: var(--bg); box-shadow: 0 1px 3px rgba(0,0,0,.24); }
+.mode-switch[aria-checked="true"], .mode-switch.is-on { justify-content: flex-end; background: var(--accent); border-color: var(--accent); }
+.mode-switch[aria-checked="true"] span, .mode-switch.is-on span { transform: none; background: var(--bg); box-shadow: 0 1px 3px rgba(0,0,0,.24); }
+.mode-switch.is-off { justify-content: flex-start; }
 .mode-switch span { transition: transform .15s ease; }
 .mode-switch:disabled { opacity: .65; cursor: wait; }
 .mode-coming-later { color: var(--warning); font-weight: 600; }
@@ -1680,3 +1682,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 900px) { .playlist-summary-footer { align-items: flex-start; flex-direction: column; } .playlist-id-tools { justify-content: flex-start; } }
+
+@media (max-width: 1100px) { .header-system-status { gap: 8px; } .header-system-status .sync-status > span, .header-system-status .quota-status > span { display: none; } }
