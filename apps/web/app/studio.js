@@ -985,6 +985,14 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     })
     .sort((a, b) => {
       if (statisticsSort === "title") return (catalogVideoDisplayTitle(a) || "").localeCompare(catalogVideoDisplayTitle(b) || "", t(uiLang, "calendarLocale"));
+      if (statisticsSort === "publishedAt") {
+        const av = Date.parse(a.publishedAt || a.slot || "");
+        const bv = Date.parse(b.publishedAt || b.slot || "");
+        if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
+        if (!Number.isFinite(av)) return 1;
+        if (!Number.isFinite(bv)) return -1;
+        return bv - av;
+      }
       const metric = statisticsSort === "likes" ? "likes" : statisticsSort === "comments" ? "comments" : "views";
       const av = Number(a[metric]);
       const bv = Number(b[metric]);
@@ -1455,8 +1463,12 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                         setCalendarDetailDay("");
                       }}
                     >
-                      <span>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
-                      <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                      {video.thumb ? <img className="calendar-day-thumb" src={video.thumb} alt="" loading="lazy" /> : <span className="calendar-day-thumb empty-thumb" />}
+                      <span className="calendar-day-copy">
+                        <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
+                        <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                        <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -1492,7 +1504,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
           <div className="statistics-toolbar">
             <input className="search" type="search" value={statisticsQuery} onChange={(event) => setStatisticsQuery(event.target.value)} placeholder={t(uiLang, "statisticsSearch")} aria-label={t(uiLang, "statisticsSearch")} />
             <label><span>{t(uiLang, "statisticsStatus")}</span><select value={statisticsStatus} onChange={(event) => setStatisticsStatus(event.target.value)}>{FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}</select></label>
-            <label><span>{t(uiLang, "statisticsSortBy")}</span><select value={statisticsSort} onChange={(event) => setStatisticsSort(event.target.value)}><option value="views">{t(uiLang, "videoViews")}</option><option value="likes">{t(uiLang, "videoLikes")}</option><option value="comments">{t(uiLang, "videoComments")}</option><option value="title">{t(uiLang, "videoTitle")}</option></select></label>
+            <label><span>{t(uiLang, "statisticsSortBy")}</span><select value={statisticsSort} onChange={(event) => setStatisticsSort(event.target.value)}><option value="views">{t(uiLang, "videoViews")}</option><option value="likes">{t(uiLang, "videoLikes")}</option><option value="comments">{t(uiLang, "videoComments")}</option><option value="publishedAt">{t(uiLang, "videoPublished")}</option><option value="title">{t(uiLang, "videoTitle")}</option></select></label>
           </div>
           {err ? <p className="calendar-error" role="alert">{err}</p> : null}
           {!loadingVideos && videos.length === 0 ? <p className="empty">{t(uiLang, catalogStatus.state === "NOT_IMPORTED" ? "statisticsCatalogNotImported" : "statisticsEmpty")}</p> : null}
