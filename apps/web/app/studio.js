@@ -190,7 +190,7 @@ function VideoInspector({
         <div className="video-summary-thumbnail">
           {selected.thumb ? <img src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
           <div className="thumbnail-actions">
-            <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "changeThumbnail")}</button>
+            <button className="btn ghost" type="button" onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; if (file) setCopyStatus(file.name); }} />
             <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "removeThumbnail")}</button>
           </div>
         </div>
@@ -212,7 +212,7 @@ function VideoInspector({
       <section className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-title"
             rows={2}
@@ -226,7 +226,7 @@ function VideoInspector({
         </div>
         <div className="description-metadata-layout">
         <div className={`editor-field description-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-description"
             rows={10}
@@ -240,7 +240,7 @@ function VideoInspector({
         </div>
         </div>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-tags"
             rows={4}
@@ -265,7 +265,7 @@ function VideoInspector({
             <span>{t(uiLang, "captionsYoutubeStatus")}</span>
             <strong>{t(uiLang, selected.captions === true ? "captionsPresent" : selected.captions === false ? "captionsNotDetected" : "captionsUnknown")}</strong>
           </div>
-          <button className="btn ghost captions-upload" type="button" disabled title={t(uiLang, "captionsUploadLater")}>+ {t(uiLang, "captionsAddFile")}</button>
+          <button className="btn ghost captions-upload" type="button" onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt" onChange={(event) => { const file = event.target.files?.[0]; if (file) setWorkingError(file.name); }} />
         </fieldset>
       </section>
 
@@ -1388,8 +1388,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
                 <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
-                  <button type="button" disabled title={t(uiLang, "playlistAddToPlaylist")}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
-                  <button type="button" disabled title={t(uiLang, "playlistMoveToPlaylist")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistAddToPlaylist")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "playlistWritesWithWriteMode"))}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "playlistWritesWithWriteMode"))}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
                   <button type="button" disabled title={t(uiLang, "playlistRemoveFromPlaylist")}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
