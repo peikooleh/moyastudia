@@ -1420,7 +1420,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           <section className="playlist-content-pane" aria-labelledby="playlist-content-title">
             {selectedPlaylist ? (
               <header className="playlist-summary">
-                {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder" />}
+                {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
                 <div className="playlist-summary-copy">
                   <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2>
                   {selectedPlaylist.description ? <p>{selectedPlaylist.description}</p> : null}
@@ -1431,7 +1431,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
                       {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
                     </div>
-                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button><a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a></div> : null}
+                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{!selectedPlaylist.localOnly ? <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a> : null}</div> : null}
                   </div>
                   {playlistIdCopyStatus ? <span className="playlist-copy-status" role="status">{playlistIdCopyStatus}</span> : null}
                 </div>
@@ -1441,8 +1441,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               <p className="empty" role="status">{t(uiLang, "playlistItemsLoading")}</p>
             ) : null}
             {currentPlaylistContents?.error ? (
-              <p className="empty" role="alert">
-                {currentPlaylistContents.error}
+              <p className="empty playlist-error" role="alert">
+                <span>{currentPlaylistContents.error}</span>
                 <button className="text-button" type="button" onClick={() => setPlaylistContentsRetry((current) => current + 1)}>{t(uiLang, "playlistsRetry")}</button>
               </p>
             ) : null}
