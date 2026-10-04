@@ -63,6 +63,12 @@ class WriteModeUpdate(BaseModel):
     confirmation: Literal["enable_youtube_writes"] | None = None
 
 
+class VideoPublishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    revision: int = Field(ge=0)
+
+
 class CatalogSyncRequest(BaseModel):
     mode: Literal["initial", "incremental", "reconcile"]
 
@@ -74,6 +80,7 @@ class VideoWorkingPatch(BaseModel):
     title: str | None = None
     description: str | None = None
     tags: str | None = None
+    language: str | None = Field(default=None, max_length=32)
     ready: bool = False
     conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
@@ -943,6 +950,7 @@ def _working_video_snapshot(video: Video) -> dict[str, str | None]:
         "title": video.youtube_title,
         "description": video.youtube_description,
         "tags": None if video.youtube_tags is None else ", ".join(video.youtube_tags),
+        "language": video.youtube_default_language or video.youtube_default_audio_language or "",
     }
 
 
@@ -951,7 +959,7 @@ def _working_dirty_fields(
 ) -> dict[str, bool]:
     return {
         field: working[field] is not None and working[field] != snapshot[field]
-        for field in ("title", "description", "tags")
+        for field in ("title", "description", "tags", "language")
     }
 
 
@@ -961,16 +969,18 @@ def _video_working_item(video: Video) -> dict:
         "title": video.title,
         "description": video.description,
         "tags": video.tags,
+        "language": video.language,
         "ready": video.working_ready,
     }
     base = {
         "title": video.working_base_title,
         "description": video.working_base_description,
         "tags": video.working_base_tags,
+        "language": video.working_base_language,
     }
     effective = {
         field: working[field] if working[field] is not None else snapshot[field]
-        for field in ("title", "description", "tags")
+        for field in ("title", "description", "tags", "language")
     }
     dirty_fields = _working_dirty_fields(snapshot, working)
     conflict_fields = {
@@ -979,7 +989,7 @@ def _video_working_item(video: Video) -> dict:
             and base[field] != snapshot[field]
             and working[field] != snapshot[field]
         )
-        for field in ("title", "description", "tags")
+        for field in ("title", "description", "tags", "language")
     }
     return {
         "id": video.id,
@@ -1244,6 +1254,85 @@ def patch_channel_video_working(
             detail={"code": "stale_revision", "current": _video_working_item(current)},
         )
 
+    db.commit()
+    db.refresh(video)
+    return _video_working_item(video)
+
+
+@app.post(
+    "/channels/{channel_id}/videos/{video_id}/publish-metadata",
+    dependencies=[Depends(require_same_origin)],
+)
+def publish_channel_video_metadata(
+    channel_id: int,
+    video_id: int,
+    request: VideoPublishRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    video = _catalog_video_or_404(db, user, channel_id, video_id)
+    if video.working_revision != request.revision:
+        raise HTTPException(409, detail={"code": "stale_revision", "current": _video_working_item(video)})
+    current = _video_working_item(video)
+    if current["conflict"]:
+        raise HTTPException(409, detail={"code": "working_conflict", "current": current})
+    if video.availability_status != "available":
+        raise HTTPException(409, detail={"code": "video_unavailable"})
+    if not current["dirty"]:
+        raise HTTPException(409, detail={"code": "nothing_to_publish"})
+    if not video.youtube_video_id or not video.youtube_category_id:
+        raise HTTPException(422, detail={"code": "incomplete_youtube_snapshot"})
+
+    title = current["effective"]["title"] or ""
+    description = current["effective"]["description"] or ""
+    tags_text = current["effective"]["tags"] or ""
+    language = (current["effective"]["language"] or "").strip() or None
+    tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+    if not title or len(title) > 100 or "<" in title or ">" in title:
+        raise HTTPException(422, detail={"code": "invalid_title"})
+    if len(description.encode("utf-8")) > 5000 or "<" in description or ">" in description:
+        raise HTTPException(422, detail={"code": "invalid_description"})
+    if quota_service.quota_summary(db)["buckets"]["general"]["estimated_remaining"] < 50:
+        raise HTTPException(429, detail={"code": "quota_preflight_failed"})
+
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            remote = yt.update_video_metadata(
+                refresh_token,
+                video.youtube_video_id,
+                title=title,
+                description=description,
+                tags=tags,
+                category_id=video.youtube_category_id,
+                language=language,
+            )
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        message = str(exc).lower()
+        if "insufficient" in message or "permission" in message or "scope" in message:
+            raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_update_failed"}) from exc
+
+    video.youtube_title = remote["youtube_title"]
+    video.youtube_description = remote["youtube_description"]
+    video.youtube_tags = remote["youtube_tags"]
+    video.youtube_category_id = remote["youtube_category_id"]
+    video.youtube_default_language = remote["youtube_default_language"]
+    video.title = None
+    video.description = None
+    video.tags = None
+    video.language = None
+    video.working_base_title = None
+    video.working_base_description = None
+    video.working_base_tags = None
+    video.working_base_language = None
+    video.working_ready = False
+    video.working_revision += 1
     db.commit()
     db.refresh(video)
     return _video_working_item(video)
