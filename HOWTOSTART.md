@@ -48,7 +48,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ```powershell
 alembic upgrade head
 
-`head` now includes `0006_youtube_quota_usage`, which creates the server-side YouTube API usage ledger used by `/quota/today`. Apply migrations before starting this branch; the application does not create this table automatically.
+`head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`) and `0007_user_write_mode` (server-authoritative Write Mode, default OFF). Apply migrations before starting this branch; the application does not create these schema changes automatically.
 ```
 
 Важно: `0001_foundation` удаляет старые prototype-таблицы `channels` и `videos` без переноса записей. Используйте новую/проверенную базу и сделайте backup перед migration существующей базы. Schema далее управляется Alembic; API не меняет её при старте.
