@@ -38,6 +38,17 @@
 - Existing `Save to YouTube`, thumbnail and playlist mutation controls remain disabled until their W4+ capability exists.
 - Added tests for default OFF, explicit confirmation, persistence/toggle behavior, authentication and same-origin enforcement, plus migration coverage.
 
+## UI polish + channel watch time — in PR #2
+
+- Moved the real server-backed Write Mode switch into the main application header beside sync/quota status. Removed the separate full-width Write Mode strip.
+- Removed repeated temporary/helper copy from Video settings/actions and Statistics so permanent controls/data carry the interface instead of placeholder notices.
+- Fixed Video scroll layering by making the catalog action/status bar non-sticky; it no longer overlays the selected video inspector while the page is scrolled.
+- Added an embedded YouTube preview to the selected-video summary. The standard YouTube player provides play/pause, seek/progress, volume and fullscreen without duplicating playback state in MoyaStudia.
+- Added owned-channel `GET /channels/{channel_id}/analytics/summary` backed by YouTube Analytics `estimatedMinutesWatched`, and a fourth Statistics headline card for total channel watch time.
+- Watch time is not approximated from duration × views. It comes from YouTube Analytics for the channel date range and displays `—` if Analytics is unavailable.
+- The YouTube Analytics API must be enabled for the Google Cloud project. Current Google documentation for `reports.query` requires `youtube.readonly`, which the existing YouTube connection already requests.
+- Added owner/auth coverage for the analytics summary endpoint.
+
 ## Known debt before/while implementing
 
 - `studio.js`, `globals.css` and `i18n.js` are large; split only along feature boundaries needed by the next stage rather than doing a broad rewrite.
