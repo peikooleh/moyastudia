@@ -1370,3 +1370,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .land-feats { width: calc(100% - 36px); margin-bottom: 48px; }
   .legal-page { width: calc(100% - 36px); margin-top: 30px; }
 }
+
+
+/* A8: final desktop polish after visual QA. */
+@media (min-width: 901px) {
+  .land-top {
+    width: min(1240px, calc(100% - 64px));
+    max-width: none;
+    margin-inline: auto;
+    padding-inline: 0;
+  }
+  .cab {
+    width: min(1320px, 100%);
+  }
+  .cab .main {
+    padding-inline: clamp(28px, 3vw, 44px);
+  }
+  .cab .panel {
+    max-width: 1040px;
+  }
+  .channel-management {
+    grid-template-columns: minmax(360px, .9fr) minmax(420px, 1.1fr);
+    gap: 24px;
+  }
+}
+.playlist-picker-search {
+  padding: 0 8px 10px;
+}
+.playlist-picker-search .search {
+  width: 100%;
+  min-width: 0;
+}
+.statistics-toolbar {
+  padding-top: 2px;
+}
+.app-footer {
+  padding-block: 16px;
+}
