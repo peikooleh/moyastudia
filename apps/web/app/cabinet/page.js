@@ -432,7 +432,7 @@ export default function CabinetPage() {
                             <span className={`connection-status ${connection.status}`}>
                               {t(uiLang, connection.status === "connected" ? "connectionStatusConnected" : "connectionStatusReauthorization")}
                             </span>
-                            <span>{t(uiLang, "connectedChannelsCount", { count: connection.channel_count })}</span>
+                            
                           </div>
                           {connection.status === "reauthorization_required" ? (
                             <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
