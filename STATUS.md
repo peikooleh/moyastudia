@@ -1,31 +1,31 @@
-# Current Handoff — Studio UI/UX visual polish, 2026-10-04
+# Current Handoff — Studio UI/UX, 2026-10-04
 
-## This pass
+## Accepted / implemented
 
-- Applied a visual polish pass to Studio shell, Videos, Calendar, Playlists, Statistics, and Cabinet. Studio navigation selection and sync status are visually distinct; list selection, metadata, summary, toolbar, numeric table values, and status hierarchy use restrained existing palette treatments.
-- Videos retains the same draft/API semantics. The title uses a single-line input, metadata counters sit immediately below their fields, and read-only properties share one block. Dates use localized display formatting and ISO durations display as `m:ss` / `h:mm:ss`; raw values and field validation behavior remain unchanged.
-- Calendar event details display localized date/time and compact duration. The existing localized overflow control and day list remain intact. Playlist and Cabinet changes in this pass are styling and read-only value presentation only.
-- Added responsive CSS for the requested portrait/tablet breakpoints and short landscape layouts. No browser was used in this pass; visual verification at 1440×900, 768×1024, 390×844, and 844×390 remains manual.
-- No backend, API, database, migration, OAuth, or YouTube write behavior changed. No commit or push was performed.
+- **A1 — Videos:** implemented and visually accepted at 1440×900, 1024×768, and 390×844. The selected-video workspace uses the available desktop width, titles and metadata no longer overlap, dates are localized, the mobile video list is bounded with internal scrolling, local Save is secondary, and the future **Save to YouTube** control remains disabled.
+- **A2 — Playlists:** implemented. Playlist selection, summary, neutral **Date** label for YouTube `snippet.publishedAt`, localized visibility/date, playlist ID copy/open-on-YouTube, current-page selection, selected count, page sizes 10/30/50/100, pagination, and **Open in Studio** are present. Playlist membership writes are not implemented.
+- **A2.1 — Playlists compact bulk UI:** code is present after the interrupted Codex run. The three large bulk buttons were replaced by one **Bulk actions / Массовые действия / Масові дії** select in the same selection toolbar as **Select on this page** and the selected count. The future Add / Move / Remove items are visible but disabled; the permanent help text is shortened and explicitly says removing from a playlist does not delete the YouTube video. Mobile playlist summary and toolbar styles are compact/responsive.
+- Dev lifecycle tooling is in place through `dev-start.ps1`, `dev-status.ps1`, and `dev-stop.ps1`. Ownership distinguishes `managed`, `unrelated`, `unverified`, and `none`; Access denied does not imply unrelated. Confirmed managed processes can be safely recovered after approved elevated inspection.
 
-## Validation
+## Validation state
 
-- `node --test tests\studio-catalog.test.mjs`: **29 passed**.
-- `npm.cmd run lint`: passed; existing Next lint deprecation, `<img>`, and custom-font warnings remain.
-- `npm.cmd run build`: passed.
-- `git diff --check`: passed.
+- Before the Codex usage limit interrupted A2.1, the A2 implementation had passed `node --test tests/studio-catalog.test.mjs` (**30/30**), `npm.cmd run lint`, `npm.cmd run build`, and `git diff --check`.
+- A2 was visually reviewed at 1440×900, 1024×768, and 390×844.
+- During A2.1, Codex reported that tests, lint, and production build passed before the run stopped during final browser/runtime recovery.
+- **A2.1 final browser QA was not completed after the last code changes.** Treat its responsive/browser state as pending verification rather than accepted.
+- Known `favicon.ico` 404 is non-blocking. The previously observed `/channels/{id}/catalog/status` 404 returned HTTP 200 in the completed A2 final browser pass.
 
-## Functional limits retained
+## Product boundaries
 
-- Statistics describes the loaded catalog subset and cached snapshot metrics, not historical analytics.
-- Playlist page sizes use existing token pagination, including sequential accumulation for 100 rows from max-50 requests.
-- Write mode remains a localized placeholder; YouTube writes and OAuth scope changes remain unimplemented.
+- YouTube Write Mode remains a placeholder. No playlist membership write, upload, publish, thumbnail write, or other YouTube write request is implemented.
+- Backend/API/database/Alembic/OAuth behavior was not changed by A1/A2/A2.1.
+- Playlist bulk semantics reserved for future Write Mode: **Add** keeps membership in the current playlist; **Move** is future add-to-target + remove-from-current; **Remove from playlist** removes membership only and must not delete the YouTube video.
 
-## Changed files in the working tree
+## Next UI work
 
-- `STATUS.md`, `apps/web/app/cabinet/page.js`, `apps/web/app/globals.css`, `apps/web/app/shell.js`, `apps/web/app/studio.js`, `apps/web/lib/catalog-state.mjs`, `apps/web/lib/i18n.js`, `apps/web/tests/studio-catalog.test.mjs`.
-
----
+1. Complete a final visual/browser check of A2.1 when a browser-capable local environment is available; only fix regressions caused by A2.1.
+2. **A3 — Calendar:** polish the existing calendar without changing read-only data flow; add/verify a clear Today action and ensure `+N` overflow opens a compact day view without forcing excessive page scrolling.
+3. Then continue Statistics, Cabinet, Landing/footer/legal, followed by one cross-app responsive/accessibility polish pass.
 
 # Stage 3 Current Handoff - 2026-10-03
 
