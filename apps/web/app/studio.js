@@ -415,7 +415,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const uiLangRef = useRef(uiLang);
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
-  const playlists = playlistsForChannel(playlistState, channelId).map((playlist) => (\n    playlist.localOnly\n      ? { ...playlist, itemCount: (localPlaylistMemberships[playlist.id] || []).length }\n      : playlist\n  ));
+  const playlists = playlistsForChannel(playlistState, channelId).map((playlist) => (
+    playlist.localOnly
+      ? { ...playlist, itemCount: (localPlaylistMemberships[playlist.id] || []).length }
+      : playlist
+  ));
   const visiblePlaylists = playlists.filter((playlist) => {
     const needle = playlistQuery.trim().toLocaleLowerCase();
     return !needle || (playlist.title || "").toLocaleLowerCase().includes(needle);
