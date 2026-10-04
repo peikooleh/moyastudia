@@ -45,6 +45,13 @@ const SORTS = [
   { id: "status", key: "sortStatus" },
 ];
 
+const VIDEO_CATEGORIES = [
+  ["1", "Film & Animation"], ["2", "Autos & Vehicles"], ["10", "Music"], ["15", "Pets & Animals"],
+  ["17", "Sports"], ["19", "Travel & Events"], ["20", "Gaming"], ["22", "People & Blogs"],
+  ["23", "Comedy"], ["24", "Entertainment"], ["25", "News & Politics"], ["26", "Howto & Style"],
+  ["27", "Education"], ["28", "Science & Technology"], ["29", "Nonprofits & Activism"],
+];
+
 const VIDEO_LANGUAGES = [
   ["", "—"], ["de", "Deutsch"], ["en", "English"], ["ru", "Русский"], ["uk", "Українська"],
   ["fr", "Français"], ["it", "Italiano"], ["es", "Español"], ["pl", "Polski"], ["pt", "Português"],
@@ -157,6 +164,15 @@ function VideoInspector({
   writeMode,
 }) {
   const [copyStatus, setCopyStatus] = useState("");
+  const [localCategory, setLocalCategory] = useState("");
+  const [localAudience, setLocalAudience] = useState("");
+  const [localCaptions, setLocalCaptions] = useState(false);
+
+  useEffect(() => {
+    setLocalCategory(selected?.category || "");
+    setLocalAudience(selected?.madeForKids === true ? "kids" : selected?.madeForKids === false ? "not-kids" : "");
+    setLocalCaptions(selected?.captions === true);
+  }, [selected?.id, selected?.category, selected?.madeForKids, selected?.captions]);
   if (!selected) {
     return <section className="video-inspector empty">{t(uiLang, "catalogSelectVideo")}</section>;
   }
@@ -244,10 +260,10 @@ function VideoInspector({
 
       <section className="video-properties" aria-labelledby="video-properties-title">
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
-        <label>{t(uiLang, "videoCategory")}<select value={categoryValue} disabled><option value={categoryValue}>{categoryValue}</option></select></label>
-        <fieldset disabled><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" checked={selected.madeForKids === true} readOnly /> {t(uiLang, "audienceKids")}</label><label><input type="radio" checked={selected.madeForKids === false} readOnly /> {t(uiLang, "audienceNotKids")}</label></fieldset>
+        <label>{t(uiLang, "videoCategory")}<select value={localCategory} onChange={(event) => setLocalCategory(event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+        <fieldset><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "kids"} onChange={() => setLocalAudience("kids")} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "not-kids"} onChange={() => setLocalAudience("not-kids")} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
         <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
-        <fieldset disabled><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={selected.captions === true} readOnly /> {t(uiLang, selected.captions ? "yes" : "no")}</label></fieldset>
+        <fieldset><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={localCaptions} onChange={(event) => setLocalCaptions(event.target.checked)} /> {t(uiLang, localCaptions ? "yes" : "no")}</label></fieldset>
       </section>
 
       <div className="working-controls" aria-live="polite">
