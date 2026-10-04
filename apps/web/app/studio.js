@@ -415,7 +415,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const uiLangRef = useRef(uiLang);
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
-  const playlists = playlistsForChannel(playlistState, channelId);
+  const playlists = playlistsForChannel(playlistState, channelId).map((playlist) => (\n    playlist.localOnly\n      ? { ...playlist, itemCount: (localPlaylistMemberships[playlist.id] || []).length }\n      : playlist\n  ));
   const visiblePlaylists = playlists.filter((playlist) => {
     const needle = playlistQuery.trim().toLocaleLowerCase();
     return !needle || (playlist.title || "").toLocaleLowerCase().includes(needle);
@@ -1548,6 +1548,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   <button type="button" disabled title={t(uiLang, "playlistRemoveFromPlaylist")}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
+              <label className="playlist-page-size">
+                {t(uiLang, "playlistPageSize")}
+                <select value={playlistPageSize} onChange={(event) => {
+                  const size = Number(event.target.value);
+                  setPlaylistPageSize(size);
+                  setPlaylistPage(0);
+                }}>
+                  {[10, 30, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+              </label>
               {playlistMembershipEditor ? (
                 <div className="playlist-membership-editor" role="dialog" aria-label={t(uiLang, "playlistMembershipTitle")}>
                   <strong>{t(uiLang, "playlistMembershipTitle")}</strong>
@@ -1566,16 +1576,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   </div>
                 </div>
               ) : null}
-              <label className="playlist-page-size">
-                {t(uiLang, "playlistPageSize")}
-                <select value={playlistPageSize} onChange={(event) => {
-                  const size = Number(event.target.value);
-                  setPlaylistPageSize(size);
-                  setPlaylistPage(0);
-                }}>
-                  {[10, 30, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
-                </select>
-              </label>
             </div>
             <p className="playlist-bulk-help" id="playlist-bulk-help">
               {t(uiLang, "playlistWritesWithWriteMode")} {t(uiLang, "playlistBulkHelp")}
