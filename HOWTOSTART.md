@@ -49,6 +49,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 alembic upgrade head
 
 `head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`) and `0007_user_write_mode` (server-authoritative Write Mode, default OFF). Apply migrations before starting this branch; the application does not create these schema changes automatically.
+
+For the Statistics watch-time card, enable **YouTube Analytics API** in the same Google Cloud project as the existing YouTube Data API credentials. The app queries `estimatedMinutesWatched` with the existing read-only YouTube connection; if Analytics is unavailable, the card stays empty rather than estimating watch time.
 ```
 
 Важно: `0001_foundation` удаляет старые prototype-таблицы `channels` и `videos` без переноса записей. Используйте новую/проверенную базу и сделайте backup перед migration существующей базы. Schema далее управляется Alembic; API не меняет её при старте.
