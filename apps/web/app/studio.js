@@ -157,7 +157,6 @@ function VideoInspector({
   workingStateKey,
   workingStateLabels,
   updateWorkingField,
-  resetWorkingToSnapshot,
   confirmResetWorkingToSnapshot,
   resolveWorkingConflict,
   publishWorkingVideo,
@@ -866,43 +865,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     resetWorkingToSnapshot();
   }
 
-  async function saveWorkingVideo() {
-    if (!workingVideo || !Object.keys(workingEdits).length || workingSaving) return;
-    setWorkingSaving(true);
-    setWorkingError("");
-    try {
-      const response = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(workingVideoPatch(workingVideo.revision, workingEdits)),
-      });
-      const data = await response.json();
-      if (response.status === 409 && data.detail?.current) {
-        setWorkingVideo(data.detail.current);
-        setWorkingSaveState("conflict");
-        setWorkingError(t(uiLang, "workingRevisionError"));
-        return;
-      }
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "workingSaveError"));
-      setWorkingVideo(data);
-      setWorkingDraft(data.effective);
-      setWorkingEdits({});
-      setWorkingSaveState(data.conflict ? "conflict" : "saved");
-      setVideos((current) => current.map((video) => (
-        video.id === data.id ? { ...video, effectiveTitle: data.effective.title } : video
-      )));
-      setPlaylistSelectedVideo((current) => (
-        current?.id === data.id
-          ? { ...current, effectiveTitle: data.effective.title, dirty: data.dirty }
-          : current
-      ));
-    } catch (error) {
-      setWorkingSaveState("error");
-      setWorkingError(String(error.message || error));
-    } finally {
-      setWorkingSaving(false);
-    }
-  }
 
   async function publishWorkingVideo() {
     if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict) return;
@@ -1312,7 +1274,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             workingStateKey={workingStateKey}
             workingStateLabels={workingStateLabels}
             updateWorkingField={updateWorkingField}
-            resetWorkingToSnapshot={resetWorkingToSnapshot}
             confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
             resolveWorkingConflict={resolveWorkingConflict}
             publishWorkingVideo={publishWorkingVideo}
