@@ -376,6 +376,49 @@ def list_playlist_items(
     return {"items": items, "nextPageToken": response.get("nextPageToken")}
 
 
+def list_playlist_memberships(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_ids: list[str],
+    video_ids: list[str],
+    recorder: QuotaRecorder | None = None,
+) -> dict[str, list[str]]:
+    wanted = {video_id for video_id in video_ids if video_id}
+    memberships = {video_id: [] for video_id in wanted}
+    if not wanted:
+        return memberships
+    service = service_for(refresh_token)
+    for playlist_id in playlist_ids:
+        if not playlist_id:
+            continue
+        playlist_response = _execute(
+            service.playlists().list(part="snippet", id=playlist_id, maxResults=1),
+            "playlists.list",
+            recorder,
+        )
+        playlists = playlist_response.get("items") or []
+        if not playlists or (playlists[0].get("snippet") or {}).get("channelId") != youtube_channel_id:
+            continue
+        token = None
+        while True:
+            kwargs = {"part": "contentDetails", "playlistId": playlist_id, "maxResults": 50}
+            if token:
+                kwargs["pageToken"] = token
+            response = _execute(
+                service.playlistItems().list(**kwargs),
+                "playlistItems.list",
+                recorder,
+            )
+            for item in response.get("items") or []:
+                video_id = (item.get("contentDetails") or {}).get("videoId")
+                if video_id in wanted:
+                    memberships[video_id].append(playlist_id)
+            token = response.get("nextPageToken")
+            if not token:
+                break
+    return memberships
+
+
 def list_videos(
     refresh_token: str,
     youtube_channel_id: str,
