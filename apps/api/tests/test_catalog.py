@@ -798,7 +798,12 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "ready": False,
     }
     assert saved_item["effective"]["title"] == ""
-    assert saved_item["base"] == saved_item["snapshot"]
+    assert saved_item["base"] == {
+        "title": "Snapshot title",
+        "description": "Snapshot description",
+        "tags": "snapshot, tags",
+        "language": None,
+    }
     assert saved_item["dirty"] is True
     assert saved_item["revision"] == 1
 
