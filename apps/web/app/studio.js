@@ -1502,7 +1502,12 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               <tbody>
                 {statisticsRows.map((video) => (
                   <tr key={video.id}>
-                    <th scope="row"><button type="button" className="text-button" onClick={() => { setSelectedId(video.id); onViewChange("videos"); }}>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</button></th>
+                    <th scope="row">
+                      <button type="button" className="statistics-video-link" onClick={() => { setSelectedId(video.id); onViewChange("videos"); }}>
+                        {video.thumb ? <img className="statistics-video-thumb" src={video.thumb} alt="" loading="lazy" /> : <span className="statistics-video-thumb empty-thumb" />}
+                        <span>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
+                      </button>
+                    </th>
                     <td>{video.views ?? "—"}</td><td>{video.likes ?? "—"}</td><td>{video.comments ?? "—"}</td>
                   </tr>
                 ))}
