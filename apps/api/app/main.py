@@ -122,7 +122,7 @@ def quota_today(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return quota_service.quota_summary(db, user.id)
+    return quota_service.quota_summary(db)
 
 
 @app.get("/auth/session")
