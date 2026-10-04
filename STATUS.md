@@ -25,7 +25,7 @@
 - Added authenticated `GET /quota/today` with Pacific-Time quota window, bucket limits, tracked usage, estimated remaining and an explicit `authoritative_google_balance: false` marker.
 - Studio header now shows the real tracked general-bucket usage (for example `API-квота 12 / 10000`) and explains that Google project usage may differ.
 - Added quota tests for Pacific reset boundaries, authentication, aggregation and the dated operation-cost reference; migration coverage includes the new table.
-- No YouTube write scope or write endpoint is enabled. W3 remains the next stage after W1/W2 is validated and merged.
+- Quota telemetry now uses an isolated SQLAlchemy session/transaction so recording a YouTube request cannot commit unrelated pending domain changes in the request session.
 - PR #2 is intentionally draft while CI and final review run.
 
 ## W3 implementation — in PR #2
@@ -33,9 +33,9 @@
 - Added Alembic revision `0007_user_write_mode`: each authenticated user has a server-persisted Write Mode flag, default OFF.
 - Added authenticated `GET /write-mode` and same-origin protected `PUT /write-mode`.
 - Enabling requires the explicit confirmation token `enable_youtube_writes`; disabling does not require confirmation.
-- API responses currently return `youtube_writes_available: false` intentionally. W3 arms the safety state only; it does not expose any YouTube mutation.
+- API responses return `youtube_writes_available: true` because W4 now exposes a guarded metadata mutation; Write Mode still only arms writes and never sends one by itself.
 - Studio's previous disabled Write Mode placeholder is now a real server-backed switch with EN/RU/UK confirmation copy and persisted state.
-- Existing `Save to YouTube`, thumbnail and playlist mutation controls remain disabled until their W4+ capability exists.
+- `Save to YouTube` is enabled for the W4 metadata subset. Thumbnail/captions and real YouTube playlist mutations remain outside the active UI write surface.
 - Added tests for default OFF, explicit confirmation, persistence/toggle behavior, authentication and same-origin enforcement, plus migration coverage.
 
 ## UI polish + channel watch time — in PR #2
@@ -59,6 +59,8 @@
 - Successful remote writes replace the local YouTube snapshot and clear the published local working copy. Failed remote writes leave the local draft intact.
 - W4 requests YouTube `youtube.force-ssl` in addition to `youtube.readonly`. Existing connections created before W4 must be reauthorized before the first write; the UI reports that requirement instead of silently failing.
 - Added backend coverage for Write Mode OFF, stale revision, same-origin enforcement and successful single-video snapshot update.
+- Metadata publish now locks the selected video row before validating the revision, preventing two concurrent requests from intentionally publishing the same working revision twice.
+- Playlist read items now retain YouTube's `playlistItemId`. Backend-only YouTube primitives for playlist create/add/remove are present behind the common quota-recording executor and have unit coverage, but no application endpoint or UI invokes those remote mutations yet.
 - Bulk operations, playlist writes and all YouTube delete operations remain unavailable. W4 exposes no delete endpoint.
 
 ## Known debt before/while implementing
