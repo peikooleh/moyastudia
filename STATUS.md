@@ -21,6 +21,20 @@
 - Known non-blocking historical issue: favicon 404.
 - Branch currently diverges from `main`: the UI branch is ahead while `main` also contains later CI-history commits. Reconcile/update the PR branch before merge rather than assuming a clean fast-forward.
 
+## Final code QA — 2026-10-04
+
+- Latest branch head `762f8da` passed GitHub Actions CI run #35: API pytest, frontend Node tests, lint and production build.
+- PR #1 is mergeable but the branch is 2 commits behind `main`; those two `main` commits only carry the CI invocation fix already present on this branch. Prefer squash-merge PR #1 rather than trying to fast-forward 50 UI commits.
+- Code audit found no merge-blocking defect in the current read-only scope.
+- Follow-up architecture debt before enabling write/AI features:
+  - `studio.js`, `globals.css`, `i18n.js` and this handoff file are now large monoliths; split by feature before Write Mode grows.
+  - Quota UI is presentation-only today; real YouTube quota accounting must live server-side and distinguish estimated API cost from Google's project-wide authoritative quota.
+  - AI provider/API-key controls are placeholders only; future secrets must be stored server-side encrypted and never persisted in browser preferences.
+  - Channel language is intentionally a browser preference keyed by stable YouTube channel ID; if it must follow a user across devices, move it to backend persistence.
+  - Google connections with zero managed channels are hidden in Cabinet rather than deleted. A future connection-management flow should explicitly support disconnect/revoke and cleanup.
+  - Legal pages are English placeholder product copy and require proper legal/localization review before public launch.
+- No YouTube write operation is enabled. Treat the next phase as a separate backend/API/security design effort, not as wiring the disabled buttons directly to YouTube.
+
 ## Product boundaries
 
 - Read-only YouTube behavior is preserved. Write Mode remains a disabled future placeholder.
