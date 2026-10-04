@@ -356,7 +356,6 @@ export default function CabinetPage() {
               <div className="panel">
                 <p className="section-kicker">{t(uiLang, "profileSection")}</p>
                 <h1>{t(uiLang, "account")}</h1>
-                <p className="panel-lead">{t(uiLang, "profileHint")}</p>
                 <div className="profile-fields field">
                   <label>{t(uiLang, "email")}</label>
                   <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
@@ -469,7 +468,7 @@ export default function CabinetPage() {
                     ))}
                     {connectionsError ? <p className="selection-error" role="alert">{t(uiLang, "connectionsLoadError")}</p> : null}
                   </div>
-                  <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                  <div className="selected-channel-column">
                   {ch ? (
                     <article className="chan-card">
                       <header className="channel-detail-heading">
@@ -491,6 +490,8 @@ export default function CabinetPage() {
                       <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                     </article>
                   ) : null}
+                    <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                  </div>
                   {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>
               </div>
