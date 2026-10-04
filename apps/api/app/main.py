@@ -20,6 +20,7 @@ from .models import (
     ChannelCatalogSync,
     GoogleConnection,
     Identity,
+    LocalPlaylist,
     User,
     UserSession,
     Video,
@@ -61,6 +62,17 @@ class WriteModeUpdate(BaseModel):
 
     enabled: bool
     confirmation: Literal["enable_youtube_writes"] | None = None
+
+
+class LocalPlaylistCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    local_id: str = Field(min_length=1, max_length=64, pattern=r"^local-[A-Za-z0-9_-]+$")
+    title: str = Field(min_length=1, max_length=150)
+
+
+class LocalPlaylistMembershipUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    video_ids: list[str] = Field(default_factory=list, max_length=500)
 
 
 class VideoPublishRequest(BaseModel):
@@ -1565,6 +1577,54 @@ def continue_catalog_sync(
         raise HTTPException(502, "YouTube catalog sync failed") from exc
 
     return _catalog_status(db, channel)
+
+
+@app.get("/channels/{channel_id}/local-playlists")
+def channel_local_playlists(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    rows = db.query(LocalPlaylist).filter(LocalPlaylist.channel_id == channel.id).order_by(LocalPlaylist.created_at).all()
+    return [{"id": row.local_id, "title": row.title, "videoIds": row.video_ids or []} for row in rows]
+
+
+@app.post("/channels/{channel_id}/local-playlists", dependencies=[Depends(require_same_origin)])
+def create_local_playlist(
+    channel_id: int,
+    payload: LocalPlaylistCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    row = LocalPlaylist(channel_id=channel.id, local_id=payload.local_id, title=payload.title.strip(), video_ids=[])
+    if not row.title:
+        raise HTTPException(422, "playlist title is required")
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "local playlist already exists") from exc
+    return {"id": row.local_id, "title": row.title, "videoIds": []}
+
+
+@app.put("/channels/{channel_id}/local-playlists/{local_id}/membership", dependencies=[Depends(require_same_origin)])
+def update_local_playlist_membership(
+    channel_id: int,
+    local_id: str,
+    payload: LocalPlaylistMembershipUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    row = db.query(LocalPlaylist).filter(LocalPlaylist.channel_id == channel.id, LocalPlaylist.local_id == local_id).one_or_none()
+    if row is None:
+        raise HTTPException(404, "local playlist not found")
+    row.video_ids = list(dict.fromkeys(video_id for video_id in payload.video_ids if video_id))
+    db.commit()
+    return {"id": row.local_id, "title": row.title, "videoIds": row.video_ids}
 
 
 @app.get("/channels/{channel_id}/playlists")
