@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 from app import quota
+from app import main as main_module
+from app.models import User
 from app.settings import settings
 
 from conftest import create_account
@@ -51,3 +53,37 @@ def test_quota_operation_buckets_match_current_reference():
     assert quota.operation_cost("videos.update") == ("general", 50)
     assert quota.operation_cost("search.list") == ("search", 1)
     assert quota.operation_cost("videos.insert") == ("video_upload", 1)
+
+
+def test_request_quota_recorder_uses_an_isolated_session(monkeypatch):
+    bind = object()
+
+    class RequestSession:
+        def get_bind(self):
+            return bind
+
+        def commit(self):
+            raise AssertionError("request session must not be committed by quota telemetry")
+
+    calls = []
+
+    def fake_record_usage_isolated(received_bind, **kwargs):
+        calls.append((received_bind, kwargs))
+
+    monkeypatch.setattr(quota, "record_usage_isolated", fake_record_usage_isolated)
+    user = User(id="quota-user")
+    recorder = main_module._quota_recorder(RequestSession(), user)
+    recorder("videos.update", "success")
+
+    assert calls == [
+        (
+            bind,
+            {
+                "user_id": "quota-user",
+                "google_connection_id": None,
+                "channel_id": None,
+                "operation": "videos.update",
+                "outcome": "success",
+            },
+        )
+    ]
