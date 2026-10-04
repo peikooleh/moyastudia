@@ -326,6 +326,7 @@ def list_playlist_items(
             continue
         items.append(
             {
+                "playlistItemId": item.get("id") or "",
                 "videoId": video_id,
                 "title": snippet.get("title") or "",
                 "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
@@ -519,6 +520,76 @@ def list_videos(
         "videos": videos,
         "next_page_token": playlist_response.get("nextPageToken"),
     }
+
+
+def create_playlist(
+    refresh_token: str,
+    *,
+    title: str,
+    description: str = "",
+    privacy_status: str = "private",
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    response = _execute(
+        service.playlists().insert(
+            part="snippet,status",
+            body={
+                "snippet": {"title": title, "description": description},
+                "status": {"privacyStatus": privacy_status},
+            },
+        ),
+        "playlists.insert",
+        recorder,
+    )
+    return {
+        "id": response.get("id") or "",
+        "title": (response.get("snippet") or {}).get("title") or title,
+        "description": (response.get("snippet") or {}).get("description") or description,
+        "privacy": (response.get("status") or {}).get("privacyStatus") or privacy_status,
+    }
+
+
+def add_video_to_playlist(
+    refresh_token: str,
+    *,
+    playlist_id: str,
+    video_id: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    response = _execute(
+        service.playlistItems().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                }
+            },
+        ),
+        "playlistItems.insert",
+        recorder,
+    )
+    return {
+        "playlistItemId": response.get("id") or "",
+        "playlistId": (response.get("snippet") or {}).get("playlistId") or playlist_id,
+        "videoId": ((response.get("snippet") or {}).get("resourceId") or {}).get("videoId") or video_id,
+    }
+
+
+def remove_playlist_item(
+    refresh_token: str,
+    *,
+    playlist_item_id: str,
+    recorder: QuotaRecorder | None = None,
+) -> None:
+    service = service_for(refresh_token)
+    _execute(
+        service.playlistItems().delete(id=playlist_item_id),
+        "playlistItems.delete",
+        recorder,
+    )
 
 
 def update_video_metadata(
