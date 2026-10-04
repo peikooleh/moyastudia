@@ -14,6 +14,7 @@ export function Shell({ children }) {
   updateRef.current = update;
   const path = usePathname();
   const router = useRouter();
+  const inCabinet = path === "/cabinet" || path?.startsWith("/cabinet/");
   const [channels, setChannels] = useState([]);
   const [channel, setChannel] = useState(null);
   const [channelsLoading, setChannelsLoading] = useState(true);
@@ -83,7 +84,7 @@ export function Shell({ children }) {
   useEffect(() => {
     const syncWorkspaceView = () => {
       const requestedView = new URLSearchParams(window.location.search).get("view");
-      setWorkspaceView(["calendar", "playlists"].includes(requestedView) ? requestedView : "videos");
+      setWorkspaceView(["calendar", "playlists", "statistics"].includes(requestedView) ? requestedView : "videos");
     };
     syncWorkspaceView();
     window.addEventListener("popstate", syncWorkspaceView);
@@ -120,27 +121,35 @@ export function Shell({ children }) {
         <nav className="workspace-nav" aria-label={t(uiLang, "studio")}>
           <button
             type="button"
-            className={workspaceView === "videos" ? "active" : ""}
-            aria-current={workspaceView === "videos" ? "page" : undefined}
+            className={!inCabinet && workspaceView === "videos" ? "active" : ""}
+            aria-current={!inCabinet && workspaceView === "videos" ? "page" : undefined}
             onClick={() => navigateWorkspace("videos")}
           >
             {t(uiLang, "videos")}
           </button>
           <button
             type="button"
-            className={workspaceView === "playlists" ? "active" : ""}
-            aria-current={workspaceView === "playlists" ? "page" : undefined}
+            className={!inCabinet && workspaceView === "playlists" ? "active" : ""}
+            aria-current={!inCabinet && workspaceView === "playlists" ? "page" : undefined}
             onClick={() => navigateWorkspace("playlists")}
           >
             {t(uiLang, "playlistsTab")}
           </button>
           <button
             type="button"
-            className={workspaceView === "calendar" ? "active" : ""}
-            aria-current={workspaceView === "calendar" ? "page" : undefined}
+            className={!inCabinet && workspaceView === "calendar" ? "active" : ""}
+            aria-current={!inCabinet && workspaceView === "calendar" ? "page" : undefined}
             onClick={() => navigateWorkspace("calendar")}
           >
             {t(uiLang, "calendarTab")}
+          </button>
+          <button
+            type="button"
+            className={!inCabinet && workspaceView === "statistics" ? "active" : ""}
+            aria-current={!inCabinet && workspaceView === "statistics" ? "page" : undefined}
+            onClick={() => navigateWorkspace("statistics")}
+          >
+            {t(uiLang, "statisticsTab")}
           </button>
         </nav>
         <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>

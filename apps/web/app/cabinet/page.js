@@ -59,7 +59,7 @@ export default function CabinetPage() {
       "connection_unavailable",
     ].includes(oauthError)) {
       setConnectionError(t(uiLang, `oauth${oauthError.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`));
-      setTab("connections");
+      setTab("channels");
     }
     if (params.get("connection_status") === "connected") {
       setConnectionNotice(t(uiLang, "connectionSaved"));
@@ -345,7 +345,7 @@ export default function CabinetPage() {
       ) : (
         <div className="cab">
           <aside className="side" aria-label={t(uiLang, "cabinet")}>
-            {[["profile", "account"], ["connections", "connections"], ["channels", "channels"], ["interface", "interface"]].map(([id, key]) => (
+            {[["profile", "account"], ["channels", "channelsConnections"], ["interface", "interface"]].map(([id, key]) => (
               <button key={id} className={tab === id ? "on" : ""} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                 {t(uiLang, key)}
               </button>
@@ -359,62 +359,20 @@ export default function CabinetPage() {
                 <p className="panel-lead">{t(uiLang, "profileHint")}</p>
                 <div className="profile-fields field">
                   <label>{t(uiLang, "email")}</label>
-                  <input value={session.user?.email || ""} readOnly title={t(uiLang, "profileHint")} />
-                </div>
-              </div>
-            ) : null}
-
-            {tab === "connections" ? (
-              <div className="panel">
-                <h1>{t(uiLang, "connections")}</h1>
-                <p className="panel-lead">{t(uiLang, "connectionsHint")}</p>
-                {connectionError ? (
-                  <p className="selection-error" role="alert">{t(uiLang, connectionError)}</p>
-                ) : null}
-                {connectionError === "oauthConsentRequired" ? (
-                  <a className="btn ghost" href={apiUrl("/auth/youtube/login?consent_required=true")}>{t(uiLang, "oauthConsentRetry")}</a>
-                ) : null}
-                {connectionNotice ? <p className="selection-notice" role="status">{connectionNotice}</p> : null}
-                <div className="connection-list">
-                  {connections === null ? <p role="status">{t(uiLang, "loadingConnections")}</p> : null}
-                  {connectionsError ? (
-                    <div className="selection-error" role="alert">
-                      <span>{t(uiLang, "connectionsLoadError")}</span>
-                      <button className="btn ghost" type="button" onClick={() => setConnectionsRetry((value) => value + 1)}>{t(uiLang, "retry")}</button>
-                    </div>
-                  ) : null}
-                  {connections?.map((connection) => (
-                    <article className="connection-row" key={connection.id}>
-                      <div>
-                        <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
-                        <span className={`connection-status ${connection.status}`}>
-                          {t(uiLang, connection.status === "connected" ? "connectionStatusConnected" : "connectionStatusReauthorization")}
-                        </span>
-                        <span>{t(uiLang, "connectedChannelsCount", { count: connection.channel_count })}</span>
-                      </div>
-                      {connection.channels.length ? (
-                        <ul className="connection-channels">
-                          {connection.channels.map((channel) => <li key={channel.id}>{channelDisplayLabel(channel)}</li>)}
-                        </ul>
-                      ) : <p>{t(uiLang, "connectionNoChannels")}</p>}
-                      <div className="actions">
-                        {connection.status === "reauthorization_required" ? (
-                          <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
-                            {t(uiLang, "reauthorizeConnection")}
-                          </a>
-                        ) : null}
-                      </div>
-                    </article>
-                  ))}
-                  {connections?.length === 0 && !connectionsError ? <p className="empty-block">{t(uiLang, "noConnections")}</p> : null}
+                  <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
                 </div>
               </div>
             ) : null}
 
             {tab === "channels" ? (
               <div className="panel">
-                <h1>{t(uiLang, "channels")}</h1>
-                <p className="panel-lead">{t(uiLang, "channelListHint")}</p>
+                <h1>{t(uiLang, "channelsConnections")}</h1>
+                <p className="panel-lead">{t(uiLang, "channelsConnectionsHint")}</p>
+                {connectionError ? <p className="selection-error" role="alert">{t(uiLang, connectionError)}</p> : null}
+                {connectionError === "oauthConsentRequired" ? (
+                  <a className="btn ghost" href={apiUrl("/auth/youtube/login?consent_required=true")}>{t(uiLang, "oauthConsentRetry")}</a>
+                ) : null}
+                {connectionNotice ? <p className="selection-notice" role="status">{connectionNotice}</p> : null}
                 {selectionNotice ? <p className="selection-notice" role="status">{selectionNotice}</p> : null}
                 {removeError ? <p className="selection-error" role="alert">{removeError}</p> : null}
                 {selectionConnectionId ? (
@@ -457,8 +415,18 @@ export default function CabinetPage() {
                     {connections?.map((connection) => (
                       <section className="channel-group" key={connection.id}>
                         <header>
-                          <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
-                          <span>{t(uiLang, "connectionStatusLabel")}: {t(uiLang, connection.status === "connected" ? "connectionStatusConnected" : "connectionStatusReauthorization")}</span>
+                          <div className="channel-group-account">
+                            <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
+                            <span className={`connection-status ${connection.status}`}>
+                              {t(uiLang, connection.status === "connected" ? "connectionStatusConnected" : "connectionStatusReauthorization")}
+                            </span>
+                            <span>{t(uiLang, "connectedChannelsCount", { count: connection.channel_count })}</span>
+                          </div>
+                          {connection.status === "reauthorization_required" ? (
+                            <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
+                              {t(uiLang, "reauthorizeConnection")}
+                            </a>
+                          ) : null}
                         </header>
                         {connection.channels.map((item) => {
                           const selected = String(item.id) === String(prefs.selectedChannelId);
@@ -523,7 +491,7 @@ export default function CabinetPage() {
                       <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                     </article>
                   ) : null}
-                  {!channels.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noChannelsSaved")}</h2><p>{t(uiLang, "channelListHint")}</p></div> : null}
+                  {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>
               </div>
             ) : null}

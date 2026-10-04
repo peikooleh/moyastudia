@@ -16,3 +16,6 @@ apps/web/out/
 # Local credentials and generated development state
 apps/api/.env
 apps/api/.venv/
+.playwright-profile/
+.playwright-mcp/
+.dev-runtime/

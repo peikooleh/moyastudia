@@ -1,3 +1,32 @@
+# Current Handoff — Studio UI/UX visual polish, 2026-10-04
+
+## This pass
+
+- Applied a visual polish pass to Studio shell, Videos, Calendar, Playlists, Statistics, and Cabinet. Studio navigation selection and sync status are visually distinct; list selection, metadata, summary, toolbar, numeric table values, and status hierarchy use restrained existing palette treatments.
+- Videos retains the same draft/API semantics. The title uses a single-line input, metadata counters sit immediately below their fields, and read-only properties share one block. Dates use localized display formatting and ISO durations display as `m:ss` / `h:mm:ss`; raw values and field validation behavior remain unchanged.
+- Calendar event details display localized date/time and compact duration. The existing localized overflow control and day list remain intact. Playlist and Cabinet changes in this pass are styling and read-only value presentation only.
+- Added responsive CSS for the requested portrait/tablet breakpoints and short landscape layouts. No browser was used in this pass; visual verification at 1440×900, 768×1024, 390×844, and 844×390 remains manual.
+- No backend, API, database, migration, OAuth, or YouTube write behavior changed. No commit or push was performed.
+
+## Validation
+
+- `node --test tests\studio-catalog.test.mjs`: **29 passed**.
+- `npm.cmd run lint`: passed; existing Next lint deprecation, `<img>`, and custom-font warnings remain.
+- `npm.cmd run build`: passed.
+- `git diff --check`: passed.
+
+## Functional limits retained
+
+- Statistics describes the loaded catalog subset and cached snapshot metrics, not historical analytics.
+- Playlist page sizes use existing token pagination, including sequential accumulation for 100 rows from max-50 requests.
+- Write mode remains a localized placeholder; YouTube writes and OAuth scope changes remain unimplemented.
+
+## Changed files in the working tree
+
+- `STATUS.md`, `apps/web/app/cabinet/page.js`, `apps/web/app/globals.css`, `apps/web/app/shell.js`, `apps/web/app/studio.js`, `apps/web/lib/catalog-state.mjs`, `apps/web/lib/i18n.js`, `apps/web/tests/studio-catalog.test.mjs`.
+
+---
+
 # Stage 3 Current Handoff - 2026-10-03
 
 This entry supersedes older "current status" and next-step text below. Historical records remain unchanged.

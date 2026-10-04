@@ -1,4 +1,4 @@
-﻿# MoyaStudia — Agent Instructions
+# MoyaStudia — Agent Instructions
 
 ## 1. Project role
 
@@ -245,3 +245,68 @@ Do not make unrelated improvements.
 Do not modify Git history.
 
 The user makes final decisions about architecture, scope, and commits.
+
+## Local development
+
+Frontend:
+- directory: `apps/web`
+- command: `npm run dev`
+- port: `3000`
+- readiness: `GET http://localhost:3000/` must return HTTP 200 with a non-empty page and successful responses from referenced `/_next/` JavaScript files.
+
+Backend:
+- directory: `apps/api`
+- command: `\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
+- port: `8000`
+- readiness: `GET http://127.0.0.1:8000/health`
+- the backend is healthy only when the response is HTTP 200 and both `ok` and `db` are `true`.
+
+Before browser or UI tasks, follow this recovery sequence:
+
+1. Run `dev-status.ps1` and inspect each service's readiness, launcher PID, runtime/listener PID, ownership, and port state.
+2. If services are ready and their listeners belong to the registered MoyaStudia process trees, reuse them and go to Playwright.
+3. If a service is stopped, has no live recorded process, and its port is free, run `dev-start.ps1`.
+4. If a service is unhealthy but its live process/listener belongs to its verified registered process tree, run `dev-stop.ps1`, verify the port is free with `dev-status.ps1`, then run `dev-start.ps1` and wait for readiness. This routine project-owned recovery is autonomous; do not ask the user.
+5. If the required port is occupied by an unrelated or unverified process, stop and report its PID, command line, and port. Do not terminate it.
+6. Open Playwright only after required services pass readiness.
+
+If `dev-status.ps1` reports `ownership=unverified` because CIM returned Access denied, this is not evidence that the listener is unrelated. Retry the read-only PID, command-line, and ancestry ownership inspection through the environment's standard elevated/approval command execution mechanism. After approval, rerun `dev-status.ps1` with the same approved execution mechanism. Continue autonomous recovery only when ownership is proven `managed`; if proven `unrelated`, report its PID, port, and command line without stopping it. If elevated inspection is unavailable or approval is declined, report ownership as unverified and leave all processes untouched. Never ask the user to run manual PowerShell inspection commands when Codex can request standard command approval itself.
+
+Safe recovery of project-owned dev processes is autonomous. Unknown-process termination requires user intervention.
+
+Rules:
+- `dev-start.ps1` leaves healthy services running and starts only missing services whose ports are free. It never kills an occupied port's process.
+- `dev-stop.ps1` may stop only a launcher whose PID, command line, executable, and process start time match the project registration; it may stop only descendants proven through that launcher's process tree.
+- Never use a global `taskkill` for `node.exe` or `python.exe`, or `Stop-Process` on unknown PIDs.
+- Never kill all processes on ports 3000/8000 without proving ownership; never remove metadata to bypass ownership checks.
+- If runtime ownership cannot be proven (including Access denied, PID reuse, or a detached orphan), report ownership as `unverified` with the reason and stop before termination. Report `unrelated` only when process inspection succeeded and the process was proven outside the registered MoyaStudia tree.
+- Do not run `npm ci` automatically.
+- Do not modify `.env` files or print secrets.
+- Use Playwright only after the relevant services pass readiness checks.
+
+## Browser QA
+
+Use Playwright MCP for browser/UI QA.
+
+- Base URL: `http://localhost:3000`.
+- Use the existing persistent Playwright profile.
+- Do not perform Google login yourself.
+- Do not enter logins, passwords, 2FA codes, cookies, or tokens.
+- A saved user session may be used for QA.
+- Do not change real user data without an explicit task.
+- Check desktop and responsive layouts when the task concerns UI.
+- After UI changes, perform browser QA if the application is available.
+- After automatic browser QA through Playwright MCP, close the page, browser, or context created for the check before the final report, unless the user explicitly asked to leave the browser open for manual interaction. Keep using the existing persistent Playwright profile across QA sessions.
+- After QA, keep the dev servers running for later tasks. Do not run `dev-stop.ps1` only because QA finished.
+
+### Next.js development runtime recovery
+
+Frontend readiness must confirm an HTTP 200 page with a non-empty body and successful HTTP responses from referenced `/_next/` JavaScript files. Playwright remains the final check of the rendered UI and browser console/network.
+
+Do not delete `.next` on every start. If Next.js runtime evidence points to stale or damaged generated output (for example, page-referenced client chunks return 404), first stop the verified frontend process tree with `dev-stop.ps1` and inspect the failure. Only then, if clearing Next.js generated output is needed, remove `apps/web/.next` alone, document why, and restart. Never remove unrelated files or data.
+
+## Git safety
+
+- Do not commit or push without the user's explicit instruction.
+- Before finishing a task, report changed files and validation results.
+- Do not add local browser profiles, cookies, sessions, or QA screenshots to Git.

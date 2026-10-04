@@ -9,6 +9,7 @@ import {
   prefsAfterChannelRemoval,
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
+import { t } from "../lib/i18n.js";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -19,6 +20,9 @@ import {
   isCurrentCatalogRequest,
   mapPlaylistForStudio,
   playlistItemsUrl,
+  playlistPageItems,
+  playlistPageSelection,
+  cachedVideoMetricSummary,
   playlistsForChannel,
   resetWorkingVideoPatch,
   shouldResumeCatalogSync,
@@ -212,8 +216,58 @@ test("playlist rows from the previous channel are hidden immediately on channel 
 test("playlist item URLs encode IDs and page tokens", () => {
   assert.equal(
     playlistItemsUrl(7, "playlist/one", "token + value"),
-    "/channels/7/playlists/playlist%2Fone/items?page_token=token+%2B+value",
+    "/channels/7/playlists/playlist%2Fone/items?limit=50&page_token=token+%2B+value",
   );
+  assert.equal(playlistItemsUrl(7, "p", "", 100), "/channels/7/playlists/p/items?limit=50");
+});
+
+test("playlist UI pages slice accumulated token pages without skipping rows", () => {
+  const items = Array.from({ length: 120 }, (_, index) => index);
+  assert.deepEqual(playlistPageItems(items, 0, 10), items.slice(0, 10));
+  assert.deepEqual(playlistPageItems(items, 1, 30), items.slice(30, 60));
+  assert.deepEqual(playlistPageItems(items, 0, 100), items.slice(0, 100));
+  assert.deepEqual(playlistPageItems(items, 1, 100), items.slice(100, 120));
+});
+
+test("playlist select-page toggles only visible rows and preserves selections on other pages", () => {
+  const selected = playlistPageSelection(new Set(["previous-page"]), [
+    { videoId: "visible-1" }, { videoId: "visible-2" },
+  ], true);
+  assert.deepEqual([...selected], ["previous-page", "visible-1", "visible-2"]);
+  assert.deepEqual([...playlistPageSelection(selected, [{ videoId: "visible-1" }], false)], ["previous-page", "visible-2"]);
+});
+
+test("statistics summarize only metrics present in the loaded catalog rows", () => {
+  assert.deepEqual(cachedVideoMetricSummary([
+    { views: 10, likes: null, comments: 2 },
+    { views: 5, likes: 3, comments: null },
+  ]), {
+    loadedVideoCount: 2,
+    views: 15, viewsCount: 2,
+    likes: 3, likesCount: 1,
+    comments: 2, commentsCount: 1,
+  });
+  assert.deepEqual(cachedVideoMetricSummary([]), {
+    loadedVideoCount: 0,
+    views: null, viewsCount: 0,
+    likes: null, likesCount: 0,
+    comments: null, commentsCount: 0,
+  });
+});
+
+test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
+  const keys = [
+    "more", "statisticsTab", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
+    "writeMode", "comingLater", "readOnlySnapshot", "calendarEventDetails", "videoReadonlyMetadata",
+    "calendarDayVideos", "playlistPageStatus", "statisticsCoverage", "statisticsMetricCount", "statisticsCatalogNotImported",
+    "youtubeDescriptionByteRule",
+    "playlistDateLabel", "playlistVisibilityUnknown", "playlistIdLabel", "playlistIdCopied", "playlistIdCopyFailed",
+    "openPlaylistOnYoutube", "openInStudio", "playlistBulkActions", "playlistAddToPlaylist", "playlistMoveToPlaylist",
+    "playlistRemoveFromPlaylist", "playlistBulkHelp", "playlistWritesWithWriteMode",
+  ];
+  for (const lang of ["en", "ru", "uk"]) {
+    for (const key of keys) assert.notEqual(t(lang, key), key, `${lang}:${key}`);
+  }
 });
 
 test("catalog list prefers the effective local title and preserves explicit empty values", () => {

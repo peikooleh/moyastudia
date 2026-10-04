@@ -35,11 +35,49 @@ export function playlistsForChannel(state, channelId) {
   return state.items || [];
 }
 
-export function playlistItemsUrl(channelId, playlistId, pageToken = "") {
-  const params = new URLSearchParams();
+export function playlistItemsUrl(channelId, playlistId, pageToken = "", limit = 50) {
+  const params = new URLSearchParams({ limit: String(Math.min(Math.max(Number(limit) || 50, 1), 50)) });
   if (pageToken) params.set("page_token", pageToken);
   const suffix = params.size ? `?${params.toString()}` : "";
   return `/channels/${channelId}/playlists/${encodeURIComponent(playlistId)}/items${suffix}`;
+}
+
+export function playlistPageItems(items, page, pageSize) {
+  const start = Math.max(0, Number(page) || 0) * Math.max(1, Number(pageSize) || 1);
+  return (items || []).slice(start, start + Math.max(1, Number(pageSize) || 1));
+}
+
+export function playlistPageSelection(currentIds, items, checked) {
+  const next = new Set(currentIds || []);
+  (items || []).forEach((item) => {
+    if (!item?.videoId) return;
+    if (checked) next.add(item.videoId);
+    else next.delete(item.videoId);
+  });
+  return next;
+}
+
+export function cachedVideoMetricSummary(videos) {
+  const rows = videos || [];
+  const sumAvailable = (field) => {
+    const values = rows.map((video) => video?.[field]).filter(Number.isFinite);
+    return {
+      total: values.length ? values.reduce((sum, value) => sum + value, 0) : null,
+      count: values.length,
+    };
+  };
+  const views = sumAvailable("views");
+  const likes = sumAvailable("likes");
+  const comments = sumAvailable("comments");
+  return {
+    loadedVideoCount: rows.length,
+    views: views.total,
+    viewsCount: views.count,
+    likes: likes.total,
+    likesCount: likes.count,
+    comments: comments.total,
+    commentsCount: comments.count,
+  };
 }
 
 export function catalogVideoDisplayTitle(video) {
