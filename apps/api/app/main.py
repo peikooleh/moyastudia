@@ -1249,6 +1249,24 @@ def patch_channel_video_working(
     return _video_working_item(video)
 
 
+@app.get("/channels/{channel_id}/analytics/summary")
+def channel_analytics_summary(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        start_date = (channel.yt_published_at or "2005-02-14")[:10]
+        end_date = _utcnow().date().isoformat()
+        return yt.channel_analytics_summary(token, start_date, end_date)
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, "Stored YouTube credentials are unavailable") from exc
+    except Exception as exc:
+        raise HTTPException(502, "YouTube Analytics is unavailable") from exc
+
+
 @app.get("/channels/{channel_id}/catalog/status")
 def catalog_status(
     channel_id: int,
