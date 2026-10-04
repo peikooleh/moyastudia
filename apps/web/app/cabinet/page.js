@@ -9,6 +9,7 @@ import {
   CHANNEL_LANGS,
   channelDisplayContext,
   channelDisplayLabel,
+  channelPreferenceKey,
   channelPreferencesForAvailableChannels,
   prefsAfterChannelRemoval,
   UI_LANGS,
@@ -306,7 +307,10 @@ export default function CabinetPage() {
       setChannels(remainingChannels);
       const connectionsResponse = await apiFetch("/google-connections");
       if (connectionsResponse.ok) setConnections(await connectionsResponse.json());
-      update(prefsAfterChannelRemoval(prefs, removedId, remainingChannels));
+      const nextPrefs = prefsAfterChannelRemoval(prefs, removedId, remainingChannels);
+      const stablePreferenceKey = channelPreferenceKey(channel);
+      if (stablePreferenceKey !== removedId) delete nextPrefs.channelLangs[stablePreferenceKey];
+      update(nextPrefs);
       if (remainingChannels.length === 0) router.replace("/");
       else if (!refreshFailed) setSelectionNotice(t(uiLang, "removeChannelSuccess"));
     } catch (error) {
@@ -356,11 +360,19 @@ export default function CabinetPage() {
               <div className="panel">
                 <p className="section-kicker">{t(uiLang, "profileSection")}</p>
                 <h1>{t(uiLang, "account")}</h1>
-                <p className="panel-lead">{t(uiLang, "profileHint")}</p>
                 <div className="profile-fields field">
                   <label>{t(uiLang, "email")}</label>
                   <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
                 </div>
+                <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
+                  <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
+                  <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
+                  <div className="ai-connection-grid">
+                    <label>{t(uiLang, "aiProvider")}<select disabled defaultValue=""><option value="">{t(uiLang, "aiNotConnected")}</option><option>OpenAI</option><option>Google Gemini</option><option>Anthropic</option></select></label>
+                    <label>{t(uiLang, "aiModel")}<input disabled value="" placeholder="—" readOnly /></label>
+                    <label>{t(uiLang, "aiApiKey")}<input disabled type="password" value="" placeholder="••••••••••••" readOnly /></label>
+                  </div>
+                </section>
               </div>
             ) : null}
 
@@ -412,15 +424,17 @@ export default function CabinetPage() {
                         <button className="btn ghost" type="button" onClick={() => setConnectionsRetry((value) => value + 1)}>{t(uiLang, "retry")}</button>
                       </div>
                     ) : null}
-                    {connections?.map((connection) => (
+                    {connections?.filter((connection) => connection.channels.length > 0).map((connection) => (
                       <section className="channel-group" key={connection.id}>
                         <header>
                           <div className="channel-group-account">
                             <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
-                            <span className={`connection-status ${connection.status}`}>
-                              {t(uiLang, connection.status === "connected" ? "connectionStatusConnected" : "connectionStatusReauthorization")}
-                            </span>
-                            <span>{t(uiLang, "connectedChannelsCount", { count: connection.channel_count })}</span>
+                            {connection.status === "reauthorization_required" ? (
+                              <span className={`connection-status ${connection.status}`}>
+                                {t(uiLang, "connectionStatusReauthorization")}
+                              </span>
+                            ) : null}
+                            
                           </div>
                           {connection.status === "reauthorization_required" ? (
                             <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
@@ -459,7 +473,7 @@ export default function CabinetPage() {
                                 {subscriberCount ? <small>{subscriberCount}</small> : null}
                                 {videoCount ? <small>{videoCount}</small> : null}
                               </span>
-                              <span className="channel-option-status">{selected ? t(uiLang, "selected") : t(uiLang, "tipSelectChannel")}</span>
+                              <span className="channel-option-status">{selected ? t(uiLang, "activeStudioChannel") : t(uiLang, "switchStudioChannel")}</span>
                             </button>
                           );
                         })}
@@ -469,15 +483,15 @@ export default function CabinetPage() {
                     ))}
                     {connectionsError ? <p className="selection-error" role="alert">{t(uiLang, "connectionsLoadError")}</p> : null}
                   </div>
-                  <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                  <div className="selected-channel-column">
                   {ch ? (
                     <article className="chan-card">
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
-                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "selected")}</span></div>
+                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "activeStudioChannel")}</span></div>
                       </header>
                       <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
-                        <select value={prefs.channelLangs[String(ch.id)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [String(ch.id)]: event.target.value } })}>
+                        <select value={prefs.channelLangs[channelPreferenceKey(ch)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [channelPreferenceKey(ch)]: event.target.value } })}>
                           <option value="">{t(uiLang, "notSet")}</option>
                           {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
                         </select>
@@ -491,6 +505,8 @@ export default function CabinetPage() {
                       <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                     </article>
                   ) : null}
+                    <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                  </div>
                   {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>
               </div>
@@ -503,6 +519,7 @@ export default function CabinetPage() {
                   <div><h2>{t(uiLang, "uiLangTitle")}</h2><div className="opt-list">{PICK_LANGS.map((language) => <button key={language.id} type="button" className={`opt ${prefs.uiLang === language.id ? "on" : ""}`} onClick={() => update({ uiLang: language.id })}><span className="radio" />{language.label}</button>)}</div></div>
                   <div><h2>{t(uiLang, "themeTitle")}</h2><ThemePicker /></div>
                 </div>
+
               </div>
             ) : null}
           </section>

@@ -162,9 +162,18 @@ export function Shell({ children }) {
         </Link>
         <LogoutControl />
       </header>
-      {typeof children === "function"
-        ? children({ view: workspaceView, onViewChange: navigateWorkspace })
-        : children}
+      <div className="shell-content">
+        {typeof children === "function"
+          ? children({ view: workspaceView, onViewChange: navigateWorkspace })
+          : children}
+      </div>
+      <footer className="app-footer">
+        <span>© {new Date().getFullYear()} {t(uiLang, "brand")}</span>
+        <nav aria-label={t(uiLang, "legalLinks")}>
+          <Link href="/privacy">{t(uiLang, "privacy")}</Link>
+          <Link href="/terms">{t(uiLang, "terms")}</Link>
+        </nav>
+      </footer>
     </div>
   );
 }

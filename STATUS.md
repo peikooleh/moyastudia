@@ -1,31 +1,45 @@
 # Current Handoff — Studio UI/UX, 2026-10-04
 
-## Accepted / implemented
+## A1–A11 UI batch
 
-- **A1 — Videos:** implemented and visually accepted at 1440×900, 1024×768, and 390×844. The selected-video workspace uses the available desktop width, titles and metadata no longer overlap, dates are localized, the mobile video list is bounded with internal scrolling, local Save is secondary, and the future **Save to YouTube** control remains disabled.
-- **A2 — Playlists:** implemented. Playlist selection, summary, neutral **Date** label for YouTube `snippet.publishedAt`, localized visibility/date, playlist ID copy/open-on-YouTube, current-page selection, selected count, page sizes 10/30/50/100, pagination, and **Open in Studio** are present. Playlist membership writes are not implemented.
-- **A2.1 — Playlists compact bulk UI:** code is present after the interrupted Codex run. The three large bulk buttons were replaced by one **Bulk actions / Массовые действия / Масові дії** select in the same selection toolbar as **Select on this page** and the selected count. The future Add / Move / Remove items are visible but disabled; the permanent help text is shortened and explicitly says removing from a playlist does not delete the YouTube video. Mobile playlist summary and toolbar styles are compact/responsive.
-- Dev lifecycle tooling is in place through `dev-start.ps1`, `dev-status.ps1`, and `dev-stop.ps1`. Ownership distinguishes `managed`, `unrelated`, `unverified`, and `none`; Access denied does not imply unrelated. Confirmed managed processes can be safely recovered after approved elevated inspection.
+- **Videos:** accepted base layout retained; final QA removed the nested desktop Inspector scrollbar so the page owns vertical scrolling while the catalog list stays bounded.
+- **Playlists:** compact bulk-action toolbar retained; playlist search with EN/RU/UK empty state added.
+- **Calendar:** Today navigation is grouped with month controls. Overflow for busy days no longer expands a long list below the calendar; it opens a bounded right-side day list. Day rows now include thumbnail, title, date, views, likes and comments and open the selected video detail.
+- **Statistics:** search, status filter and sorting are aligned in one toolbar. Sorting supports views, likes, comments, publication date and title. Rows include video thumbnails.
+- **Cabinet:** channel/connection hierarchy and desktop containment polished. Channel language remains configurable here.
+- **Onboarding:** channel-language selection was removed. Existing-channel onboarding now covers UI language and theme; channel connection remains only when no channel exists.
+- **Landing / shared shell:** responsive header, footer and legal links/pages added and visually polished.
+- **Cross-app:** control sizing, focus-visible states, spacing and responsive containment were normalized without changing backend/API/database/OAuth or enabling YouTube writes.
 
-## Validation state
+## QA state
 
-- Before the Codex usage limit interrupted A2.1, the A2 implementation had passed `node --test tests/studio-catalog.test.mjs` (**30/30**), `npm.cmd run lint`, `npm.cmd run build`, and `git diff --check`.
-- A2 was visually reviewed at 1440×900, 1024×768, and 390×844.
-- During A2.1, Codex reported that tests, lint, and production build passed before the run stopped during final browser/runtime recovery.
-- **A2.1 final browser QA was not completed after the last code changes.** Treat its responsive/browser state as pending verification rather than accepted.
-- Known `favicon.ico` 404 is non-blocking. The previously observed `/channels/{id}/catalog/status` 404 returned HTTP 200 in the completed A2 final browser pass.
+- User visually reviewed the current desktop flow during the A1–A11 pass and reported the latest layouts looking good, with targeted issues repaired iteratively.
+- GitHub Actions passed on the immediately preceding UI commit `1d0e494` (API pytest, frontend Node tests, lint and production build via the PR workflow).
+- Final label fix commit `8f4b67d` changes only the Statistics publication-date sort label from a missing key to the existing localized `videoPublishedAt` key; its CI run was queued when this handoff was updated.
+- PR #1 remains **draft** and unmerged.
+- Final local responsive/browser smoke is still required at 1440 / 1024 / 390 before merge because this environment cannot drive the user's localhost/browser.
+- Known non-blocking historical issue: favicon 404.
+- Branch currently diverges from `main`: the UI branch is ahead while `main` also contains later CI-history commits. Reconcile/update the PR branch before merge rather than assuming a clean fast-forward.
+
+## Final code QA — 2026-10-04
+
+- Latest branch head `762f8da` passed GitHub Actions CI run #35: API pytest, frontend Node tests, lint and production build.
+- PR #1 is mergeable but the branch is 2 commits behind `main`; those two `main` commits only carry the CI invocation fix already present on this branch. Prefer squash-merge PR #1 rather than trying to fast-forward 50 UI commits.
+- Code audit found no merge-blocking defect in the current read-only scope.
+- Follow-up architecture debt before enabling write/AI features:
+  - `studio.js`, `globals.css`, `i18n.js` and this handoff file are now large monoliths; split by feature before Write Mode grows.
+  - Quota UI is presentation-only today; real YouTube quota accounting must live server-side and distinguish estimated API cost from Google's project-wide authoritative quota.
+  - AI provider/API-key controls are placeholders only; future secrets must be stored server-side encrypted and never persisted in browser preferences.
+  - Channel language is intentionally a browser preference keyed by stable YouTube channel ID; if it must follow a user across devices, move it to backend persistence.
+  - Google connections with zero managed channels are hidden in Cabinet rather than deleted. A future connection-management flow should explicitly support disconnect/revoke and cleanup.
+  - Legal pages are English placeholder product copy and require proper legal/localization review before public launch.
+- No YouTube write operation is enabled. Treat the next phase as a separate backend/API/security design effort, not as wiring the disabled buttons directly to YouTube.
 
 ## Product boundaries
 
-- YouTube Write Mode remains a placeholder. No playlist membership write, upload, publish, thumbnail write, or other YouTube write request is implemented.
-- Backend/API/database/Alembic/OAuth behavior was not changed by A1/A2/A2.1.
-- Playlist bulk semantics reserved for future Write Mode: **Add** keeps membership in the current playlist; **Move** is future add-to-target + remove-from-current; **Remove from playlist** removes membership only and must not delete the YouTube video.
-
-## Next UI work
-
-1. Complete a final visual/browser check of A2.1 when a browser-capable local environment is available; only fix regressions caused by A2.1.
-2. **A3 — Calendar:** polish the existing calendar without changing read-only data flow; add/verify a clear Today action and ensure `+N` overflow opens a compact day view without forcing excessive page scrolling.
-3. Then continue Statistics, Cabinet, Landing/footer/legal, followed by one cross-app responsive/accessibility polish pass.
+- Read-only YouTube behavior is preserved. Write Mode remains a disabled future placeholder.
+- No backend API, database, Alembic, OAuth, ownership, or YouTube write behavior was changed by this UI batch.
+- Do not merge PR #1 until final CI and local responsive smoke are green.
 
 # Stage 3 Current Handoff - 2026-10-03
 
