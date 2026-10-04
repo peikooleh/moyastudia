@@ -811,17 +811,32 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     });
   }
 
-  function openPlaylistMembershipEditor(mode) {
+  async function openPlaylistMembershipEditor(mode) {
     if (!selectedPlaylistVideoIds.size) {
       setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
       return;
     }
-    const targets = new Set();
-    if (selectedPlaylistId) targets.add(selectedPlaylistId);
-    Object.entries(localPlaylistMemberships).forEach(([playlistId, videoIds]) => {
-      if ([...selectedPlaylistVideoIds].every((videoId) => videoIds.includes(videoId))) targets.add(playlistId);
-    });
-    setPlaylistMembershipEditor({ mode, targets });
+    const videoIds = [...selectedPlaylistVideoIds];
+    setPlaylistMembershipEditor({ mode, targets: new Set(), loading: true });
+    try {
+      const params = new URLSearchParams();
+      videoIds.forEach((videoId) => params.append("video_id", videoId));
+      const response = await apiFetch(`/channels/${channelId}/playlist-memberships?${params.toString()}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipLoadError"));
+      const remote = data.memberships || {};
+      const targets = new Set();
+      playlists.forEach((playlist) => {
+        const allRemote = !playlist.localOnly && videoIds.every((videoId) => (remote[videoId] || []).includes(playlist.id));
+        const local = localPlaylistMemberships[playlist.id];
+        const allLocal = Array.isArray(local) && videoIds.every((videoId) => local.includes(videoId));
+        if (allRemote || allLocal) targets.add(playlist.id);
+      });
+      setPlaylistMembershipEditor({ mode, targets, loading: false });
+    } catch (error) {
+      setPlaylistMembershipEditor(null);
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
   }
 
   function togglePlaylistMembershipTarget(playlistId, checked) {
@@ -1437,18 +1452,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               {playlistMembershipEditor ? (
                 <div className="playlist-membership-editor" role="dialog" aria-label={t(uiLang, "playlistMembershipTitle")}>
                   <strong>{t(uiLang, "playlistMembershipTitle")}</strong>
-                  <p>{t(uiLang, "playlistMembershipHelp")}</p>
+                  <p>{playlistMembershipEditor.loading ? t(uiLang, "playlistMembershipLoading") : t(uiLang, "playlistMembershipHelp")}</p>
                   <div className="playlist-membership-list">
                     {playlists.map((playlist) => (
                       <label key={playlist.id}>
-                        <input type="checkbox" checked={playlistMembershipEditor.targets.has(playlist.id)} onChange={(event) => togglePlaylistMembershipTarget(playlist.id, event.target.checked)} />
+                        <input type="checkbox" checked={playlistMembershipEditor.targets.has(playlist.id)} disabled={playlistMembershipEditor.loading} onChange={(event) => togglePlaylistMembershipTarget(playlist.id, event.target.checked)} />
                         <span>{playlist.title || t(uiLang, "untitledPlaylist")}{playlist.localOnly ? ` · ${t(uiLang, "playlistLocalBadge")}` : ""}</span>
                       </label>
                     ))}
                   </div>
                   <div className="playlist-membership-actions">
                     <button className="btn ghost" type="button" onClick={() => setPlaylistMembershipEditor(null)}>{t(uiLang, "cancel")}</button>
-                    <button className="btn" type="button" onClick={applyLocalPlaylistMemberships}>{t(uiLang, "applyLocally")}</button>
+                    <button className="btn" type="button" disabled={playlistMembershipEditor.loading} onClick={applyLocalPlaylistMemberships}>{t(uiLang, "applyLocally")}</button>
                   </div>
                 </div>
               ) : null}
