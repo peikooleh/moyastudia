@@ -92,6 +92,19 @@ def service_for(refresh_token: str):
     return build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
 
 
+def channel_analytics_summary(refresh_token: str, start_date: str, end_date: str) -> dict:
+    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    response = service.reports().query(
+        ids="channel==MINE",
+        startDate=start_date,
+        endDate=end_date,
+        metrics="estimatedMinutesWatched",
+    ).execute()
+    rows = response.get("rows") or []
+    minutes = float(rows[0][0]) if rows and rows[0] else 0.0
+    return {"estimated_minutes_watched": minutes, "start_date": start_date, "end_date": end_date}
+
+
 QuotaRecorder = Callable[[str, str], None]
 _current_quota_recorder: ContextVar[QuotaRecorder | None] = ContextVar(
     "youtube_quota_recorder", default=None
