@@ -300,15 +300,7 @@ function VideoInspector({
             {t(uiLang, "workingUseSnapshot")}
           </button>
         ) : null}
-        <button
-          className="btn ghost"
-          type="button"
-          disabled={!workingVideo || workingLoading || workingSaving || !Object.keys(workingEdits).length}
-          onClick={saveWorkingVideo}
-        >
-          {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
-        </button>
-        <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !workingVideo?.dirty || workingVideo?.conflict || workingSaving || Object.keys(workingEdits).length > 0} title={!writeMode?.enabled ? t(uiLang, "writeModeDescription") : Object.keys(workingEdits).length ? t(uiLang, "saveLocalBeforeYoutube") : ""} onClick={publishWorkingVideo}>{t(uiLang, "saveToYoutube")}</button>
+        <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} title={!writeMode?.enabled ? t(uiLang, "writeModeDescription") : ""} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
@@ -913,15 +905,39 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }
 
   async function publishWorkingVideo() {
-    if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict || Object.keys(workingEdits).length) return;
+    if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict) return;
+    if (!workingVideo.dirty && !Object.keys(workingEdits).length) return;
     if (!window.confirm(t(uiLang, "publishMetadataConfirm"))) return;
     setWorkingSaving(true);
     setWorkingError("");
+    let draft = workingVideo;
     try {
-      const response = await apiFetch(catalogVideoPublishUrl(channelId, workingVideo.id), {
+      if (Object.keys(workingEdits).length) {
+        const saveResponse = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(workingVideoPatch(workingVideo.revision, workingEdits)),
+        });
+        const saved = await saveResponse.json();
+        if (saveResponse.status === 409 && saved.detail?.current) {
+          setWorkingVideo(saved.detail.current);
+          setWorkingDraft(saved.detail.current.effective);
+          setWorkingSaveState("conflict");
+          throw new Error(t(uiLang, "workingRevisionError"));
+        }
+        if (!saveResponse.ok) throw new Error(saved.detail || t(uiLang, "workingSaveError"));
+        draft = saved;
+        setWorkingVideo(saved);
+        setWorkingDraft(saved.effective);
+        setWorkingEdits({});
+        setWorkingSaveState(saved.conflict ? "conflict" : "saved");
+        if (saved.conflict) throw new Error(t(uiLang, "workingRevisionError"));
+      }
+
+      const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ revision: workingVideo.revision }),
+        body: JSON.stringify({ revision: draft.revision }),
       });
       const data = await response.json();
       if (response.status === 409 && data.detail?.current) {
@@ -943,7 +959,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setWorkingDetailReload((current) => current + 1);
       setCatalogReload((current) => current + 1);
     } catch (error) {
-      setWorkingSaveState("error");
+      setWorkingSaveState((current) => current === "conflict" ? current : "error");
       setWorkingError(String(error.message || error));
     } finally {
       setWorkingSaving(false);
