@@ -56,6 +56,13 @@ class ChannelSelection(BaseModel):
     youtube_channel_ids: list[str]
 
 
+class WriteModeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    confirmation: Literal["enable_youtube_writes"] | None = None
+
+
 class CatalogSyncRequest(BaseModel):
     mode: Literal["initial", "incremental", "reconcile"]
 
@@ -115,6 +122,24 @@ def _oauth_status_redirect(path: str, parameter: str, status: str, state: str = 
     if state:
         clear_oauth_state_cookie(response, state)
     return response
+
+
+@app.get("/write-mode")
+def get_write_mode(user: User = Depends(get_current_user)):
+    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": False}
+
+
+@app.put("/write-mode", dependencies=[Depends(require_same_origin)])
+def set_write_mode(
+    update: WriteModeUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if update.enabled and update.confirmation != "enable_youtube_writes":
+        raise HTTPException(422, "Explicit Write Mode confirmation is required")
+    user.write_mode_enabled = update.enabled
+    db.commit()
+    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": False}
 
 
 @app.get("/quota/today")
