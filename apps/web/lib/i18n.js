@@ -2,6 +2,7 @@ const dict = {
   en: {
     playlistVisibilityStageHint: "Change visibility locally. Use Save to YouTube to publish the change.",
     playlistMoveUpStageHint: "Move this video one position up locally.",
+    playlistReorderPositionSortHint: "Switch sorting to playlist order to move videos.",
     playlistMoveDownStageHint: "Move this video one position down locally.",
     playlistQuickSaveHint: "Send the staged visibility and playlist order changes to YouTube.",
     playlistQuickSaveConfirm: "Send the staged visibility and playlist order changes to YouTube?",
@@ -525,6 +526,7 @@ const dict = {
   ru: {
     playlistVisibilityStageHint: "Изменить видимость локально. Для отправки изменения используйте «Сохранить на YouTube».",
     playlistMoveUpStageHint: "Локально переместить видео на одну позицию выше.",
+    playlistReorderPositionSortHint: "Переключите сортировку на порядок плейлиста, чтобы перемещать видео.",
     playlistMoveDownStageHint: "Локально переместить видео на одну позицию ниже.",
     playlistQuickSaveHint: "Отправить подготовленные изменения видимости и порядка плейлиста на YouTube.",
     playlistQuickSaveConfirm: "Отправить подготовленные изменения видимости и порядка плейлиста на YouTube?",
@@ -1048,6 +1050,7 @@ const dict = {
   uk: {
     playlistVisibilityStageHint: "Змінити видимість локально. Для надсилання зміни використайте «Зберегти на YouTube».",
     playlistMoveUpStageHint: "Локально перемістити відео на одну позицію вище.",
+    playlistReorderPositionSortHint: "Перемкніть сортування на порядок плейлиста, щоб переміщувати відео.",
     playlistMoveDownStageHint: "Локально перемістити відео на одну позицію нижче.",
     playlistQuickSaveHint: "Надіслати підготовлені зміни видимості та порядку плейлиста на YouTube.",
     playlistQuickSaveConfirm: "Надіслати підготовлені зміни видимості та порядку плейлиста на YouTube?",
