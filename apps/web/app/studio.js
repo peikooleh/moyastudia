@@ -402,11 +402,12 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
   }
   const date = selected.slot || selected.publishedAt || "";
   const displayDate = formatStudioDate(date, uiLang);
-  const parsedDate = date ? new Date(date) : null;
-  const dateValue = parsedDate && !Number.isNaN(parsedDate.getTime()) ? localDateKey(parsedDate) : "";
-  const timeValue = parsedDate && !Number.isNaN(parsedDate.getTime())
-    ? `${String(parsedDate.getHours()).padStart(2, "0")}:${String(parsedDate.getMinutes()).padStart(2, "0")}`
+  const scheduledDate = selected.slot ? new Date(selected.slot) : null;
+  const dateValue = scheduledDate && !Number.isNaN(scheduledDate.getTime()) ? localDateKey(scheduledDate) : "";
+  const timeValue = scheduledDate && !Number.isNaN(scheduledDate.getTime())
+    ? `${String(scheduledDate.getHours()).padStart(2, "0")}:${String(scheduledDate.getMinutes()).padStart(2, "0")}`
     : "";
+  const canChooseScheduleDate = Boolean(selected.slot) || selected.privacy === "private";
   return (
     <aside className="calendar-event-details" aria-label={t(uiLang, "calendarEventDetails")}>
       {selected.thumb ? <img className="calendar-event-thumb" src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
@@ -445,7 +446,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
       <div className="calendar-manipulation-panel">
         <label>
           <span>{t(uiLang, "calendarDate")}</span>
-          <input type="date" value={dateValue} disabled={!selected.slot} title={!selected.slot ? t(uiLang, "calendarScheduleFirstHint") : t(uiLang, "calendarDateHint")} onChange={(event) => onDate(selected, event.target.value)} />
+          <input type="date" value={dateValue} disabled={!canChooseScheduleDate} title={!canChooseScheduleDate ? t(uiLang, "calendarPublishedDateLockedHint") : t(uiLang, "calendarDateHint")} onChange={(event) => onDate(selected, event.target.value)} />
         </label>
         <label>
           <span>{t(uiLang, "calendarTime")}</span>
@@ -1762,7 +1763,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }
 
   function stageCalendarDay(video, dayKey) {
-    const source = calendarDrafts[video.id]?.publishAt || video.slot || video.publishedAt || "";
+    const source = calendarDrafts[video.id]?.publishAt || video.slot || "";
     const sourceDate = source ? new Date(source) : new Date();
     const [year, monthValue, day] = dayKey.split("-").map(Number);
     const next = new Date(year, monthValue - 1, day, sourceDate.getHours(), sourceDate.getMinutes(), 0, 0);
@@ -2455,7 +2456,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <button
                         key={video.id}
                         type="button"
-                        draggable
+                        draggable={Boolean(video.slot)}
+                        title={!video.slot ? t(uiLang, "calendarPublishedDragLockedHint") : t(uiLang, "calendarDragScheduledHint")}
                         className={`cal-event status-${video.status || video.privacy || "unknown"} ${video.calendarStaged ? "staged" : ""} ${video.id === selectedId ? "active" : ""}`}
                         onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
                         onContextMenu={(event) => {
@@ -2477,6 +2479,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
                           <small>{statusLabel(uiLang, video.status || video.privacy)}</small>
                           <small>{t(uiLang, "videoDuration")}: {formatStudioDuration(video.duration) || "—"}</small>
+                          <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
                         </span>
                       </button>
                     ))}
@@ -2539,7 +2542,17 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <button
                       className={video.id === selectedId ? "active" : ""}
                       type="button"
+                      draggable={Boolean(video.slot)}
+                      title={!video.slot ? t(uiLang, "calendarPublishedDragLockedHint") : t(uiLang, "calendarDragScheduledHint")}
                       aria-pressed={video.id === selectedId}
+                      onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setPlaylistSelectedVideo(null);
+                        setSelectedId(video.id);
+                        setCalendarDetailDay("");
+                        setCalendarContext({ videoId: video.id, x: event.clientX, y: event.clientY });
+                      }}
                       onClick={() => {
                         setPlaylistSelectedVideo(null);
                         setSelectedId(video.id);
