@@ -432,7 +432,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistDraft, setPlaylistDraft] = useState(null);
   const [playlistDescriptionExpanded, setPlaylistDescriptionExpanded] = useState(false);
   const [playlistMetadataEditing, setPlaylistMetadataEditing] = useState(false);
-  const [playlistQuickDraft, setPlaylistQuickDraft] = useState({ playlistId: "", privacy: "", positions: {} });
+  const [playlistQuickDraft, setPlaylistQuickDraft] = useState({ playlistId: "", privacy: "", positions: {}, basePositions: {} });
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
@@ -756,7 +756,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setPlaylistPage(0);
     setSelectedPlaylistVideoIds(new Set());
     setPlaylistMetadataEditing(false);
-    setPlaylistQuickDraft({ playlistId: selectedPlaylistId, privacy: "", positions: {} });
+    setPlaylistQuickDraft({ playlistId: selectedPlaylistId, privacy: "", positions: {}, basePositions: {} });
   }, [selectedPlaylistId]);
 
   useEffect(() => {
@@ -1103,23 +1103,30 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         return entry;
       }),
     }));
-    setPlaylistQuickDraft((current) => ({
-      playlistId: selectedPlaylist.id,
-      privacy: current.playlistId === selectedPlaylist.id ? current.privacy : "",
-      positions: {
-        ...(current.playlistId === selectedPlaylist.id ? current.positions : {}),
-        [item.playlistItemId]: otherPosition,
-        [other.playlistItemId]: itemPosition,
-      },
-    }));
+    setPlaylistQuickDraft((current) => {
+      const samePlaylist = current.playlistId === selectedPlaylist.id;
+      const basePositions = samePlaylist && Object.keys(current.basePositions || {}).length
+        ? current.basePositions
+        : Object.fromEntries(items.map((entry) => [entry.playlistItemId, Number(entry.position)]));
+      const desiredPositions = Object.fromEntries(items.map((entry) => {
+        if (entry.playlistItemId === item.playlistItemId) return [entry.playlistItemId, otherPosition];
+        if (entry.playlistItemId === other.playlistItemId) return [entry.playlistItemId, itemPosition];
+        return [entry.playlistItemId, Number(entry.position)];
+      }));
+      const positions = Object.fromEntries(Object.entries(desiredPositions).filter(
+        ([playlistItemId, position]) => Number(basePositions[playlistItemId]) !== Number(position)
+      ));
+      return { playlistId: selectedPlaylist.id, privacy: samePlaylist ? current.privacy : "", positions, basePositions };
+    });
   }
 
   function stagePlaylistPrivacy(privacy) {
     if (!selectedPlaylist || selectedPlaylist.localOnly) return;
     setPlaylistQuickDraft((current) => ({
       playlistId: selectedPlaylist.id,
-      privacy,
+      privacy: privacy === (selectedPlaylist.privacy || "private") ? "" : privacy,
       positions: current.playlistId === selectedPlaylist.id ? current.positions : {},
+      basePositions: current.playlistId === selectedPlaylist.id ? current.basePositions : {},
     }));
   }
 
@@ -1153,7 +1160,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
       }
-      setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {} });
+      setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {}, basePositions: {} });
       setPlaylistContentsRetry((current) => current + 1);
       setPlaylistIdCopyStatus(t(uiLang, "playlistQuickSaved"));
     } catch (error) {
@@ -1165,7 +1172,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
 
   function discardPlaylistQuickChanges() {
     if (!selectedPlaylist) return;
-    setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {} });
+    setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {}, basePositions: {} });
     setPlaylistContentsRetry((current) => current + 1);
     setPlaylistIdCopyStatus("");
   }
