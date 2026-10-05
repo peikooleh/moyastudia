@@ -2304,3 +2304,11 @@ body {
   font-size: 11px;
   font-weight: 500;
 }
+
+
+/* Keep the collapsed playlist description on complete text lines. */
+.playlist-metadata-editor:not(.editing) .playlist-description-value:not(.expanded) {
+  line-height: 1.45;
+  height: calc(3 * 1.45em);
+  max-height: calc(3 * 1.45em);
+}
