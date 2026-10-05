@@ -1889,3 +1889,72 @@ body {
 .working-controls .conflict-actions {
   width: 100%;
 }
+
+
+/* Video page polish: strengthen hierarchy and small-text readability without changing layout. */
+.studio-list .item-meta {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.video-summary-meta {
+  font-size: 13px;
+}
+.video-summary-meta dt,
+.video-properties > label,
+.video-properties legend {
+  font-size: 12px;
+  font-weight: 500;
+}
+.video-summary-meta code {
+  font-size: 12px;
+}
+.inspector-edit h3,
+.video-properties h3 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.inspector-edit label,
+.editor-field-heading label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.field-limit {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.video-properties fieldset label,
+.captions-status strong {
+  font-size: 13px;
+}
+.captions-status,
+.video-properties fieldset small,
+.video-properties > p,
+.write-action-help {
+  font-size: 12px;
+}
+.ai-improve-btn {
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ai-improve-btn:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.captions-upload {
+  min-height: 34px;
+  padding-block: 6px;
+  font-size: 12px;
+}
+.video-summary {
+  padding-bottom: 14px;
+}
+.inspector-edit {
+  padding-top: 14px;
+}
