@@ -1827,6 +1827,30 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       ) : null}
                     </div>
                   )}
+                  {!selectedPlaylist.localOnly ? (
+                    <aside className="playlist-settings-panel">
+                      <div className="playlist-setting">
+                        <span>{t(uiLang, "playlistVisibility")}</span>
+                        {playlistEditing ? (
+                          <select
+                            value={effectivePlaylistDraft?.privacy || "private"}
+                            disabled={playlistSaving}
+                            title={t(uiLang, "playlistVisibility")}
+                            onChange={(event) => updatePlaylistDraft("privacy", event.target.value)}
+                          >
+                            <option value="public">{t(uiLang, "filterPublic")}</option>
+                            <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+                            <option value="private">{t(uiLang, "filterPrivate")}</option>
+                          </select>
+                        ) : <strong>{statusLabel(uiLang, selectedPlaylist.privacy)}</strong>}
+                      </div>
+                      <div className="playlist-setting playlist-order-setting">
+                        <span>{t(uiLang, "playlistCompositionOrder")}</span>
+                        <strong>{t(uiLang, "playlistVideosCount", { count: selectedPlaylist.itemCount ?? currentPlaylistContents?.items?.length ?? 0 })}</strong>
+                        <small>{t(uiLang, "playlistOrderHint")}</small>
+                      </div>
+                    </aside>
+                  ) : null}
                   <div className="playlist-summary-footer">
                     <div className="playlist-summary-meta">
                       <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
