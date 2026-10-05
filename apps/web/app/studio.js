@@ -1690,6 +1690,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 onChange={(event) => setPlaylistQuery(event.target.value)}
                 placeholder={t(uiLang, "playlistSearch")}
                 aria-label={t(uiLang, "playlistSearch")}
+                title={t(uiLang, "playlistSearchHint")}
               />
             </div>
             <form className="playlist-create" onSubmit={(event) => {
@@ -1711,8 +1712,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 setPlaylistIdCopyStatus(t(uiLang, "playlistCreatedLocally"));
               }).catch((error) => setPlaylistIdCopyStatus(String(error.message || error)));
             }}>
-              <input className="search" type="text" value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder={t(uiLang, "playlistNewTitle")} aria-label={t(uiLang, "playlistNewTitle")} maxLength={150} />
-              <button className="btn" type="submit">+ {t(uiLang, "playlistCreate")}</button>
+              <input className="search" type="text" value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder={t(uiLang, "playlistNewTitle")} aria-label={t(uiLang, "playlistNewTitle")} title={t(uiLang, "playlistCreateHint")} maxLength={150} />
+              <button className="btn" type="submit" title={t(uiLang, "playlistCreateButtonHint")}>+ {t(uiLang, "playlistCreate")}</button>
             </form>
             <div className="playlist-picker-list">
               {currentPlaylistState?.loading ? <p className="empty" role="status">{t(uiLang, "playlistsLoading")}</p> : null}
@@ -1732,6 +1733,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   className={`playlist-picker-row ${playlist.id === selectedPlaylistId ? "active" : ""}`}
                   type="button"
                   aria-pressed={playlist.id === selectedPlaylistId}
+                  title={t(uiLang, "playlistOpenHint", { title: playlist.title || t(uiLang, "untitledPlaylist") })}
                   onClick={() => setSelectedPlaylistId(playlist.id)}
                 >
                   {playlist.thumb ? <img src={playlist.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
@@ -1787,7 +1789,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {!playlistEditing ? <button className="playlist-edit-metadata" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : null}
                       {playlistEditing ? (
                         <div className="playlist-metadata-actions">
-                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "cancel")}</button>
+                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
                           <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
                             <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
                           </span>
@@ -1802,7 +1804,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
                       {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
                     </div>
-                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{selectedPlaylist.localOnly ? <button className="text-button danger-text" type="button" onClick={deleteLocalPlaylist}>{t(uiLang, "playlistDeleteLocal")}</button> : <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a>}</div> : null}
+                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" title={t(uiLang, "copyPlaylistIdHint")} onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{selectedPlaylist.localOnly ? <button className="text-button danger-text" type="button" onClick={deleteLocalPlaylist}>{t(uiLang, "playlistDeleteLocal")}</button> : <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer" title={t(uiLang, "openPlaylistYoutubeHint")}>{t(uiLang, "openPlaylistOnYoutube")}</a>}</div> : null}
                   </div>
                   {playlistIdCopyStatus ? <span className="playlist-copy-status" role="status">{playlistIdCopyStatus}</span> : null}
                 </div>
@@ -1822,7 +1824,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             ) : null}
             <div className="playlist-list-controls">
               <div className="playlist-selection-controls">
-                <label className="playlist-select-all">
+                <label className="playlist-select-all" title={t(uiLang, "playlistSelectPageHint")}>
                   <input
                     type="checkbox"
                     checked={visiblePlaylistItems.length > 0 && visiblePlaylistItems.every((item) => selectedPlaylistVideoIds.has(item.videoId))}
@@ -1835,11 +1837,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
                   <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
-                  <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
-                  <button type="button" disabled={!selectedPlaylistVideoIds.size || !selectedPlaylist?.localOnly} title={selectedPlaylist?.localOnly ? t(uiLang, "playlistRemoveFromPlaylist") : t(uiLang, "playlistRemoveYoutubeUnavailable")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistMoveToPlaylistHint")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
+                  <button type="button" disabled={!selectedPlaylistVideoIds.size || !selectedPlaylist?.localOnly} title={selectedPlaylist?.localOnly ? t(uiLang, "playlistRemoveFromPlaylistHint") : t(uiLang, "playlistRemoveYoutubeUnavailable")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
-              <label className="playlist-page-size">
+              <label className="playlist-page-size" title={t(uiLang, "playlistPageSizeHint")}>
                 {t(uiLang, "playlistPageSize")}
                 <select value={playlistPageSize} onChange={(event) => {
                   const size = Number(event.target.value);
@@ -1853,7 +1855,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-video-picker" role="dialog" aria-label={t(uiLang, "playlistAddVideos")}>
                   <div className="playlist-video-picker-head">
                     <strong>{t(uiLang, "playlistChooseVideos")}</strong>
-                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
+                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} title={t(uiLang, "playlistVideoPickerSearchHint")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
                   </div>
                   <div className="playlist-video-picker-list">
                     {videos.filter((video) => {
@@ -1873,8 +1875,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   </div>
                   <div className="playlist-membership-actions">
                     <span>{t(uiLang, "playlistSelectedCount", { count: playlistVideoPicker.selected.size })}</span>
-                    <button className="btn ghost" type="button" onClick={() => setPlaylistVideoPicker(null)}>{t(uiLang, "cancel")}</button>
-                    <button className="btn" type="button" disabled={!playlistVideoPicker.selected.size || playlistVideoPicker.loading} onClick={addPickedVideosToCurrentPlaylist}>{t(uiLang, "playlistAddSelected")}</button>
+                    <button className="btn ghost" type="button" onClick={() => setPlaylistVideoPicker(null)}>{t(uiLang, "actionCancel")}</button>
+                    <button className="btn" type="button" title={t(uiLang, "playlistAddSelectedHint")} disabled={!playlistVideoPicker.selected.size || playlistVideoPicker.loading} onClick={addPickedVideosToCurrentPlaylist}>{t(uiLang, "playlistAddSelected")}</button>
                   </div>
                 </div>
               ) : null}
@@ -1891,8 +1893,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     ))}
                   </div>
                   <div className="playlist-membership-actions">
-                    <button className="btn ghost" type="button" onClick={() => setPlaylistMembershipEditor(null)}>{t(uiLang, "cancel")}</button>
-                    <button className="btn" type="button" disabled={playlistMembershipEditor.loading} onClick={applyLocalPlaylistMemberships}>{t(uiLang, "applyLocally")}</button>
+                    <button className="btn ghost" type="button" onClick={() => setPlaylistMembershipEditor(null)}>{t(uiLang, "actionCancel")}</button>
+                    <button className="btn" type="button" title={t(uiLang, "playlistApplyLocallyHint")} disabled={playlistMembershipEditor.loading} onClick={applyLocalPlaylistMemberships}>{t(uiLang, "applyLocally")}</button>
                   </div>
                 </div>
               ) : null}
@@ -1927,16 +1929,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         {(cached?.publishedAt || item.videoSnapshot?.publishedAt) ? <small><time dateTime={cached?.publishedAt || item.videoSnapshot?.publishedAt}>{formatPlaylistDate(cached?.publishedAt || item.videoSnapshot?.publishedAt, uiLang) || "—"}</time></small> : <small>—</small>}
                         {!cached ? <small>{t(uiLang, selectable ? "playlistReadOnlyVideo" : "playlistVideoNotCached")}</small> : null}
                       </span>
-                      {selectable ? <span className="playlist-open-video">{t(uiLang, "openInStudio")}</span> : null}
+                      {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
                     </button>
                   </li>
                 );
               })}
             </ol>
             <nav className="playlist-pagination" aria-label={t(uiLang, "playlistPagination")}>
-              <button className="btn ghost" type="button" disabled={playlistPage === 0 || currentPlaylistContents?.loading} onClick={() => setPlaylistPage((page) => Math.max(0, page - 1))}>{t(uiLang, "playlistPreviousPage")}</button>
+              <button className="btn ghost" type="button" disabled={playlistPage === 0 || currentPlaylistContents?.loading} title={t(uiLang, "playlistPreviousPageHint")} onClick={() => setPlaylistPage((page) => Math.max(0, page - 1))}>{t(uiLang, "playlistPreviousPage")}</button>
               <span>{t(uiLang, "playlistPageStatus", { page: playlistPage + 1, count: visiblePlaylistItems.length })}</span>
-              <button className="btn ghost" type="button" disabled={!hasNextPlaylistPage || currentPlaylistContents?.loading} onClick={() => loadPlaylistPage()}>
+              <button className="btn ghost" type="button" disabled={!hasNextPlaylistPage || currentPlaylistContents?.loading} title={t(uiLang, "playlistNextPageHint")} onClick={() => loadPlaylistPage()}>
                 {currentPlaylistContents?.loading ? t(uiLang, "playlistItemsLoading") : t(uiLang, "playlistNextPage")}
               </button>
             </nav>
