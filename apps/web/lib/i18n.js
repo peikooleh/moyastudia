@@ -1,5 +1,11 @@
 const dict = {
   en: {
+    playlistVisibilityStageHint: "Change visibility locally. Use Save to YouTube to publish the change.",
+    playlistMoveUpStageHint: "Move this video one position up locally.",
+    playlistMoveDownStageHint: "Move this video one position down locally.",
+    playlistQuickSaveHint: "Send the staged visibility and playlist order changes to YouTube.",
+    playlistQuickSaveConfirm: "Send the staged visibility and playlist order changes to YouTube?",
+    playlistQuickSaved: "Playlist visibility and order updated on YouTube.",
     playlistVisibilityHint: "Change playlist visibility. You will be asked to confirm before it is sent to YouTube.",
     playlistVisibilityConfirm: "Change playlist visibility to “{visibility}” on YouTube?",
     playlistVisibilitySaved: "Playlist visibility updated on YouTube.",
@@ -513,6 +519,12 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    playlistVisibilityStageHint: "Изменить видимость локально. Для отправки изменения используйте «Сохранить на YouTube».",
+    playlistMoveUpStageHint: "Локально переместить видео на одну позицию выше.",
+    playlistMoveDownStageHint: "Локально переместить видео на одну позицию ниже.",
+    playlistQuickSaveHint: "Отправить подготовленные изменения видимости и порядка плейлиста на YouTube.",
+    playlistQuickSaveConfirm: "Отправить подготовленные изменения видимости и порядка плейлиста на YouTube?",
+    playlistQuickSaved: "Видимость и порядок плейлиста обновлены на YouTube.",
     playlistVisibilityHint: "Изменить видимость плейлиста. Перед отправкой на YouTube потребуется подтверждение.",
     playlistVisibilityConfirm: "Изменить видимость плейлиста на «{visibility}» на YouTube?",
     playlistVisibilitySaved: "Видимость плейлиста обновлена на YouTube.",
@@ -1026,6 +1038,12 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    playlistVisibilityStageHint: "Змінити видимість локально. Для надсилання зміни використайте «Зберегти на YouTube».",
+    playlistMoveUpStageHint: "Локально перемістити відео на одну позицію вище.",
+    playlistMoveDownStageHint: "Локально перемістити відео на одну позицію нижче.",
+    playlistQuickSaveHint: "Надіслати підготовлені зміни видимості та порядку плейлиста на YouTube.",
+    playlistQuickSaveConfirm: "Надіслати підготовлені зміни видимості та порядку плейлиста на YouTube?",
+    playlistQuickSaved: "Видимість і порядок плейлиста оновлено на YouTube.",
     playlistVisibilityHint: "Змінити видимість плейлиста. Перед надсиланням на YouTube потрібне підтвердження.",
     playlistVisibilityConfirm: "Змінити видимість плейлиста на «{visibility}» на YouTube?",
     playlistVisibilitySaved: "Видимість плейлиста оновлено на YouTube.",
