@@ -669,6 +669,84 @@ def update_playlist_item_position(
     return {"id": response.get("id") or playlist_item_id, "position": (response.get("snippet") or {}).get("position", position)}
 
 
+def reorder_playlist_items(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    playlist_item_ids: list[str],
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    wanted = list(dict.fromkeys(value for value in playlist_item_ids if value))
+    current = []
+    token = None
+    while True:
+        kwargs = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
+        if token:
+            kwargs["pageToken"] = token
+        response = _execute(service.playlistItems().list(**kwargs), "playlistItems.list", recorder)
+        current.extend(response.get("items") or [])
+        token = response.get("nextPageToken")
+        if not token:
+            break
+    current_ids = [item.get("id") or "" for item in current]
+    if len(wanted) != len(current_ids) or set(wanted) != set(current_ids):
+        raise ValueError("playlist order must contain every current playlist item exactly once")
+    by_id = {item.get("id"): item for item in current}
+    working = list(current_ids)
+    updated = 0
+    for target_position, playlist_item_id in enumerate(wanted):
+        current_position = working.index(playlist_item_id)
+        if current_position == target_position:
+            continue
+        snippet = (by_id[playlist_item_id].get("snippet") or {})
+        resource = snippet.get("resourceId") or {}
+        _execute(
+            service.playlistItems().update(
+                part="snippet",
+                body={
+                    "id": playlist_item_id,
+                    "snippet": {
+                        "playlistId": playlist_id,
+                        "resourceId": {
+                            "kind": resource.get("kind") or "youtube#video",
+                            "videoId": resource.get("videoId"),
+                        },
+                        "position": target_position,
+                    },
+                },
+            ),
+            "playlistItems.update",
+            recorder,
+        )
+        working.pop(current_position)
+        working.insert(target_position, playlist_item_id)
+        updated += 1
+    return {"ok": True, "playlistId": playlist_id, "updated": updated, "playlistItemIds": working}
+
+
+def delete_playlist_item(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    playlist_item_id: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    listed = _execute(
+        service.playlistItems().list(part="snippet", id=playlist_item_id, maxResults=1),
+        "playlistItems.list",
+        recorder,
+    ).get("items") or []
+    if not listed or (listed[0].get("snippet") or {}).get("playlistId") != playlist_id:
+        raise LookupError("playlist item does not belong to the selected playlist")
+    _execute(service.playlistItems().delete(id=playlist_item_id), "playlistItems.delete", recorder)
+    return {"ok": True, "playlistItemId": playlist_item_id}
+
+
+
 def add_videos_to_playlist(
     refresh_token: str,
     youtube_channel_id: str,
