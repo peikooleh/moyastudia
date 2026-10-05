@@ -35,6 +35,30 @@ class User(Base):
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    ai_connections: Mapped[list["AIConnection"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class AIConnection(Base):
+    __tablename__ = "ai_connections"
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", "model", name="uq_ai_connection_user_provider_model"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(128))
+    encrypted_api_key: Mapped[str] = mapped_column(Text)
+    title_prompt: Mapped[str] = mapped_column(Text, default="")
+    description_prompt: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="ai_connections")
 
 
 class Identity(Base):
