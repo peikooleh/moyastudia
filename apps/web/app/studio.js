@@ -445,31 +445,30 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
       <div className="calendar-manipulation-panel">
         <label>
           <span>{t(uiLang, "calendarDate")}</span>
-          <input type="date" value={dateValue} onChange={(event) => onDate(selected, event.target.value)} />
+          <input type="date" value={dateValue} disabled={!selected.slot} title={!selected.slot ? t(uiLang, "calendarScheduleFirstHint") : t(uiLang, "calendarDateHint")} onChange={(event) => onDate(selected, event.target.value)} />
         </label>
         <label>
           <span>{t(uiLang, "calendarTime")}</span>
-          <input type="time" value={timeValue} onChange={(event) => onTime(selected, event.target.value)} />
+          <input type="time" value={timeValue} disabled={!selected.slot} title={!selected.slot ? t(uiLang, "calendarScheduleFirstHint") : t(uiLang, "calendarTimeHint")} onChange={(event) => onTime(selected, event.target.value)} />
         </label>
         <label>
           <span>{t(uiLang, "videoVisibility")}</span>
-          <select value={draft?.privacy || selected.privacy || "private"} onChange={(event) => onStage(selected, { privacy: event.target.value, publishAt: event.target.value === "private" ? (draft?.publishAt ?? selected.slot ?? null) : null })}>
+          <select title={t(uiLang, "calendarVisibilityHint")} value={draft?.privacy || selected.privacy || "private"} onChange={(event) => onStage(selected, { privacy: event.target.value, publishAt: event.target.value === "private" ? (draft?.publishAt ?? selected.slot ?? null) : null })}>
             <option value="public">{t(uiLang, "filterPublic")}</option>
             <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
             <option value="private">{t(uiLang, "filterPrivate")}</option>
           </select>
         </label>
         {selected.slot ? (
-          <button className="btn ghost" type="button" onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
+          <button className="btn ghost" type="button" title={t(uiLang, "calendarCancelScheduleHint")} onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
             {t(uiLang, "calendarCancelSchedule")}
           </button>
         ) : selected.privacy === "public" ? (
-          <button className="btn ghost" type="button" onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
+          <button className="btn ghost" type="button" title={t(uiLang, "calendarUnpublishHint")} onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
             {t(uiLang, "calendarUnpublish")}
           </button>
         ) : null}
       </div>
-      {selected.calendarStaged ? <p className="item-change">{t(uiLang, "calendarStaged")}</p> : null}
       {pendingCount ? <YoutubeStagedSave uiLang={uiLang} count={pendingCount} saving={saving} status={saveStatus} writeMode={writeMode} onDiscard={onDiscard} onSave={onSave} /> : saveStatus ? <p className="calendar-save-status">{saveStatus}</p> : null}
       {workingVideo?.conflict ? <p className="calendar-conflict">{t(uiLang, "workingConflict")}</p> : null}
     </aside>
