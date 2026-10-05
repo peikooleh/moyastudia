@@ -813,6 +813,8 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "description": "Snapshot description",
         "tags": "snapshot, tags",
         "language": None,
+        "category": None,
+        "madeForKids": None,
     }
     assert saved_item["dirty"] is True
     assert saved_item["revision"] == 1
@@ -872,6 +874,8 @@ def test_working_metadata_round_trips_above_youtube_limits(client, test_database
         "description": description,
         "tags": tags,
         "language": "",
+        "category": "",
+        "madeForKids": None,
     }
 
 
