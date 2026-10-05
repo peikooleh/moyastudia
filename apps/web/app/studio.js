@@ -239,8 +239,7 @@ function VideoInspector({
         <div className="video-summary-thumbnail">
           {thumbnailPreview || selected.thumb ? <img src={thumbnailPreview || selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
           <div className="thumbnail-actions">
-            <button className="btn ghost" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : ""} onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadThumbnail(file); }} />
-            <button className="btn ghost" type="button" disabled title="YouTube Data API не предоставляет операции удаления пользовательской обложки">{t(uiLang, "removeThumbnail")}</button>
+            <button className="btn ghost thumbnail-change-action" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : ""} onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadThumbnail(file); }} />
           </div>
         </div>
         <div className="video-summary-copy">
