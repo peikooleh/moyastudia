@@ -54,6 +54,22 @@ def _video_fixture(test_database, *, write_mode=True):
         return session_token, channel.id, video.id
 
 
+def test_video_settings_patch_tracks_category_and_audience(client, test_database):
+    token, channel_id, video_id = _video_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    response = client.patch(
+        f"/channels/{channel_id}/videos/{video_id}/working",
+        headers={"Origin": settings.frontend_origin},
+        json={"revision": 4, "category": "24", "madeForKids": False},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["effective"]["category"] == "24"
+    assert body["effective"]["madeForKids"] is False
+    assert body["dirtyFields"]["category"] is True
+    assert body["dirtyFields"]["madeForKids"] is False
+
+
 def test_single_video_publish_requires_write_mode(client, test_database, monkeypatch):
     token, channel_id, video_id = _video_fixture(test_database, write_mode=False)
     client.cookies.set(settings.session_cookie_name, token)
