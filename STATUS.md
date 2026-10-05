@@ -799,3 +799,20 @@ Security:
 - Добавлены backend tests для local playlist persistence, same-origin и cross-user ownership; migration test проверяет наличие `local_playlists`.
 - Исправлена локализация playlist removal: en/ru/uk keys снова находятся в своих языковых секциях, без duplicate-key override.
 - Реальные YouTube playlist mutations, thumbnail upload, captions upload и destructive video delete в этом hardening-проходе намеренно не включались. Их нужно делать отдельными write increments после merge текущей ветки.
+
+## Запись 2026-10-05 — AI connections и Cabinet polish
+
+- Добавлена migration `0011_ai_connections`: пользовательские AI connections хранят provider/model, зашифрованный API key и отдельные prompts для улучшения title/description. Уникальность — на `(user_id, provider, model)`.
+- Backend реализует owner-scoped `GET /ai-connections` и same-origin `PUT /ai-connections`. Plaintext API key не возвращается: клиент получает только `has_api_key`; новый/заменённый ключ шифруется тем же server-side encryption boundary. Реальных вызовов OpenAI/Gemini/Anthropic и AI Improve actions пока нет.
+- Cabinet → Account теперь редактирует provider/model/API key и prompts. Сохранённый ключ отображается только как masked state; пустое поле при повторном сохранении не заменяет существующий ключ.
+- Полировка Cabinet: кнопка отмены полностью локализована через общий `actionCancel`; отмена/повторное закрытие настроек восстанавливает сохранённые prompts, очищает transient notice/error и не сохраняет изменения. Текст AI-блока приведён в соответствие фактической server-side encrypted persistence.
+- Ветка реализации: `feature-ai-connections`. Документация ниже/выше может содержать исторические записи этапов; эта запись является актуализацией фактического состояния AI connections на 2026-10-05.
+
+### Ограничения / следующий шаг
+
+- AI provider calls всё ещё отключены; наличие connection не означает, что MoyaStudia отправляет данные внешнему AI provider.
+- Добавлены backend tests для AI authentication, owner scope, same-origin write protection, encrypted-at-rest API key, отсутствия plaintext key в API responses, сохранения существующего ключа при обновлении prompts и обязательного ключа для новой connection. Frontend node:test дополнен проверкой локализации AI labels/cancel для en/ru/uk.
+- UI-level автоматизация cancel/dirty/validation без React/browser test harness пока не добавлялась: существующий frontend test stack покрывает pure helpers/i18n, а новая test dependency в этот scope не вводилась.
+- Контрольная проверка 2026-10-05 после AI/Cabinet polish: backend `pytest` — **130 passed**; frontend `node --test tests/studio-catalog.test.mjs` — **31 passed, 0 failed**; `npm run lint` — без ошибок (только существующие warnings); `npm run build` — успешно, все 7 static pages сгенерированы. Неблокирующие warnings: FastAPI `on_event`/Starlette deprecations, Node module-type warning, существующие Next.js `<img>`/font warnings и autoprefixer `end` compatibility warning.
+- Финальный pre-merge audit обнаружил и исправил server-side whitespace validation gap: модель из одних пробелов и новый API key из одних пробелов теперь отклоняются с 422; добавлен regression test. Cabinet Cancel также очищает введённый, но не сохранённый API key из browser state. После этих последних правок полный validation suite требуется повторить перед merge.
+- `HOWTOSTART.md` должен считать `0011_ai_connections` текущим migration head после merge этой ветки.

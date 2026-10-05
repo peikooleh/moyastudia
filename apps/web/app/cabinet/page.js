@@ -41,6 +41,16 @@ export default function CabinetPage() {
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [removingChannelId, setRemovingChannelId] = useState("");
   const [removeError, setRemoveError] = useState("");
+  const [aiConnections, setAiConnections] = useState([]);
+  const [aiProvider, setAiProvider] = useState("openai");
+  const [aiModel, setAiModel] = useState("");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiTitlePrompt, setAiTitlePrompt] = useState("");
+  const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("");
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiNotice, setAiNotice] = useState("");
+  const [aiError, setAiError] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -214,6 +224,88 @@ export default function CabinetPage() {
     if (channelPrefs) update(channelPrefs);
   }, [channels, channelsError, prefs, update]);
 
+  useEffect(() => {
+    if (!session?.authenticated) return undefined;
+    let cancelled = false;
+    apiFetch("/ai-connections")
+      .then(async (response) => {
+        if (!response.ok) throw new Error(t(uiLang, "aiLoadError"));
+        return response.json();
+      })
+      .then((rows) => {
+        if (cancelled) return;
+        setAiConnections(rows);
+        if (rows[0]) {
+          setAiProvider(rows[0].provider);
+          setAiModel(rows[0].model);
+          setAiTitlePrompt(rows[0].title_prompt || "");
+          setAiDescriptionPrompt(rows[0].description_prompt || "");
+        }
+      })
+      .catch((error) => { if (!cancelled) setAiError(error.message); });
+    return () => { cancelled = true; };
+  }, [session?.authenticated, uiLang]);
+
+  function selectAiModel(provider, model) {
+    setAiProvider(provider);
+    setAiModel(model);
+    setAiApiKey("");
+    const saved = aiConnections.find((item) => item.provider === provider && item.model === model);
+    setAiTitlePrompt(saved?.title_prompt || "");
+    setAiDescriptionPrompt(saved?.description_prompt || "");
+    setAiNotice("");
+    setAiError("");
+  }
+
+  function cancelAiSettings() {
+    const saved = aiConnections.find(
+      (item) => item.provider === aiProvider && item.model === aiModel.trim(),
+    );
+    setAiTitlePrompt(saved?.title_prompt || "");
+    setAiDescriptionPrompt(saved?.description_prompt || "");
+    setAiApiKey("");
+    setAiError("");
+    setAiNotice("");
+    setAiSettingsOpen(false);
+  }
+
+  async function saveAiConnection() {
+    if (!aiModel.trim()) {
+      setAiError(t(uiLang, "aiModelRequired"));
+      return;
+    }
+    const saved = aiConnections.find((item) => item.provider === aiProvider && item.model === aiModel.trim());
+    if (!saved?.has_api_key && !aiApiKey.trim()) {
+      setAiError(t(uiLang, "aiApiKeyRequired"));
+      return;
+    }
+    setAiSaving(true);
+    setAiError("");
+    setAiNotice("");
+    try {
+      const response = await apiFetch("/ai-connections", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: aiProvider,
+          model: aiModel.trim(),
+          api_key: aiApiKey.trim() || null,
+          title_prompt: aiTitlePrompt,
+          description_prompt: aiDescriptionPrompt,
+        }),
+      });
+      if (!response.ok) throw new Error(t(uiLang, "aiSaveError"));
+      const row = await response.json();
+      setAiConnections((current) => [...current.filter((item) => item.id !== row.id), row]);
+      setAiApiKey("");
+      setAiNotice(t(uiLang, "aiSaved"));
+    } catch (error) {
+      setAiError(error.message || t(uiLang, "aiSaveError"));
+    } finally {
+      setAiSaving(false);
+    }
+  }
+
   async function saveChannelSelection() {
     setSelectionSaving(true);
     setSelectionError("");
@@ -364,10 +456,21 @@ export default function CabinetPage() {
                   <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
                   <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                   <div className="ai-connection-grid">
-                    <label>{t(uiLang, "aiProvider")}<select disabled defaultValue=""><option value="">{t(uiLang, "aiNotConnected")}</option><option>OpenAI</option><option>Google Gemini</option><option>Anthropic</option></select></label>
-                    <label>{t(uiLang, "aiModel")}<input disabled value="" placeholder="—" readOnly /></label>
-                    <label>{t(uiLang, "aiApiKey")}<input disabled type="password" value="" placeholder="••••••••••••" readOnly /></label>
+                    <label>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
+                    <label>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
+                    <label>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
+                    <button className={`btn ghost ai-settings-button ${aiSettingsOpen ? "active" : ""}`} type="button" title={t(uiLang, "aiSettings")} onClick={() => (aiSettingsOpen ? cancelAiSettings() : setAiSettingsOpen(true))} aria-expanded={aiSettingsOpen}>⚙ {t(uiLang, "aiSettings")}</button>
                   </div>
+                  {aiSettingsOpen ? (
+                    <div className="ai-model-settings">
+                      <h3>{t(uiLang, "aiModelSettings")}</h3>
+                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /></label>
+                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /></label>
+                    </div>
+                  ) : null}
+                  {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
+                  {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
+                  <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
                 </section>
               </div>
             ) : null}

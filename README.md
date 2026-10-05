@@ -4,7 +4,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Пользователь подключает свой Google-аккаунт и свои YouTube-каналы. Видео остаются на YouTube; MoyaStudia хранит только необходимые метаданные и настройки, поэтому большие видеофайлы не нужно переносить в наше хранилище.
 
-Текущая реализация включает Foundation, channel discovery/selection (Stage 2A/2B) и read-only video catalog/sync (Stage 3). Google OAuth — единственный реализованный identity flow; Apple login и YouTube write operations не включены. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md). Архитектура следующей функциональной фазы зафиксирована в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md).
+Текущая реализация уже вышла за пределы раннего read-only Stage 3: есть server-authoritative Write Mode, локальный working state видео, контролируемая отправка поддерживаемых изменений в YouTube, playlist/calendar write increments, quota telemetry и серверные AI connection settings. Google OAuth остаётся единственным реализованным identity flow; Apple login и AI provider calls не включены. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md); принципы write security зафиксированы в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md).
 
 ## Что умеем сегодня
 
@@ -13,14 +13,18 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - Доступные YouTube-каналы обнаруживаются через подключённый Google account; в MoyaStudia сохраняются только выбранные каналы.
 - Studio читает видео из локального cache; initial import и sync запускаются явно.
 - Тема светлая/тёмная/авто, язык интерфейса en/ru/uk отдельно от языка канала.
-- Read-only работа строится на реальных данных YouTube, а не на mock-каталоге.
+- Каталог и рабочие операции строятся на реальных данных YouTube, а не на mock-каталоге.
+- Локальные working-изменения отделены от YouTube snapshot; поддерживаемые remote writes требуют включённого серверного Write Mode и явного действия пользователя.
+- MoyaStudia ведёт собственный server-side ledger обращений к YouTube Data API и показывает отслеживаемое использование квоты.
+- В Cabinet можно сохранить per-user AI provider/model/API-key settings и prompts; API key хранится зашифрованным и не возвращается в plaintext.
 
 ## Что пока намеренно не включено
 
 - Загрузка больших видеофайлов в MoyaStudia.
-- Запись метаданных, плейлистов, обложек и расписания в YouTube.
+- Полный набор операций YouTube Studio: реализованы только явно поддерживаемые write increments; неподдерживаемые destructive/upload flows не считаются доступными автоматически.
+- Загрузка больших видеофайлов и полноценный upload pipeline.
 - Биллинг и публичный SaaS multi-tenancy.
-- AI-провайдеры пока не подключены. Следующая фаза предусматривает опциональные server-side AI connections только для предложений по метаданным; AI не получает права напрямую изменять YouTube.
+- Вызовы OpenAI/Gemini/Anthropic пока не включены: AI connection settings уже хранятся server-side, но наличие ключа не запускает provider call и не даёт AI права напрямую изменять YouTube.
 
 ## Стек
 
@@ -57,6 +61,9 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - `GET /auth/google/login` → callback `GET /auth/google/callback`
 - `GET /auth/session`; `POST /auth/logout`
 - `GET /auth/youtube/login` → callback `GET /auth/youtube/callback`
+- `GET /write-mode`; `PUT /write-mode` для server-authoritative Write Mode
+- `GET /quota/today` для MoyaStudia-tracked YouTube API usage
+- `GET /ai-connections`; `PUT /ai-connections` для encrypted per-user AI settings
 - `GET /channels` and channel data routes require a server session and owner match
 - `GET /google-connections/{connection_id}/available-channels`
 - `POST /google-connections/{connection_id}/channels`
