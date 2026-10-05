@@ -811,5 +811,6 @@ Security:
 ### Ограничения / следующий шаг
 
 - AI provider calls всё ещё отключены; наличие connection не означает, что MoyaStudia отправляет данные внешнему AI provider.
-- Нужны автоматизированные backend tests именно для AI ownership/same-origin/encryption/no-plaintext-response и frontend helper/UI tests для cancel/dirty/validation перед merge.
+- Добавлены backend tests для AI authentication, owner scope, same-origin write protection, encrypted-at-rest API key, отсутствия plaintext key в API responses, сохранения существующего ключа при обновлении prompts и обязательного ключа для новой connection. Frontend node:test дополнен проверкой локализации AI labels/cancel для en/ru/uk.
+- UI-level автоматизация cancel/dirty/validation без React/browser test harness пока не добавлялась: существующий frontend test stack покрывает pure helpers/i18n, а новая test dependency в этот scope не вводилась.
 - `HOWTOSTART.md` должен считать `0011_ai_connections` текущим migration head после merge этой ветки.
