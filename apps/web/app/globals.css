@@ -2519,3 +2519,14 @@ body {
 .calendar-inspector-save .calendar-save-status { margin: 0; }
 .calendar-event-details.empty { display: grid; align-content: center; justify-items: center; min-height: 300px; gap: 6px; text-align: center; color: var(--muted); }
 .calendar-event-details.empty strong { color: var(--text); }
+
+.youtube-staged-save { display: grid; gap: 9px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; }
+.youtube-staged-note { color: var(--warning); }
+.youtube-staged-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.youtube-staged-actions > div { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.youtube-staged-save .youtube-write-action:not(:disabled) { background: var(--youtube); border-color: var(--youtube); color: #fff; }
+.youtube-staged-save .youtube-write-action:not(:disabled):hover { background: var(--youtube-hover); }
+.youtube-staged-save .youtube-write-action:disabled { border-color: color-mix(in srgb, var(--youtube) 30%, var(--line)); color: color-mix(in srgb, var(--youtube) 55%, var(--muted)); }
+.youtube-staged-save .calendar-save-status { margin: 0; }
+.working-controls .youtube-staged-save { width: 100%; }
+.playlist-quick-save.youtube-staged-save { width: 100%; }
