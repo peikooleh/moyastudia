@@ -859,26 +859,30 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedId("");
     setCalendarDetailDay("");
     setLoadingCalendar(true);
-    apiFetch(
-      catalogVideosUrl(channelId, { dateFrom: start, dateTo: end, sort: "date", filter, query }),
-      { signal: controller.signal },
-    )
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
-        return data;
-      })
-      .then((data) => {
+    (async () => {
+      try {
+        const items = [];
+        let cursor = null;
+        do {
+          const response = await apiFetch(
+            catalogVideosUrl(channelId, { cursor, dateFrom: start, dateTo: end, sort: "date", filter, query }),
+            { signal: controller.signal },
+          );
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
+          if (controller.signal.aborted) return;
+          items.push(...(data.items || []));
+          cursor = data.next_cursor || null;
+        } while (cursor);
         if (controller.signal.aborted) return;
-        setCalendarVideos(data.items || []);
-        setCalendarCursor(data.next_cursor || null);
-      })
-      .catch((error) => {
+        setCalendarVideos(items);
+        setCalendarCursor(null);
+      } catch (error) {
         if (!controller.signal.aborted) setErr(String(error.message || error));
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setLoadingCalendar(false);
-      });
+      }
+    })();
     return () => controller.abort();
   }, [channelId, filter, month, query, view]);
 
