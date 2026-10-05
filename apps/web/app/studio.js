@@ -431,6 +431,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistVideoPicker, setPlaylistVideoPicker] = useState(null);
   const [playlistDraft, setPlaylistDraft] = useState(null);
   const [playlistDescriptionExpanded, setPlaylistDescriptionExpanded] = useState(false);
+  const [playlistMetadataEditing, setPlaylistMetadataEditing] = useState(false);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
@@ -921,13 +922,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   function resetPlaylistDraft() {
     if (!selectedPlaylist) return;
     setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" });
+    setPlaylistMetadataEditing(false);
     setPlaylistIdCopyStatus("");
   }
 
   function beginPlaylistEditing() {
     if (!selectedPlaylist || selectedPlaylist.localOnly) return;
     setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" });
-    setPlaylistEditing(true);
+    setPlaylistMetadataEditing(true);
     setPlaylistDescriptionExpanded(false);
     setPlaylistIdCopyStatus("");
   }
@@ -955,7 +957,35 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
       setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
       setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description, privacy: data.privacy || effectivePlaylistDraft.privacy });
+      setPlaylistMetadataEditing(false);
       setPlaylistIdCopyStatus(t(uiLang, "playlistSavedToYoutube"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    } finally {
+      setPlaylistSaving(false);
+    }
+  }
+
+  async function changePlaylistPrivacy(privacy) {
+    if (!selectedPlaylist || selectedPlaylist.localOnly || playlistSaving || privacy === selectedPlaylist.privacy) return;
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!window.confirm(t(uiLang, "playlistVisibilityConfirm", { visibility: statusLabel(uiLang, privacy) }))) return;
+    setPlaylistSaving(true);
+    setPlaylistIdCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
+      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
+      setPlaylistDraft((current) => current?.id === selectedPlaylist.id ? { ...current, privacy: data.privacy || privacy } : current);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistVisibilitySaved"));
     } catch (error) {
       setPlaylistIdCopyStatus(String(error.message || error));
     } finally {
@@ -1455,11 +1485,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     : selectedPlaylist
       ? { id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" }
       : null;
-  const playlistEditing = Boolean(writeMode?.enabled && selectedPlaylist && !selectedPlaylist.localOnly);
+  const playlistEditing = Boolean(writeMode?.enabled && playlistMetadataEditing && selectedPlaylist && !selectedPlaylist.localOnly);
   const playlistMetadataDirty = Boolean(selectedPlaylist && effectivePlaylistDraft && (
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
-    || effectivePlaylistDraft.privacy !== (selectedPlaylist.privacy || "private")
   ));
   const filteredPlaylistItems = [...(currentPlaylistContents?.items || [])]
     .filter((item) => {
@@ -1804,6 +1833,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-summary-copy">
                   {selectedPlaylist.localOnly ? <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2> : (
                     <div className={`playlist-metadata-editor ${playlistEditing ? "editing" : ""}`}>
+                      {writeMode?.enabled && !playlistEditing ? <button className="playlist-edit-metadata" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : null}
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoTitle")}</span>
@@ -1847,12 +1877,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <aside className="playlist-settings-panel">
                       <div className="playlist-setting">
                         <span>{t(uiLang, "playlistVisibility")}</span>
-                        {playlistEditing ? (
+                        {writeMode?.enabled ? (
                           <select
-                            value={effectivePlaylistDraft?.privacy || "private"}
+                            value={selectedPlaylist.privacy || "private"}
                             disabled={playlistSaving}
-                            title={t(uiLang, "playlistVisibility")}
-                            onChange={(event) => updatePlaylistDraft("privacy", event.target.value)}
+                            title={t(uiLang, "playlistVisibilityHint")}
+                            onChange={(event) => changePlaylistPrivacy(event.target.value)}
                           >
                             <option value="public">{t(uiLang, "filterPublic")}</option>
                             <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
