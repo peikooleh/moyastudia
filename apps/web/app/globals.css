@@ -2398,3 +2398,32 @@ body {
     border-left: 0;
   }
 }
+
+
+.playlist-video-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 8px;
+  border-top: 1px solid var(--line);
+}
+.playlist-video-tools .search {
+  width: min(360px, 100%);
+  min-height: 34px;
+}
+.playlist-video-tools label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.playlist-video-tools select {
+  min-height: 34px;
+}
+@media (max-width: 720px) {
+  .playlist-video-tools { align-items: stretch; flex-direction: column; }
+  .playlist-video-tools .search { width: 100%; }
+  .playlist-video-tools label { margin-left: 0; justify-content: space-between; }
+}
