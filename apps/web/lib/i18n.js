@@ -1,5 +1,8 @@
 const dict = {
   en: {
+    playlistVisibilityHint: "Change playlist visibility. You will be asked to confirm before it is sent to YouTube.",
+    playlistVisibilityConfirm: "Change playlist visibility to “{visibility}” on YouTube?",
+    playlistVisibilitySaved: "Playlist visibility updated on YouTube.",
     playlistSearchVideos: "Search playlist videos",
     playlistSearchVideosHint: "Filter videos in the open playlist by title.",
     playlistSortVideosHint: "Choose how videos in the open playlist are sorted.",
@@ -510,6 +513,9 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    playlistVisibilityHint: "Изменить видимость плейлиста. Перед отправкой на YouTube потребуется подтверждение.",
+    playlistVisibilityConfirm: "Изменить видимость плейлиста на «{visibility}» на YouTube?",
+    playlistVisibilitySaved: "Видимость плейлиста обновлена на YouTube.",
     playlistSearchVideos: "Поиск видео в плейлисте",
     playlistSearchVideosHint: "Фильтровать видео открытого плейлиста по названию.",
     playlistSortVideosHint: "Выбрать порядок отображения видео открытого плейлиста.",
@@ -1020,6 +1026,9 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    playlistVisibilityHint: "Змінити видимість плейлиста. Перед надсиланням на YouTube потрібне підтвердження.",
+    playlistVisibilityConfirm: "Змінити видимість плейлиста на «{visibility}» на YouTube?",
+    playlistVisibilitySaved: "Видимість плейлиста оновлено на YouTube.",
     playlistSearchVideos: "Пошук відео в плейлисті",
     playlistSearchVideosHint: "Фільтрувати відео відкритого плейлиста за назвою.",
     playlistSortVideosHint: "Вибрати порядок відображення відео відкритого плейлиста.",
