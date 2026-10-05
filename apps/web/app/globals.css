@@ -1818,3 +1818,46 @@ body {
   opacity: .45;
   cursor: not-allowed;
 }
+
+
+/* YouTube actions use YouTube brand red, distinct from the app accent. */
+:root {
+  --youtube: #ff0000;
+  --youtube-hover: #d90000;
+}
+.catalog-actions .catalog-refresh-icon {
+  background: var(--youtube);
+  border-color: var(--youtube);
+  color: #fff;
+}
+.catalog-actions .catalog-refresh-icon:hover:not(:disabled) {
+  background: var(--youtube-hover);
+}
+.catalog-actions .catalog-reconcile-action {
+  color: color-mix(in srgb, var(--youtube) 72%, var(--muted));
+}
+.catalog-actions .catalog-reconcile-action:hover:not(:disabled) {
+  color: var(--youtube);
+}
+.mode-switch[aria-checked="true"],
+.mode-switch.is-on {
+  background: var(--youtube);
+  border-color: var(--youtube);
+}
+.mode-switch[aria-checked="true"] span,
+.mode-switch.is-on span {
+  background: #fff;
+}
+.youtube-write-tooltip .youtube-write-action:not(:disabled) {
+  background: var(--youtube);
+  border-color: var(--youtube);
+  color: #fff;
+}
+.youtube-write-tooltip .youtube-write-action:not(:disabled):hover {
+  background: var(--youtube-hover);
+}
+.youtube-write-tooltip .youtube-write-action:disabled {
+  border: 1px solid color-mix(in srgb, var(--youtube) 32%, var(--line));
+  background: color-mix(in srgb, var(--youtube) 8%, var(--bg-raise));
+  color: color-mix(in srgb, var(--youtube) 58%, var(--muted));
+}
