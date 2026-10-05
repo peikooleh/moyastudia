@@ -338,19 +338,18 @@ function VideoInspector({
           </div>
         ) : null}
         {workingError ? <span role="alert">{workingError}</span> : null}
-        {!workingVideo?.conflict && (Object.keys(workingEdits).length || workingVideo?.dirty) ? (
-          <button
-            className="btn ghost"
-            type="button"
-            disabled={!workingVideo || workingLoading || workingSaving}
-            onClick={confirmResetWorkingToSnapshot}
-          >
-            {t(uiLang, "workingUseSnapshot")}
-          </button>
+        {workingVideo && !workingVideo.conflict && (Object.keys(workingEdits).length || workingVideo.dirty) ? (
+          <YoutubeStagedSave
+            uiLang={uiLang}
+            count={Math.max(1, Object.keys(workingEdits).length)}
+            saving={workingSaving}
+            writeMode={writeMode}
+            onDiscard={confirmResetWorkingToSnapshot}
+            onSave={publishWorkingVideo}
+            saveHint="publishVideoHint"
+            className="video-staged-save"
+          />
         ) : null}
-        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "publishVideoHint")}>
-          <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
-        </span>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
@@ -370,6 +369,26 @@ function VideoInspector({
   );
 }
 
+function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", writeMode, onDiscard, onSave, saveHint = "calendarSaveHint", className = "" }) {
+  return (
+    <div className={`youtube-staged-save ${className}`.trim()} role="status">
+      <span className="youtube-staged-note">{t(uiLang, "calendarStaged")}</span>
+      <div className="youtube-staged-actions">
+        <span>{t(uiLang, "calendarPendingChanges", { count })}</span>
+        <div>
+          <button className="btn ghost" type="button" disabled={saving} onClick={onDiscard}>{t(uiLang, "actionCancel")}</button>
+          <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, saveHint)}>
+            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || saving} onClick={onSave}>
+              {saving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
+            </button>
+          </span>
+        </div>
+      </div>
+      {status ? <small className="calendar-save-status">{status}</small> : null}
+    </div>
+  );
+}
+
 function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave }) {
   const [linkStatus, setLinkStatus] = useState("");
   if (!selected) {
@@ -377,20 +396,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
       <aside className="calendar-event-details empty">
         <strong>{t(uiLang, "calendarSelectEvent")}</strong>
         <span>{t(uiLang, "calendarSelectEventHint")}</span>
-        {pendingCount ? (
-          <div className="calendar-inspector-save">
-            <span>{t(uiLang, "calendarPendingChanges", { count: pendingCount })}</span>
-            <div>
-              <button className="btn ghost" type="button" disabled={saving} onClick={onDiscard}>{t(uiLang, "actionCancel")}</button>
-              <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "calendarSaveHint")}>
-                <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || saving} onClick={onSave}>
-                  {saving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
-                </button>
-              </span>
-            </div>
-            {saveStatus ? <small className="calendar-save-status">{saveStatus}</small> : null}
-          </div>
-        ) : null}
+        {pendingCount ? <YoutubeStagedSave uiLang={uiLang} count={pendingCount} saving={saving} status={saveStatus} writeMode={writeMode} onDiscard={onDiscard} onSave={onSave} /> : null}
       </aside>
     );
   }
@@ -464,20 +470,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
         ) : null}
       </div>
       {selected.calendarStaged ? <p className="item-change">{t(uiLang, "calendarStaged")}</p> : null}
-      {pendingCount ? (
-        <div className="calendar-inspector-save">
-          <span>{t(uiLang, "calendarPendingChanges", { count: pendingCount })}</span>
-          <div>
-            <button className="btn ghost" type="button" disabled={saving} onClick={onDiscard}>{t(uiLang, "actionCancel")}</button>
-            <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "calendarSaveHint")}>
-              <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || saving} onClick={onSave}>
-                {saving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
-              </button>
-            </span>
-          </div>
-          {saveStatus ? <small className="calendar-save-status">{saveStatus}</small> : null}
-        </div>
-      ) : saveStatus ? <p className="calendar-save-status">{saveStatus}</p> : null}
+      {pendingCount ? <YoutubeStagedSave uiLang={uiLang} count={pendingCount} saving={saving} status={saveStatus} writeMode={writeMode} onDiscard={onDiscard} onSave={onSave} /> : saveStatus ? <p className="calendar-save-status">{saveStatus}</p> : null}
       {workingVideo?.conflict ? <p className="calendar-conflict">{t(uiLang, "workingConflict")}</p> : null}
     </aside>
   );
@@ -2176,12 +2169,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         <small>{t(uiLang, "playlistOrderHint")}</small>
                       </div>
                       {playlistQuickDirty ? (
-                        <div className="playlist-quick-save">
-                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={discardPlaylistQuickChanges}>{t(uiLang, "actionCancel")}</button>
-                          <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistQuickSaveHint")}>
-                            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || playlistSaving} onClick={savePlaylistQuickChanges}>{t(uiLang, "saveToYoutube")}</button>
-                          </span>
-                        </div>
+                        <YoutubeStagedSave
+                          uiLang={uiLang}
+                          count={1}
+                          saving={playlistSaving}
+                          writeMode={writeMode}
+                          onDiscard={discardPlaylistQuickChanges}
+                          onSave={savePlaylistQuickChanges}
+                          saveHint="playlistQuickSaveHint"
+                          className="playlist-quick-save"
+                        />
                       ) : null}
                     </aside>
                   ) : null}
