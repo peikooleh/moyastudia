@@ -1861,3 +1861,31 @@ body {
   background: color-mix(in srgb, var(--youtube) 8%, var(--bg-raise));
   color: color-mix(in srgb, var(--youtube) 58%, var(--muted));
 }
+
+
+/* Catalog refresh is a neutral read action; only writes to YouTube use YouTube red. */
+.catalog-actions .catalog-refresh-icon,
+.catalog-actions .catalog-refresh-icon:hover:not(:disabled) {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.catalog-actions .catalog-refresh-icon:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.catalog-actions .catalog-reconcile-action,
+.catalog-actions .catalog-reconcile-action:hover:not(:disabled) {
+  color: var(--muted);
+}
+.catalog-actions .catalog-reconcile-action:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* Keep reset and YouTube publish controls together and centered. */
+.working-controls {
+  justify-content: center;
+}
+.working-controls .conflict-actions {
+  width: 100%;
+}
