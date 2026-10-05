@@ -370,28 +370,62 @@ function VideoInspector({
   );
 }
 
-function CalendarEventDetails({ uiLang, selected, workingVideo }) {
+function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onTime }) {
   if (!selected) {
-    return <aside className="calendar-event-details empty">{t(uiLang, "calendarSelectEvent")}</aside>;
+    return (
+      <aside className="calendar-event-details empty">
+        <strong>{t(uiLang, "calendarSelectEvent")}</strong>
+        <span>{t(uiLang, "calendarSelectEventHint")}</span>
+      </aside>
+    );
   }
   const date = selected.slot || selected.publishedAt || "";
   const displayDate = formatStudioDate(date, uiLang);
+  const timeValue = date && !Number.isNaN(new Date(date).getTime())
+    ? `${String(new Date(date).getHours()).padStart(2, "0")}:${String(new Date(date).getMinutes()).padStart(2, "0")}`
+    : "";
   return (
     <aside className="calendar-event-details" aria-label={t(uiLang, "calendarEventDetails")}>
       {selected.thumb ? <img className="calendar-event-thumb" src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
-      <h2>{catalogVideoDisplayTitle(selected) || t(uiLang, "untitledVideo")}</h2>
+      <div className="calendar-detail-title">
+        <h2>{catalogVideoDisplayTitle(selected) || t(uiLang, "untitledVideo")}</h2>
+        <span className={`calendar-status-pill status-${selected.status || selected.privacy || "unknown"}`}>
+          {statusLabel(uiLang, selected.status || selected.privacy)}
+        </span>
+      </div>
       <dl className="inspector-data">
         <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : "videoPublishedAt")}</dt><dd>{displayDate || "—"}</dd></div>
         <div><dt>{t(uiLang, "videoVisibility")}</dt><dd>{statusLabel(uiLang, selected.privacy || selected.status)}</dd></div>
-        <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
         <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
         <div><dt>{t(uiLang, "videoViews")}</dt><dd>{selected.views ?? "—"}</dd></div>
         <div><dt>{t(uiLang, "videoLikes")}</dt><dd>{selected.likes ?? "—"}</dd></div>
         <div><dt>{t(uiLang, "videoComments")}</dt><dd>{selected.comments ?? "—"}</dd></div>
       </dl>
-      {workingVideo?.dirty ? <p className="item-change">{t(uiLang, "workingModified")}</p> : null}
+      <div className="calendar-manipulation-panel">
+        <label>
+          <span>{t(uiLang, "calendarTime")}</span>
+          <input type="time" value={timeValue} disabled={!date} onChange={(event) => onTime(selected, event.target.value)} />
+        </label>
+        <label>
+          <span>{t(uiLang, "videoVisibility")}</span>
+          <select value={draft?.privacy || selected.privacy || "private"} onChange={(event) => onStage(selected, { privacy: event.target.value, publishAt: event.target.value === "private" ? (draft?.publishAt ?? selected.slot ?? null) : null })}>
+            <option value="public">{t(uiLang, "filterPublic")}</option>
+            <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+            <option value="private">{t(uiLang, "filterPrivate")}</option>
+          </select>
+        </label>
+        {selected.slot ? (
+          <button className="btn ghost" type="button" onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
+            {t(uiLang, "calendarCancelSchedule")}
+          </button>
+        ) : selected.privacy === "public" ? (
+          <button className="btn ghost" type="button" onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
+            {t(uiLang, "calendarUnpublish")}
+          </button>
+        ) : null}
+      </div>
+      {selected.calendarStaged ? <p className="item-change">{t(uiLang, "calendarStaged")}</p> : null}
       {workingVideo?.conflict ? <p className="calendar-conflict">{t(uiLang, "workingConflict")}</p> : null}
-      <p className="readonly-note">{t(uiLang, "readOnlySnapshot")}</p>
     </aside>
   );
 }
