@@ -535,6 +535,11 @@ def save_ai_connection(
 ):
     provider = payload.provider.strip().lower()
     model = payload.model.strip()
+    api_key = payload.api_key.strip() if payload.api_key is not None else None
+    if not model:
+        raise HTTPException(422, "model must not be blank")
+    if api_key == "":
+        api_key = None
     row = (
         db.query(AIConnection)
         .filter(
@@ -545,13 +550,13 @@ def save_ai_connection(
         .one_or_none()
     )
     if row is None:
-        if not payload.api_key:
+        if not api_key:
             raise HTTPException(422, "api_key is required for a new AI connection")
         row = AIConnection(user_id=user.id, provider=provider, model=model, encrypted_api_key="")
         db.add(row)
-    if payload.api_key:
+    if api_key:
         try:
-            row.encrypted_api_key = encrypt_refresh_token(payload.api_key)
+            row.encrypted_api_key = encrypt_refresh_token(api_key)
         except TokenEncryptionError as exc:
             raise HTTPException(503, "API key encryption configuration is invalid") from exc
     row.title_prompt = payload.title_prompt.strip()
