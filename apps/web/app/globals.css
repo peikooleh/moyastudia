@@ -2427,3 +2427,20 @@ body {
   .playlist-video-tools .search { width: 100%; }
   .playlist-video-tools label { margin-left: 0; justify-content: space-between; }
 }
+
+
+/* Let playlist video search consume all space left before sorting. */
+.playlist-video-tools .search {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+.playlist-video-tools label {
+  flex: 0 0 auto;
+}
+@media (max-width: 720px) {
+  .playlist-video-tools .search {
+    width: 100%;
+  }
+}
