@@ -462,6 +462,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
+  const [calendarDrafts, setCalendarDrafts] = useState({});
+  const [calendarSaving, setCalendarSaving] = useState(false);
+  const [calendarSaveStatus, setCalendarSaveStatus] = useState("");
+  const [calendarContext, setCalendarContext] = useState(null);
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
@@ -1593,7 +1597,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const visiblePlaylistItems = playlistPageItems(filteredPlaylistItems, playlistPage, playlistPageSize);
   const hasNextPlaylistPage = Boolean(currentPlaylistContents?.nextPageToken)
     || filteredPlaylistItems.length > (playlistPage + 1) * playlistPageSize;
-  const calendarSelected = calendarVideos.find((video) => video.id === selectedId) || null;
+  const effectiveCalendarVideos = calendarVideos.map((video) => {
+    const draft = calendarDrafts[video.id];
+    if (!draft) return video;
+    return {
+      ...video,
+      privacy: draft.privacy,
+      status: draft.publishAt ? "scheduled" : draft.privacy,
+      slot: draft.publishAt || "",
+      calendarStaged: true,
+    };
+  });
+  const calendarSelected = effectiveCalendarVideos.find((video) => video.id === selectedId) || null;
   const statistics = cachedVideoMetricSummary(videos);
   const statisticsRows = [...videos]
     .filter((video) => {
@@ -1637,9 +1652,89 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     saving: "workingSaving",
     error: "workingSaveError",
   };
+  function calendarBaseline(video) {
+    return { privacy: video.privacy || "private", publishAt: video.slot || null };
+  }
+
+  function stageCalendarChange(video, changes) {
+    const original = calendarVideos.find((item) => item.id === video.id) || video;
+    const baseline = calendarBaseline(original);
+    setCalendarDrafts((current) => {
+      const previous = current[video.id] || baseline;
+      const next = { ...previous, ...changes };
+      const clean = next.privacy === baseline.privacy && (next.publishAt || null) === (baseline.publishAt || null);
+      if (clean) {
+        const copy = { ...current };
+        delete copy[video.id];
+        return copy;
+      }
+      return { ...current, [video.id]: next };
+    });
+    setCalendarSaveStatus("");
+  }
+
+  function stageCalendarDay(video, dayKey) {
+    const source = calendarDrafts[video.id]?.publishAt || video.slot || video.publishedAt || "";
+    const sourceDate = source ? new Date(source) : new Date();
+    const [year, monthValue, day] = dayKey.split("-").map(Number);
+    const next = new Date(year, monthValue - 1, day, sourceDate.getHours(), sourceDate.getMinutes(), 0, 0);
+    stageCalendarChange(video, { privacy: "private", publishAt: next.toISOString() });
+  }
+
+  function stageCalendarTime(video, timeValue) {
+    if (!timeValue) return;
+    const source = calendarDrafts[video.id]?.publishAt || video.slot || video.publishedAt || new Date().toISOString();
+    const date = new Date(source);
+    const [hours, minutes] = timeValue.split(":").map(Number);
+    date.setHours(hours, minutes, 0, 0);
+    stageCalendarChange(video, { privacy: "private", publishAt: date.toISOString() });
+  }
+
+  function discardCalendarChanges() {
+    setCalendarDrafts({});
+    setCalendarSaveStatus("");
+    setCalendarContext(null);
+  }
+
+  async function saveCalendarChanges() {
+    const entries = Object.entries(calendarDrafts);
+    if (!entries.length || calendarSaving) return;
+    if (!writeMode?.enabled) {
+      setCalendarSaveStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!window.confirm(t(uiLang, "calendarSaveConfirm", { count: entries.length }))) return;
+    setCalendarSaving(true);
+    setCalendarSaveStatus("");
+    let completed = 0;
+    try {
+      for (const [videoId, draft] of entries) {
+        const response = await apiFetch(`/channels/${channelId}/videos/${videoId}/calendar-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ privacy: draft.privacy, publishAt: draft.publishAt || null }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "calendarSaveError"));
+        completed += 1;
+        setCalendarVideos((current) => current.map((video) => video.id === Number(videoId) ? { ...video, ...data } : video));
+        setCalendarDrafts((current) => {
+          const next = { ...current };
+          delete next[videoId];
+          return next;
+        });
+      }
+      setCalendarSaveStatus(t(uiLang, "calendarSaved"));
+    } catch (error) {
+      setCalendarSaveStatus(t(uiLang, completed ? "calendarPartialSaveError" : "calendarSaveError", { error: String(error.message || error) }));
+    } finally {
+      setCalendarSaving(false);
+    }
+  }
+
   const cells = monthMatrix(month);
   const byDay = {};
-  calendarVideos.forEach((v) => {
+  effectiveCalendarVideos.forEach((v) => {
     const key = (v.slot || v.publishedAt || "").slice(0, 10);
     if (!key) return;
     byDay[key] = byDay[key] || [];
