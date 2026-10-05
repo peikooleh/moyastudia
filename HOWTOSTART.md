@@ -48,7 +48,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ```powershell
 alembic upgrade head
 
-`head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`), `0007_user_write_mode` (server-authoritative Write Mode, default OFF), `0008_video_working_language` (local/base video language draft fields), and `0009_local_playlist_drafts` (persistent local playlist drafts and membership). Apply migrations before starting this branch; the application does not create these schema changes automatically.
+`head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`), `0007_user_write_mode` (server-authoritative Write Mode, default OFF), `0008_video_working_language` (local/base video language draft fields), `0009_local_playlist_drafts` (persistent local playlist drafts and membership), `0010_video_working_settings` (additional local video working settings), and `0011_ai_connections` (encrypted per-user AI provider/model credentials and prompts). Apply migrations before starting this branch; the application does not create these schema changes automatically.
 
 For the Statistics watch-time card, enable **YouTube Analytics API** in the same Google Cloud project as the existing YouTube Data API credentials. The app queries `estimatedMinutesWatched` with the existing read-only YouTube connection; if Analytics is unavailable, the card stays empty rather than estimating watch time.
 ```
