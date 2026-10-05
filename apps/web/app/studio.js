@@ -954,12 +954,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: effectivePlaylistDraft.title.trim(), description: effectivePlaylistDraft.description, privacy: effectivePlaylistDraft.privacy }),
+        body: JSON.stringify({ title: effectivePlaylistDraft.title.trim(), description: effectivePlaylistDraft.description, privacy: selectedPlaylist.privacy || "private" }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
       setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
-      setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description, privacy: data.privacy || effectivePlaylistDraft.privacy });
+      setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description, privacy: data.privacy || selectedPlaylist.privacy || "private" });
       setPlaylistMetadataEditing(false);
       setPlaylistIdCopyStatus(t(uiLang, "playlistSavedToYoutube"));
     } catch (error) {
@@ -969,32 +969,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  async function changePlaylistPrivacy(privacy) {
-    if (!selectedPlaylist || selectedPlaylist.localOnly || playlistSaving || privacy === selectedPlaylist.privacy) return;
-    if (!writeMode?.enabled) {
-      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
-      return;
-    }
-    if (!window.confirm(t(uiLang, "playlistVisibilityConfirm", { visibility: statusLabel(uiLang, privacy) }))) return;
-    setPlaylistSaving(true);
-    setPlaylistIdCopyStatus("");
-    try {
-      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
-      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
-      setPlaylistDraft((current) => current?.id === selectedPlaylist.id ? { ...current, privacy: data.privacy || privacy } : current);
-      setPlaylistIdCopyStatus(t(uiLang, "playlistVisibilitySaved"));
-    } catch (error) {
-      setPlaylistIdCopyStatus(String(error.message || error));
-    } finally {
-      setPlaylistSaving(false);
-    }
-  }
 
   async function uploadPlaylistThumbnail(file) {
     if (!file || !selectedPlaylist || selectedPlaylist.localOnly || playlistMediaBusy) return;
