@@ -12,13 +12,9 @@ import {
   channelPreferenceKey,
   channelPreferencesForAvailableChannels,
   prefsAfterChannelRemoval,
-  UI_LANGS,
 } from "../../lib/prefs";
-import { ThemePicker } from "../theme-picker";
 import { usePrefs } from "../providers";
 import { Shell } from "../shell";
-
-const PICK_LANGS = UI_LANGS.filter((language) => language.id !== "auto");
 
 export default function CabinetPage() {
   const { prefs, uiLang, update } = usePrefs();
@@ -349,7 +345,7 @@ export default function CabinetPage() {
       ) : (
         <div className="cab">
           <aside className="side" aria-label={t(uiLang, "cabinet")}>
-            {[["profile", "account"], ["channels", "channelsConnections"], ["interface", "interface"]].map(([id, key]) => (
+            {[["profile", "account"], ["channels", "channelsConnections"]].map(([id, key]) => (
               <button key={id} className={tab === id ? "on" : ""} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                 {t(uiLang, key)}
               </button>
@@ -509,17 +505,6 @@ export default function CabinetPage() {
                   </div>
                   {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>
-              </div>
-            ) : null}
-
-            {tab === "interface" ? (
-              <div className="panel">
-                <h1>{t(uiLang, "interface")}</h1>
-                <div className="grid2">
-                  <div><h2>{t(uiLang, "uiLangTitle")}</h2><div className="opt-list">{PICK_LANGS.map((language) => <button key={language.id} type="button" className={`opt ${prefs.uiLang === language.id ? "on" : ""}`} onClick={() => update({ uiLang: language.id })}><span className="radio" />{language.label}</button>)}</div></div>
-                  <div><h2>{t(uiLang, "themeTitle")}</h2><ThemePicker /></div>
-                </div>
-
               </div>
             ) : null}
           </section>
