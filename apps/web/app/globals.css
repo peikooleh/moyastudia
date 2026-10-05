@@ -2725,3 +2725,117 @@ body {
   color: var(--text);
   color-scheme: light dark;
 }
+
+
+/* Shared Studio polish — Video / Playlists / Calendar.
+   Statistics and Cabinet intentionally remain outside this pass. */
+.app-top,
+.catalog-state,
+.studio,
+.playlist-workspace,
+.calendar-workspace {
+  color: var(--text);
+}
+.app-top,
+.catalog-state {
+  border-color: var(--line);
+}
+.catalog-state {
+  background: color-mix(in srgb, var(--bg) 94%, var(--bg-raise));
+}
+.btn,
+.icon-btn,
+.text-button,
+.workspace-nav button,
+.playlist-picker-row,
+.playlist-video-row,
+.calendar-event,
+.calendar-day-drawer button {
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+.btn.ghost,
+.icon-btn,
+.catalog-more-actions > summary,
+.cal-nav button,
+.playlist-pagination .btn {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--text);
+}
+.btn.ghost:hover:not(:disabled),
+.icon-btn:hover:not(:disabled),
+.catalog-more-actions > summary:hover,
+.cal-nav button:hover:not(:disabled),
+.playlist-pagination .btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+.text-button:hover:not(:disabled),
+.playlist-open-video:hover {
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+}
+.catalog-more-menu,
+.calendar-context-menu {
+  border: 1px solid var(--line);
+  background: var(--bg-raise);
+  color: var(--text);
+  box-shadow: 0 16px 40px color-mix(in srgb, #000 24%, transparent);
+}
+.playlist-picker-row,
+.playlist-video-row,
+.calendar-day-drawer li button {
+  color: var(--text);
+}
+.playlist-picker-row:hover:not(:disabled),
+.playlist-video-row:hover:not(:disabled),
+.calendar-day-drawer li button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.playlist-picker-row.active,
+.playlist-video-list li.selected,
+.calendar-day-drawer li button.active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-raise));
+}
+.playlist-picker-row:focus-visible,
+.playlist-video-row:focus-visible,
+.calendar-day-drawer li button:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+.calendar-event-details,
+.playlist-content-pane,
+.playlist-pane,
+.studio-list,
+.studio-card {
+  border-color: var(--line);
+}
+.calendar-event-details,
+.studio-card {
+  background: var(--bg);
+}
+.calendar-manipulation-panel input,
+.calendar-manipulation-panel select,
+.playlist-metadata-editor input,
+.playlist-metadata-editor textarea,
+.playlist-metadata-editor select,
+.studio-card input,
+.studio-card textarea,
+.studio-card select {
+  border-color: var(--line);
+  background: var(--bg-raise);
+  color: var(--text);
+}
+.calendar-manipulation-panel input:hover:not(:disabled),
+.calendar-manipulation-panel select:hover:not(:disabled),
+.playlist-metadata-editor input:hover:not(:disabled),
+.playlist-metadata-editor textarea:hover:not(:disabled),
+.playlist-metadata-editor select:hover:not(:disabled),
+.studio-card input:hover:not(:disabled),
+.studio-card textarea:hover:not(:disabled),
+.studio-card select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+}
