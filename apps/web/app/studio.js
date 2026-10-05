@@ -172,7 +172,7 @@ function VideoInspector({
       setCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    if (!window.confirm(`Отправить новую обложку «${file.name}» на YouTube?`)) return;
+    if (!window.confirm(t(uiLang, "thumbnailUploadConfirm", { name: file.name }))) return;
     setMediaBusy(true);
     setCopyStatus("");
     try {
@@ -182,9 +182,9 @@ function VideoInspector({
         body: file,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail?.code || data?.detail || "Не удалось обновить обложку");
+      if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "thumbnailUploadError"));
       setThumbnailPreview(data.thumbnail_url || URL.createObjectURL(file));
-      setCopyStatus("Обложка обновлена на YouTube");
+      setCopyStatus(t(uiLang, "thumbnailUploadSuccess"));
     } catch (error) {
       setCopyStatus(String(error.message || error));
     } finally {
@@ -199,7 +199,7 @@ function VideoInspector({
       return;
     }
     const captionLanguage = language || "ru";
-    if (!window.confirm(`Загрузить субтитры «${file.name}» на YouTube (${captionLanguage})?`)) return;
+    if (!window.confirm(t(uiLang, "captionsUploadConfirm", { name: file.name, language: captionLanguage }))) return;
     setMediaBusy(true);
     setCopyStatus("");
     try {
@@ -210,8 +210,8 @@ function VideoInspector({
         body: file,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail?.code || data?.detail || "Не удалось загрузить субтитры");
-      setCopyStatus("Субтитры отправлены на YouTube");
+      if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "captionsUploadError"));
+      setCopyStatus(t(uiLang, "captionsUploadSuccess"));
     } catch (error) {
       setCopyStatus(String(error.message || error));
     } finally {
