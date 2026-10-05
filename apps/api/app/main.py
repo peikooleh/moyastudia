@@ -1245,11 +1245,12 @@ def patch_channel_video_working(
         if not conflicted_fields:
             raise HTTPException(409, "video has no conflicts to resolve")
         for field in conflicted_fields:
+            model_field = "made_for_kids" if field == "madeForKids" else field
             if patch.conflict_resolution == "use_snapshot":
-                values[field] = None
-                values[f"working_base_{field}"] = None
+                values[model_field] = None
+                values[f"working_base_{model_field}"] = None
             else:
-                values[f"working_base_{field}"] = snapshot[field]
+                values[f"working_base_{model_field}"] = snapshot[field]
     else:
         if not changed_fields:
             raise HTTPException(422, "provide at least one working field")
