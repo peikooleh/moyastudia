@@ -370,20 +370,36 @@ function VideoInspector({
   );
 }
 
-function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onTime }) {
+function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave }) {
   const [linkStatus, setLinkStatus] = useState("");
   if (!selected) {
     return (
       <aside className="calendar-event-details empty">
         <strong>{t(uiLang, "calendarSelectEvent")}</strong>
         <span>{t(uiLang, "calendarSelectEventHint")}</span>
+        {pendingCount ? (
+          <div className="calendar-inspector-save">
+            <span>{t(uiLang, "calendarPendingChanges", { count: pendingCount })}</span>
+            <div>
+              <button className="btn ghost" type="button" disabled={saving} onClick={onDiscard}>{t(uiLang, "actionCancel")}</button>
+              <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "calendarSaveHint")}>
+                <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || saving} onClick={onSave}>
+                  {saving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
+                </button>
+              </span>
+            </div>
+            {saveStatus ? <small className="calendar-save-status">{saveStatus}</small> : null}
+          </div>
+        ) : null}
       </aside>
     );
   }
   const date = selected.slot || selected.publishedAt || "";
   const displayDate = formatStudioDate(date, uiLang);
-  const timeValue = date && !Number.isNaN(new Date(date).getTime())
-    ? `${String(new Date(date).getHours()).padStart(2, "0")}:${String(new Date(date).getMinutes()).padStart(2, "0")}`
+  const parsedDate = date ? new Date(date) : null;
+  const dateValue = parsedDate && !Number.isNaN(parsedDate.getTime()) ? localDateKey(parsedDate) : "";
+  const timeValue = parsedDate && !Number.isNaN(parsedDate.getTime())
+    ? `${String(parsedDate.getHours()).padStart(2, "0")}:${String(parsedDate.getMinutes()).padStart(2, "0")}`
     : "";
   return (
     <aside className="calendar-event-details" aria-label={t(uiLang, "calendarEventDetails")}>
@@ -422,8 +438,12 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
       {linkStatus ? <span className="calendar-link-status" role="status">{linkStatus}</span> : null}
       <div className="calendar-manipulation-panel">
         <label>
+          <span>{t(uiLang, "calendarDate")}</span>
+          <input type="date" value={dateValue} onChange={(event) => onDate(selected, event.target.value)} />
+        </label>
+        <label>
           <span>{t(uiLang, "calendarTime")}</span>
-          <input type="time" value={timeValue} disabled={!selected.slot} title={!selected.slot ? t(uiLang, "calendarTimeScheduledOnly") : undefined} onChange={(event) => onTime(selected, event.target.value)} />
+          <input type="time" value={timeValue} onChange={(event) => onTime(selected, event.target.value)} />
         </label>
         <label>
           <span>{t(uiLang, "videoVisibility")}</span>
@@ -444,6 +464,20 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
         ) : null}
       </div>
       {selected.calendarStaged ? <p className="item-change">{t(uiLang, "calendarStaged")}</p> : null}
+      {pendingCount ? (
+        <div className="calendar-inspector-save">
+          <span>{t(uiLang, "calendarPendingChanges", { count: pendingCount })}</span>
+          <div>
+            <button className="btn ghost" type="button" disabled={saving} onClick={onDiscard}>{t(uiLang, "actionCancel")}</button>
+            <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "calendarSaveHint")}>
+              <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || saving} onClick={onSave}>
+                {saving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
+              </button>
+            </span>
+          </div>
+          {saveStatus ? <small className="calendar-save-status">{saveStatus}</small> : null}
+        </div>
+      ) : saveStatus ? <p className="calendar-save-status">{saveStatus}</p> : null}
       {workingVideo?.conflict ? <p className="calendar-conflict">{t(uiLang, "workingConflict")}</p> : null}
     </aside>
   );
@@ -1738,12 +1772,21 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     stageCalendarChange(video, { privacy: "private", publishAt: next.toISOString() });
   }
 
+  function stageCalendarDate(video, dayKey) {
+    if (!dayKey) return;
+    stageCalendarDay(video, dayKey);
+  }
+
   function stageCalendarTime(video, timeValue) {
     if (!timeValue) return;
     const source = calendarDrafts[video.id]?.publishAt || video.slot || video.publishedAt || new Date().toISOString();
     const date = new Date(source);
     const [hours, minutes] = timeValue.split(":").map(Number);
     date.setHours(hours, minutes, 0, 0);
+    if (date.getTime() <= Date.now()) {
+      setCalendarSaveStatus(t(uiLang, "calendarFutureOnly"));
+      return;
+    }
     stageCalendarChange(video, { privacy: "private", publishAt: date.toISOString() });
   }
 
@@ -2342,20 +2385,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               {catalogStatus.video_count > 0 ? <span>{t(uiLang, "catalogCacheCount", { count: catalogStatus.video_count })}</span> : null}
               {err ? <span className="calendar-error" role="alert">{err}</span> : null}
             </div>
-            {Object.keys(calendarDrafts).length ? (
-              <div className="calendar-staged-bar" role="status">
-                <span>{t(uiLang, "calendarPendingChanges", { count: Object.keys(calendarDrafts).length })}</span>
-                <div>
-                  <button className="btn ghost" type="button" disabled={calendarSaving} onClick={discardCalendarChanges}>{t(uiLang, "actionCancel")}</button>
-                  <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "calendarSaveHint")}>
-                    <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || calendarSaving} onClick={saveCalendarChanges}>
-                      {calendarSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
-                    </button>
-                  </span>
-                </div>
-              </div>
-            ) : null}
-            {calendarSaveStatus ? <p className="calendar-save-status">{calendarSaveStatus}</p> : null}
             <div className="cal" role="grid" aria-label={t(uiLang, "calendarTab")}>
               {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
               {cells.map((day, index) => {
@@ -2489,7 +2518,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               workingVideo={workingVideo?.id === calendarSelected?.id ? workingVideo : null}
               draft={calendarSelected ? calendarDrafts[calendarSelected.id] : null}
               onStage={stageCalendarChange}
+              onDate={stageCalendarDate}
               onTime={stageCalendarTime}
+              pendingCount={Object.keys(calendarDrafts).length}
+              saving={calendarSaving}
+              saveStatus={calendarSaveStatus}
+              writeMode={writeMode}
+              onDiscard={discardCalendarChanges}
+              onSave={saveCalendarChanges}
             />
           )}
         </main>
