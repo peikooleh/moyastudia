@@ -2531,12 +2531,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <input type="time" defaultValue={time} onChange={(event) => stageCalendarTime(video, event.target.value)} />
                     </label>
                   ) : null}
-                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "public", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterPublic")}</button>
-                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "unlisted", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterUnlisted")}</button>
-                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>
-                    {video.slot ? t(uiLang, "calendarCancelSchedule") : video.privacy === "public" ? t(uiLang, "calendarUnpublish") : t(uiLang, "filterPrivate")}
-                  </button>
-                  <button className="calendar-context-close" type="button" onClick={() => setCalendarContext(null)}>{t(uiLang, "close")}</button>
+                  <div className="calendar-context-heading">{t(uiLang, "calendarChangeVisibility")}</div>
+                  <button type="button" role="menuitem" disabled={video.privacy === "public" && !video.slot} onClick={() => { stageCalendarChange(video, { privacy: "public", publishAt: null }); setCalendarContext(null); }}>{video.privacy === "public" && !video.slot ? "✓ " : ""}{t(uiLang, "calendarMakePublic")}</button>
+                  <button type="button" role="menuitem" disabled={video.privacy === "unlisted" && !video.slot} onClick={() => { stageCalendarChange(video, { privacy: "unlisted", publishAt: null }); setCalendarContext(null); }}>{video.privacy === "unlisted" && !video.slot ? "✓ " : ""}{t(uiLang, "calendarMakeUnlisted")}</button>
+                  {!video.slot && video.privacy !== "public" ? (
+                    <button type="button" role="menuitem" disabled={video.privacy === "private"} onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>{video.privacy === "private" ? "✓ " : ""}{t(uiLang, "calendarMakePrivate")}</button>
+                  ) : null}
+                  {video.slot ? (
+                    <button className="calendar-context-danger" type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "calendarCancelSchedule")}</button>
+                  ) : video.privacy === "public" ? (
+                    <button className="calendar-context-danger" type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "calendarUnpublish")}</button>
+                  ) : null}
+                  <small className="calendar-context-note">{t(uiLang, "calendarContextStagedHint")}</small>
                 </div>
               );
             })() : null}
