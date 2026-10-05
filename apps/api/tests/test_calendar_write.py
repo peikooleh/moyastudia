@@ -1,4 +1,4 @@
-from app import main
+﻿from app import main
 from app.models import Channel, GoogleConnection, User, Video
 from app.settings import settings
 from app.tokens import encrypt_refresh_token
@@ -100,7 +100,12 @@ def test_calendar_write_updates_local_snapshot(client, test_database, monkeypatc
     with test_database() as db:
         video = db.get(Video, video_id)
         assert video.youtube_visibility == "private"
-        assert video.youtube_scheduled_at is not None\n        assert video.youtube_scheduled_at.year == 2099\n        assert video.youtube_scheduled_at.month == 1\n        assert video.youtube_scheduled_at.day == 2\n        assert video.youtube_scheduled_at.hour == 15\n        assert video.youtube_scheduled_at.minute == 30
+        assert video.youtube_scheduled_at is not None
+        assert video.youtube_scheduled_at.year == 2099
+        assert video.youtube_scheduled_at.month == 1
+        assert video.youtube_scheduled_at.day == 2
+        assert video.youtube_scheduled_at.hour == 15
+        assert video.youtube_scheduled_at.minute == 30
 
 
 def test_calendar_unschedule_clears_publish_at(client, test_database, monkeypatch):
@@ -129,3 +134,4 @@ def test_calendar_write_requires_same_origin(client, test_database):
         json={"privacy": "private", "publishAt": None},
     )
     assert response.status_code == 403
+
