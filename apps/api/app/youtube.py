@@ -916,6 +916,55 @@ def update_video_metadata(
     }
 
 
+
+def update_video_calendar_status(
+    refresh_token: str,
+    youtube_video_id: str,
+    *,
+    privacy_status: str,
+    publish_at: str | None,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    """Update only YouTube publication state, preserving unrelated mutable status fields."""
+    service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
+    current_response = _execute(
+        service.videos().list(part="status", id=youtube_video_id),
+        "videos.list",
+        recorder,
+    )
+    items = current_response.get("items") or []
+    if not items:
+        raise LookupError("YouTube video status is unavailable")
+    current_status = items[0].get("status") or {}
+    status = {
+        field: current_status[field]
+        for field in (
+            "license",
+            "embeddable",
+            "publicStatsViewable",
+            "selfDeclaredMadeForKids",
+            "containsSyntheticMedia",
+        )
+        if field in current_status
+    }
+    status["privacyStatus"] = privacy_status
+    if publish_at:
+        status["publishAt"] = publish_at
+    response = _execute(
+        service.videos().update(
+            part="status",
+            body={"id": youtube_video_id, "status": status},
+        ),
+        "videos.update",
+        recorder,
+    )
+    returned = response.get("status") or status
+    return {
+        "privacy": returned.get("privacyStatus") or privacy_status,
+        "publishAt": returned.get("publishAt"),
+    }
+
+
 def _optional_int(value: str | None) -> int | None:
     if value is None:
         return None

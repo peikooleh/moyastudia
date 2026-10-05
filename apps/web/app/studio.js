@@ -338,19 +338,18 @@ function VideoInspector({
           </div>
         ) : null}
         {workingError ? <span role="alert">{workingError}</span> : null}
-        {!workingVideo?.conflict && (Object.keys(workingEdits).length || workingVideo?.dirty) ? (
-          <button
-            className="btn ghost"
-            type="button"
-            disabled={!workingVideo || workingLoading || workingSaving}
-            onClick={confirmResetWorkingToSnapshot}
-          >
-            {t(uiLang, "workingUseSnapshot")}
-          </button>
+        {workingVideo && !workingVideo.conflict && (Object.keys(workingEdits).length || workingVideo.dirty) ? (
+          <YoutubeStagedSave
+            uiLang={uiLang}
+            count={Math.max(1, Object.keys(workingEdits).length)}
+            saving={workingSaving}
+            writeMode={writeMode}
+            onDiscard={confirmResetWorkingToSnapshot}
+            onSave={publishWorkingVideo}
+            saveHint="publishVideoHint"
+            className="video-staged-save"
+          />
         ) : null}
-        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "publishVideoHint")}>
-          <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
-        </span>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
@@ -370,28 +369,109 @@ function VideoInspector({
   );
 }
 
-function CalendarEventDetails({ uiLang, selected, workingVideo }) {
+function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", writeMode, onDiscard, onSave, saveHint = "calendarSaveHint", className = "" }) {
+  return (
+    <div className={`youtube-staged-save ${className}`.trim()} role="status">
+      <span className="youtube-staged-note">{t(uiLang, "calendarStaged")}</span>
+      <div className="youtube-staged-actions">
+        <span>{t(uiLang, "calendarPendingChanges", { count })}</span>
+        <div>
+          <button className="btn ghost" type="button" disabled={saving} onClick={onDiscard}>{t(uiLang, "actionCancel")}</button>
+          <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, saveHint)}>
+            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || saving} onClick={onSave}>
+              {saving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}
+            </button>
+          </span>
+        </div>
+      </div>
+      {status ? <small className="calendar-save-status">{status}</small> : null}
+    </div>
+  );
+}
+
+function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave }) {
+  const [linkStatus, setLinkStatus] = useState("");
   if (!selected) {
-    return <aside className="calendar-event-details empty">{t(uiLang, "calendarSelectEvent")}</aside>;
+    return (
+      <aside className="calendar-event-details empty">
+        <strong>{t(uiLang, "calendarSelectEvent")}</strong>
+        <span>{t(uiLang, "calendarSelectEventHint")}</span>
+        {pendingCount ? <YoutubeStagedSave uiLang={uiLang} count={pendingCount} saving={saving} status={saveStatus} writeMode={writeMode} onDiscard={onDiscard} onSave={onSave} /> : null}
+      </aside>
+    );
   }
   const date = selected.slot || selected.publishedAt || "";
   const displayDate = formatStudioDate(date, uiLang);
+  const scheduledDate = selected.slot ? new Date(selected.slot) : null;
+  const dateValue = scheduledDate && !Number.isNaN(scheduledDate.getTime()) ? localDateKey(scheduledDate) : "";
+  const timeValue = scheduledDate && !Number.isNaN(scheduledDate.getTime())
+    ? `${String(scheduledDate.getHours()).padStart(2, "0")}:${String(scheduledDate.getMinutes()).padStart(2, "0")}`
+    : "";
+  const canChooseScheduleDate = Boolean(selected.slot) || selected.privacy === "private";
   return (
     <aside className="calendar-event-details" aria-label={t(uiLang, "calendarEventDetails")}>
       {selected.thumb ? <img className="calendar-event-thumb" src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
-      <h2>{catalogVideoDisplayTitle(selected) || t(uiLang, "untitledVideo")}</h2>
+      <div className="calendar-detail-title">
+        <h2>{catalogVideoDisplayTitle(selected) || t(uiLang, "untitledVideo")}</h2>
+        <span className={`calendar-status-pill status-${selected.status || selected.privacy || "unknown"}`}>
+          {statusLabel(uiLang, selected.status || selected.privacy)}
+        </span>
+      </div>
       <dl className="inspector-data">
         <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : "videoPublishedAt")}</dt><dd>{displayDate || "—"}</dd></div>
         <div><dt>{t(uiLang, "videoVisibility")}</dt><dd>{statusLabel(uiLang, selected.privacy || selected.status)}</dd></div>
-        <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
         <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
         <div><dt>{t(uiLang, "videoViews")}</dt><dd>{selected.views ?? "—"}</dd></div>
         <div><dt>{t(uiLang, "videoLikes")}</dt><dd>{selected.likes ?? "—"}</dd></div>
         <div><dt>{t(uiLang, "videoComments")}</dt><dd>{selected.comments ?? "—"}</dd></div>
+        {selected.youtubeId ? (
+          <div className="calendar-youtube-link">
+            <dt>{t(uiLang, "calendarYoutubeLink")}</dt>
+            <dd>
+              <code>{`youtu.be/${selected.youtubeId}`}</code>
+              <button className="text-button" type="button" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(`https://youtu.be/${selected.youtubeId}`);
+                  setLinkStatus(t(uiLang, "calendarLinkCopied"));
+                } catch {
+                  setLinkStatus(t(uiLang, "calendarLinkCopyFailed"));
+                }
+              }}>{t(uiLang, "calendarCopyLink")}</button>
+              <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(selected.youtubeId)}`} target="_blank" rel="noreferrer">{t(uiLang, "openVideo")}</a>
+            </dd>
+          </div>
+        ) : null}
       </dl>
-      {workingVideo?.dirty ? <p className="item-change">{t(uiLang, "workingModified")}</p> : null}
+      {linkStatus ? <span className="calendar-link-status" role="status">{linkStatus}</span> : null}
+      <div className="calendar-manipulation-panel">
+        <label>
+          <span>{t(uiLang, "calendarDate")}</span>
+          <input type="date" value={dateValue} disabled={!canChooseScheduleDate} title={!canChooseScheduleDate ? t(uiLang, "calendarPublishedDateLockedHint") : t(uiLang, "calendarDateHint")} onChange={(event) => onDate(selected, event.target.value)} />
+        </label>
+        <label>
+          <span>{t(uiLang, "calendarTime")}</span>
+          <input type="time" value={timeValue} disabled={!selected.slot} title={!selected.slot ? t(uiLang, "calendarScheduleFirstHint") : t(uiLang, "calendarTimeHint")} onChange={(event) => onTime(selected, event.target.value)} />
+        </label>
+        <label>
+          <span>{t(uiLang, "videoVisibility")}</span>
+          <select title={t(uiLang, "calendarVisibilityHint")} value={draft?.privacy || selected.privacy || "private"} onChange={(event) => onStage(selected, { privacy: event.target.value, publishAt: event.target.value === "private" ? (draft?.publishAt ?? selected.slot ?? null) : null })}>
+            <option value="public">{t(uiLang, "filterPublic")}</option>
+            <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+            <option value="private">{t(uiLang, "filterPrivate")}</option>
+          </select>
+        </label>
+        {selected.slot ? (
+          <button className="btn ghost" type="button" title={t(uiLang, "calendarCancelScheduleHint")} onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
+            {t(uiLang, "calendarCancelSchedule")}
+          </button>
+        ) : selected.privacy === "public" ? (
+          <button className="btn ghost" type="button" title={t(uiLang, "calendarUnpublishHint")} onClick={() => onStage(selected, { privacy: "private", publishAt: null })}>
+            {t(uiLang, "calendarUnpublish")}
+          </button>
+        ) : null}
+      </div>
+      {pendingCount ? <YoutubeStagedSave uiLang={uiLang} count={pendingCount} saving={saving} status={saveStatus} writeMode={writeMode} onDiscard={onDiscard} onSave={onSave} /> : saveStatus ? <p className="calendar-save-status">{saveStatus}</p> : null}
       {workingVideo?.conflict ? <p className="calendar-conflict">{t(uiLang, "workingConflict")}</p> : null}
-      <p className="readonly-note">{t(uiLang, "readOnlySnapshot")}</p>
     </aside>
   );
 }
@@ -462,6 +542,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
+  const [calendarDrafts, setCalendarDrafts] = useState({});
+  const [calendarSaving, setCalendarSaving] = useState(false);
+  const [calendarSaveStatus, setCalendarSaveStatus] = useState("");
+  const [calendarContext, setCalendarContext] = useState(null);
+  const [calendarQueueOpen, setCalendarQueueOpen] = useState(false);
+  const [calendarQueueQuery, setCalendarQueueQuery] = useState("");
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
@@ -1593,7 +1679,25 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const visiblePlaylistItems = playlistPageItems(filteredPlaylistItems, playlistPage, playlistPageSize);
   const hasNextPlaylistPage = Boolean(currentPlaylistContents?.nextPageToken)
     || filteredPlaylistItems.length > (playlistPage + 1) * playlistPageSize;
-  const calendarSelected = calendarVideos.find((video) => video.id === selectedId) || null;
+  const effectiveCalendarVideos = calendarVideos.map((video) => {
+    const draft = calendarDrafts[video.id];
+    if (!draft) return video;
+    return {
+      ...video,
+      privacy: draft.privacy,
+      status: draft.publishAt ? "scheduled" : draft.privacy,
+      slot: draft.publishAt || "",
+      calendarStaged: true,
+    };
+  });
+  const calendarSelected = effectiveCalendarVideos.find((video) => video.id === selectedId) || null;
+  const calendarQueueVideos = effectiveCalendarVideos.filter((video) => {
+    const needle = calendarQueueQuery.trim().toLocaleLowerCase();
+    const unscheduledPrivate = video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing;
+    const matchesQuery = !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
+    return unscheduledPrivate && matchesQuery;
+  });
+  const calendarQueueCount = effectiveCalendarVideos.filter((video) => video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing).length;
   const statistics = cachedVideoMetricSummary(videos);
   const statisticsRows = [...videos]
     .filter((video) => {
@@ -1637,9 +1741,102 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     saving: "workingSaving",
     error: "workingSaveError",
   };
+  function calendarBaseline(video) {
+    return { privacy: video.privacy || "private", publishAt: video.slot || null };
+  }
+
+  function stageCalendarChange(video, changes) {
+    const original = calendarVideos.find((item) => item.id === video.id) || video;
+    const baseline = calendarBaseline(original);
+    setCalendarDrafts((current) => {
+      const previous = current[video.id] || baseline;
+      const next = { ...previous, ...changes };
+      const clean = next.privacy === baseline.privacy && (next.publishAt || null) === (baseline.publishAt || null);
+      if (clean) {
+        const copy = { ...current };
+        delete copy[video.id];
+        return copy;
+      }
+      return { ...current, [video.id]: next };
+    });
+    setCalendarSaveStatus("");
+  }
+
+  function stageCalendarDay(video, dayKey) {
+    const source = calendarDrafts[video.id]?.publishAt || video.slot || "";
+    const sourceDate = source ? new Date(source) : new Date();
+    const [year, monthValue, day] = dayKey.split("-").map(Number);
+    const next = new Date(year, monthValue - 1, day, sourceDate.getHours(), sourceDate.getMinutes(), 0, 0);
+    if (next.getTime() <= Date.now()) {
+      setCalendarSaveStatus(t(uiLang, "calendarFutureOnly"));
+      return;
+    }
+    stageCalendarChange(video, { privacy: "private", publishAt: next.toISOString() });
+  }
+
+  function stageCalendarDate(video, dayKey) {
+    if (!dayKey) return;
+    stageCalendarDay(video, dayKey);
+  }
+
+  function stageCalendarTime(video, timeValue) {
+    if (!timeValue) return;
+    const source = calendarDrafts[video.id]?.publishAt || video.slot || video.publishedAt || new Date().toISOString();
+    const date = new Date(source);
+    const [hours, minutes] = timeValue.split(":").map(Number);
+    date.setHours(hours, minutes, 0, 0);
+    if (date.getTime() <= Date.now()) {
+      setCalendarSaveStatus(t(uiLang, "calendarFutureOnly"));
+      return;
+    }
+    stageCalendarChange(video, { privacy: "private", publishAt: date.toISOString() });
+  }
+
+  function discardCalendarChanges() {
+    setCalendarDrafts({});
+    setCalendarSaveStatus("");
+    setCalendarContext(null);
+  }
+
+  async function saveCalendarChanges() {
+    const entries = Object.entries(calendarDrafts);
+    if (!entries.length || calendarSaving) return;
+    if (!writeMode?.enabled) {
+      setCalendarSaveStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!window.confirm(t(uiLang, "calendarSaveConfirm", { count: entries.length }))) return;
+    setCalendarSaving(true);
+    setCalendarSaveStatus("");
+    let completed = 0;
+    try {
+      for (const [videoId, draft] of entries) {
+        const response = await apiFetch(`/channels/${channelId}/videos/${videoId}/calendar-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ privacy: draft.privacy, publishAt: draft.publishAt || null }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "calendarSaveError"));
+        completed += 1;
+        setCalendarVideos((current) => current.map((video) => video.id === Number(videoId) ? { ...video, ...data } : video));
+        setCalendarDrafts((current) => {
+          const next = { ...current };
+          delete next[videoId];
+          return next;
+        });
+      }
+      setCalendarSaveStatus(t(uiLang, "calendarSaved"));
+    } catch (error) {
+      setCalendarSaveStatus(t(uiLang, completed ? "calendarPartialSaveError" : "calendarSaveError", { error: String(error.message || error) }));
+    } finally {
+      setCalendarSaving(false);
+    }
+  }
+
   const cells = monthMatrix(month);
   const byDay = {};
-  calendarVideos.forEach((v) => {
+  effectiveCalendarVideos.forEach((v) => {
     const key = (v.slot || v.publishedAt || "").slice(0, 10);
     if (!key) return;
     byDay[key] = byDay[key] || [];
@@ -1981,12 +2178,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         <small>{t(uiLang, "playlistOrderHint")}</small>
                       </div>
                       {playlistQuickDirty ? (
-                        <div className="playlist-quick-save">
-                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={discardPlaylistQuickChanges}>{t(uiLang, "actionCancel")}</button>
-                          <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistQuickSaveHint")}>
-                            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || playlistSaving} onClick={savePlaylistQuickChanges}>{t(uiLang, "saveToYoutube")}</button>
-                          </span>
-                        </div>
+                        <YoutubeStagedSave
+                          uiLang={uiLang}
+                          count={1}
+                          saving={playlistSaving}
+                          writeMode={writeMode}
+                          onDiscard={discardPlaylistQuickChanges}
+                          onSave={savePlaylistQuickChanges}
+                          saveHint="playlistQuickSaveHint"
+                          className="playlist-quick-save"
+                        />
                       ) : null}
                     </aside>
                   ) : null}
@@ -2165,10 +2366,51 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       ) : null}
 
       {view === "calendar" ? (
-        <main className="calendar-workspace">
+        <main className={`calendar-workspace ${calendarQueueOpen ? "queue-open" : ""}`}>
+          {calendarQueueOpen ? (
+            <aside className="calendar-queue" aria-label={t(uiLang, "calendarQueue")}>
+              <header>
+                <div>
+                  <h2>{t(uiLang, "calendarQueue")}</h2>
+                  <span>{t(uiLang, "calendarQueueCount", { count: calendarQueueCount })}</span>
+                </div>
+                <button className="btn ghost" type="button" title={t(uiLang, "close")} aria-label={t(uiLang, "close")} onClick={() => setCalendarQueueOpen(false)}>×</button>
+              </header>
+              <input className="search" value={calendarQueueQuery} onChange={(event) => setCalendarQueueQuery(event.target.value)} placeholder={t(uiLang, "calendarQueueSearch")} aria-label={t(uiLang, "calendarQueueSearch")} />
+              <p className="calendar-queue-help">{t(uiLang, "calendarQueueHelp")}</p>
+              <div className="calendar-queue-list">
+                {calendarQueueVideos.length ? calendarQueueVideos.map((video) => (
+                  <button
+                    key={video.id}
+                    className={`calendar-queue-item ${video.id === selectedId ? "active" : ""}`}
+                    type="button"
+                    draggable
+                    title={t(uiLang, "calendarQueueDragHint")}
+                    onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
+                    onClick={() => {
+                      setPlaylistSelectedVideo(null);
+                      setSelectedId(video.id);
+                      setCalendarContext(null);
+                    }}
+                  >
+                    {video.thumb ? <img src={video.thumb} alt="" /> : <span className="calendar-queue-empty-thumb" />}
+                    <span>
+                      <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
+                      <small>{t(uiLang, "filterPrivate")}</small>
+                    </span>
+                  </button>
+                )) : <div className="calendar-queue-empty">{t(uiLang, calendarQueueQuery ? "calendarQueueNoResults" : "calendarQueueEmpty")}</div>}
+              </div>
+            </aside>
+          ) : null}
           <section className="calendar-panel">
             <header className="calendar-heading">
               <h1>{t(uiLang, "calendarTab")}</h1>
+              <div className="calendar-heading-actions">
+                <button className={`btn ghost calendar-queue-toggle ${calendarQueueOpen ? "active" : ""}`} type="button" title={t(uiLang, "calendarQueueHint")} onClick={() => setCalendarQueueOpen((open) => !open)}>
+                  {t(uiLang, "calendarQueue")} <span>{calendarQueueCount}</span>
+                </button>
+              </div>
               <div className="cal-nav">
                 <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
@@ -2196,20 +2438,49 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 const key = day ? localDateKey(day) : `empty-${index}`;
                 const items = day ? byDay[key] || [] : [];
                 return (
-                  <div key={key} className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`} role="gridcell">
+                  <div
+                    key={key}
+                    className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`}
+                    role="gridcell"
+                    title={day && items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
+                    onDragOver={day ? (event) => event.preventDefault() : undefined}
+                    onDrop={day ? (event) => {
+                      event.preventDefault();
+                      const videoId = Number(event.dataTransfer.getData("text/calendar-video"));
+                      const video = effectiveCalendarVideos.find((item) => item.id === videoId);
+                      if (video) stageCalendarDay(video, key);
+                    } : undefined}
+                  >
                     {day ? <b aria-current={monthHasToday && localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
                     {items.slice(0, 2).map((video) => (
                       <button
                         key={video.id}
                         type="button"
-                        className={`cal-event ${video.id === selectedId ? "active" : ""}`}
-                        title={catalogVideoDisplayTitle(video)}
+                        draggable={Boolean(video.slot)}
+                        title={!video.slot ? t(uiLang, "calendarPublishedDragLockedHint") : t(uiLang, "calendarDragScheduledHint")}
+                        className={`cal-event status-${video.status || video.privacy || "unknown"} ${video.calendarStaged ? "staged" : ""} ${video.id === selectedId ? "active" : ""}`}
+                        onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          setPlaylistSelectedVideo(null);
+                          setSelectedId(video.id);
+                          setCalendarContext({ videoId: video.id, x: event.clientX, y: event.clientY });
+                        }}
                         onClick={() => {
                           setPlaylistSelectedVideo(null);
                           setSelectedId(video.id);
+                          setCalendarContext(null);
                         }}
                       >
-                        {catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}
+                        <span className="cal-event-title">{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
+                        <span className="calendar-hover-card" aria-hidden="true">
+                          {video.thumb ? <img src={video.thumb} alt="" /> : null}
+                          <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
+                          <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                          <small>{statusLabel(uiLang, video.status || video.privacy)}</small>
+                          <small>{t(uiLang, "videoDuration")}: {formatStudioDuration(video.duration) || "—"}</small>
+                          <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
+                        </span>
                       </button>
                     ))}
                     {items.length > 2 ? (
@@ -2221,6 +2492,28 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 );
               })}
             </div>
+            {calendarContext ? (() => {
+              const video = effectiveCalendarVideos.find((item) => item.id === calendarContext.videoId);
+              if (!video) return null;
+              const date = new Date(video.slot || video.publishedAt || Date.now());
+              const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+              return (
+                <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu">
+                  {video.slot ? (
+                    <label>
+                      <span>{t(uiLang, "calendarChangeTime")}</span>
+                      <input type="time" defaultValue={time} onChange={(event) => stageCalendarTime(video, event.target.value)} />
+                    </label>
+                  ) : null}
+                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "public", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterPublic")}</button>
+                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "unlisted", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterUnlisted")}</button>
+                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>
+                    {video.slot ? t(uiLang, "calendarCancelSchedule") : video.privacy === "public" ? t(uiLang, "calendarUnpublish") : t(uiLang, "filterPrivate")}
+                  </button>
+                  <button className="calendar-context-close" type="button" onClick={() => setCalendarContext(null)}>{t(uiLang, "close")}</button>
+                </div>
+              );
+            })() : null}
             {loadingCalendar ? <div className="empty" role="status">{t(uiLang, "catalogLoadingCalendar")}</div> : null}
             {!loadingCalendar && !err && calendarVideos.length === 0 ? (
               <div className="empty">
@@ -2249,7 +2542,17 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <button
                       className={video.id === selectedId ? "active" : ""}
                       type="button"
+                      draggable={Boolean(video.slot)}
+                      title={!video.slot ? t(uiLang, "calendarPublishedDragLockedHint") : t(uiLang, "calendarDragScheduledHint")}
                       aria-pressed={video.id === selectedId}
+                      onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setPlaylistSelectedVideo(null);
+                        setSelectedId(video.id);
+                        setCalendarDetailDay("");
+                        setCalendarContext({ videoId: video.id, x: event.clientX, y: event.clientY });
+                      }}
                       onClick={() => {
                         setPlaylistSelectedVideo(null);
                         setSelectedId(video.id);
@@ -2272,6 +2575,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               uiLang={uiLang}
               selected={calendarSelected}
               workingVideo={workingVideo?.id === calendarSelected?.id ? workingVideo : null}
+              draft={calendarSelected ? calendarDrafts[calendarSelected.id] : null}
+              onStage={stageCalendarChange}
+              onDate={stageCalendarDate}
+              onTime={stageCalendarTime}
+              pendingCount={Object.keys(calendarDrafts).length}
+              saving={calendarSaving}
+              saveStatus={calendarSaveStatus}
+              writeMode={writeMode}
+              onDiscard={discardCalendarChanges}
+              onSave={saveCalendarChanges}
             />
           )}
         </main>

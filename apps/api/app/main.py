@@ -97,6 +97,13 @@ class PlaylistOrderUpdate(BaseModel):
     playlist_item_ids: list[str] = Field(min_length=1, max_length=500)
 
 
+class CalendarVideoUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    privacy: Literal["public", "unlisted", "private"]
+    publishAt: datetime | None
+
+
 class VideoPublishRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1412,6 +1419,62 @@ def publish_channel_video_metadata(
     db.commit()
     db.refresh(video)
     return _video_working_item(video)
+
+
+
+
+@app.put(
+    "/channels/{channel_id}/videos/{video_id}/calendar-status",
+    dependencies=[Depends(require_same_origin)],
+)
+def update_channel_video_calendar_status(
+    channel_id: int,
+    video_id: int,
+    payload: CalendarVideoUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    video = _catalog_video_or_404(db, user, channel_id, video_id, for_update=True)
+    if video.availability_status != "available" or not video.youtube_video_id:
+        raise HTTPException(409, detail={"code": "video_unavailable"})
+
+    publish_at = payload.publishAt
+    if publish_at is not None:
+        if publish_at.tzinfo is None or publish_at.utcoffset() is None:
+            raise HTTPException(422, detail={"code": "schedule_timezone_required"})
+        publish_at = publish_at.astimezone(timezone.utc)
+        if publish_at <= _utcnow():
+            raise HTTPException(422, detail={"code": "schedule_must_be_future"})
+        if payload.privacy != "private":
+            raise HTTPException(422, detail={"code": "scheduled_video_must_be_private"})
+
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            remote = yt.update_video_calendar_status(
+                refresh_token,
+                video.youtube_video_id,
+                privacy_status=payload.privacy,
+                publish_at=publish_at.isoformat().replace("+00:00", "Z") if publish_at else None,
+            )
+    except LookupError as exc:
+        raise HTTPException(404, detail={"code": "video_not_found_on_youtube"}) from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        message = str(exc).lower()
+        if "insufficient" in message or "permission" in message or "scope" in message:
+            raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_calendar_update_failed"}) from exc
+
+    video.youtube_visibility = remote["privacy"]
+    video.youtube_scheduled_at = _parse_youtube_datetime(remote.get("publishAt"))
+    db.commit()
+    db.refresh(video)
+    return _video_catalog_item(video)
 
 
 
