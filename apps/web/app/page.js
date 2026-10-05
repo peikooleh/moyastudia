@@ -143,7 +143,7 @@ export default function HomePage() {
   }
   return (
     <Shell>
-      {({ view, onViewChange }) => <Studio view={view} onViewChange={onViewChange} />}
+      {({ view, onViewChange, writeMode }) => <Studio view={view} onViewChange={onViewChange} writeMode={writeMode} />}
     </Shell>
   );
 }

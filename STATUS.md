@@ -1,4 +1,78 @@
-# Current Handoff — Studio UI/UX, 2026-10-04
+# Current Handoff — Functional Architecture, 2026-10-04
+
+## UI baseline closed
+
+- PR #1 was squash-merged into `main` as `da8b634` after green CI. The UI/UX polish phase is closed.
+- The current production-development baseline remains read-only with local working metadata. No YouTube write, AI provider call or upload was enabled by the architecture work below.
+- New design branch: `architecture-write-mode`.
+
+## Next phase baseline
+
+- Added [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md) as the implementation contract for W1–W9.
+- Write Mode will be server-authoritative and checked on every YouTube mutation; a disabled/enabled frontend button is not a security control.
+- First remote mutation will be single-video title/description/tags via `videos.update`, preserving local drafts on failure and using working revision/conflict checks.
+- Quota accounting will be a backend ledger around centralized YouTube execution. UI will explicitly label it as MoyaStudia-tracked usage rather than claiming Google's authoritative project balance.
+- Official YouTube quota rules were rechecked on 2026-10-04. Current documentation uses separate default daily buckets for `search.list` and `videos.insert` (100 calls each, 1 unit/call) and a 10,000-unit combined default allocation for other endpoints; ordinary reads are generally 1 unit and most mutations 50. Reset is midnight Pacific Time. Costs must remain dated/configurable and be reverified before implementation.
+- AI connections are optional future server-side integrations. API keys must be encrypted at rest and never stored in browser preferences or returned in plaintext. AI Improve actions produce suggestions/local draft changes only; they cannot directly write YouTube.
+- Google connection lifecycle will get explicit disconnect/revoke/reauthorize behavior; hiding an empty connection in Cabinet is not considered a real disconnect.
+- Implementation order is W1 boundaries → W2 quota ledger on reads → W3 server Write Mode → W4 single-video metadata write → W5 thumbnail/status/scheduling → W6 playlists → W7 connection lifecycle → W8 AI → W9 uploads/drafts.
+- Each W-stage must update STATUS/documentation and pass relevant tests/CI before merge.
+
+## W1/W2 implementation — in PR #2
+
+- Added Alembic revision `0006_youtube_quota_usage` and `YouTubeQuotaUsage` ledger rows attributed to user/connection/channel while quota totals are aggregated at the shared Google Cloud project scope.
+- Central YouTube request execution now records each instrumented request attempt as success or provider error with operation/bucket/cost. Existing channel discovery/profile, catalog sync, playlist list/items and video snapshot reads are instrumented.
+- Added authenticated `GET /quota/today` with Pacific-Time quota window, bucket limits, tracked usage, estimated remaining and an explicit `authoritative_google_balance: false` marker.
+- Studio header now shows the real tracked general-bucket usage (for example `API-квота 12 / 10000`) and explains that Google project usage may differ.
+- Added quota tests for Pacific reset boundaries, authentication, aggregation and the dated operation-cost reference; migration coverage includes the new table.
+- Quota telemetry now uses an isolated SQLAlchemy session/transaction so recording a YouTube request cannot commit unrelated pending domain changes in the request session.
+- PR #2 is intentionally draft while CI and final review run.
+
+## W3 implementation — in PR #2
+
+- Added Alembic revision `0007_user_write_mode`: each authenticated user has a server-persisted Write Mode flag, default OFF.
+- Added authenticated `GET /write-mode` and same-origin protected `PUT /write-mode`.
+- Enabling requires the explicit confirmation token `enable_youtube_writes`; disabling does not require confirmation.
+- API responses return `youtube_writes_available: true` because W4 now exposes a guarded metadata mutation; Write Mode still only arms writes and never sends one by itself.
+- Studio's previous disabled Write Mode placeholder is now a real server-backed switch with EN/RU/UK confirmation copy and persisted state.
+- `Save to YouTube` is enabled for the W4 metadata subset. Thumbnail/captions and real YouTube playlist mutations remain outside the active UI write surface.
+- Added tests for default OFF, explicit confirmation, persistence/toggle behavior, authentication and same-origin enforcement, plus migration coverage.
+
+## UI polish + channel watch time — in PR #2
+
+- Moved the real server-backed Write Mode switch into the main application header beside sync/quota status. Removed the separate full-width Write Mode strip.
+- Removed repeated temporary/helper copy from Video settings/actions and Statistics so permanent controls/data carry the interface instead of placeholder notices.
+- Fixed Video scroll layering by making the catalog action/status bar non-sticky; it no longer overlays the selected video inspector while the page is scrolled.
+- Added an embedded YouTube preview to the selected-video summary. The standard YouTube player provides play/pause, seek/progress, volume and fullscreen without duplicating playback state in MoyaStudia.
+- Added owned-channel `GET /channels/{channel_id}/analytics/summary` backed by YouTube Analytics `estimatedMinutesWatched`, and a fourth Statistics headline card for total channel watch time.
+- Watch time is not approximated from duration × views. It comes from YouTube Analytics for the channel date range and displays `—` if Analytics is unavailable.
+- The YouTube Analytics API must be enabled for the Google Cloud project. Current Google documentation for `reports.query` requires `youtube.readonly`, which the existing YouTube connection already requests.
+- Added owner/auth coverage for the analytics summary endpoint.
+
+## W4 implementation — in PR #2
+
+- Added the first real YouTube mutation: metadata update for one explicitly selected catalog video only.
+- Supported fields are title, description, tags and video language. Language is now a local working-draft field and a Studio dropdown rather than a disabled raw code.
+- Added migration `0008_video_working_language` for local/base language state.
+- Added guarded `POST /channels/{channel_id}/videos/{video_id}/publish-metadata`: authentication, same-origin, ownership, Write Mode ON, exact working revision, no unresolved conflict, available remote video, server-side metadata validation and 50-unit tracked quota preflight are required before YouTube is contacted.
+- Remote update uses `videos.update(part=snippet)` and preserves the existing YouTube category ID because YouTube requires category ID when updating snippet metadata.
+- Successful remote writes replace the local YouTube snapshot and clear the published local working copy. Failed remote writes leave the local draft intact.
+- W4 requests YouTube `youtube.force-ssl` in addition to `youtube.readonly`. Existing connections created before W4 must be reauthorized before the first write; the UI reports that requirement instead of silently failing.
+- Added backend coverage for Write Mode OFF, stale revision, same-origin enforcement and successful single-video snapshot update.
+- Metadata publish now locks the selected video row before validating the revision, preventing two concurrent requests from intentionally publishing the same working revision twice.
+- Playlist read items now retain YouTube's `playlistItemId`. Backend-only YouTube primitives for playlist create/add/remove are present behind the common quota-recording executor and have unit coverage, but no application endpoint or UI invokes those remote mutations yet.
+- Bulk operations, playlist writes and all YouTube delete operations remain unavailable. W4 exposes no delete endpoint.
+
+## Known debt before/while implementing
+
+- `studio.js`, `globals.css` and `i18n.js` are large; split only along feature boundaries needed by the next stage rather than doing a broad rewrite.
+- Existing `dailyEdits` / `dailyUploads` browser preferences are not YouTube quota and must not be reused as quota truth.
+- Channel language is browser-local; move it server-side only if cross-device persistence becomes a product requirement.
+- Legal pages remain launch placeholders and require separate legal/localization review.
+
+---
+
+# Previous Handoff — Studio UI/UX, 2026-10-04
 
 ## A1–A11 UI batch
 
@@ -712,3 +786,16 @@ Security:
 - `git diff --check` — требуется/выполнено отдельно перед commit.
 - Browser smoke: локальный Next.js dev server успешно запустился; полноценный authenticated Studio flow в этой сессии не выполнялся через изолированный API/session environment.
 - Commit/push не выполнялись.
+
+
+## Запись 2026-10-04 — pre-merge hardening Write Mode и local playlists
+
+- Quota telemetry изолирована от request/domain transaction: YouTube quota attempts теперь записываются отдельной SQLAlchemy Session и не могут своим `commit()` случайно закоммитить pending domain changes текущего запроса.
+- Аудит YouTube Data API вызовов: Data API reads/writes в `app/youtube.py` проходят через централизованный `_execute` и quota recorder; YouTube Analytics остаётся отдельным API и не включается в Data API ledger.
+- Текущая granular quota-модель повторно сверена с официальной документацией YouTube на 2026-10-04. Добавлены известные costs для будущих captions/channel/video-delete write paths; это только accounting constants, новые destructive endpoints не включены.
+- `GET/PUT /write-mode` теперь правдиво возвращает `youtube_writes_available: true`, поскольку W4 metadata publish уже реализован. Confirmation copy обновлён: Write Mode разрешает поддерживаемые write operations, но сам по себе ничего не отправляет.
+- W4 metadata publish сериализуется row lock по выбранному Video перед revision check, чтобы два параллельных запроса не отправили одну и ту же working revision дважды. Frontend дополнительно уже блокирует повторный submit через `workingSaving`.
+- Local playlist drafts теперь серверно персистентны через migration `0009_local_playlist_drafts`: create/list/membership/delete owner-scoped, mutations same-origin, reload браузера не должен терять draft/membership.
+- Добавлены backend tests для local playlist persistence, same-origin и cross-user ownership; migration test проверяет наличие `local_playlists`.
+- Исправлена локализация playlist removal: en/ru/uk keys снова находятся в своих языковых секциях, без duplicate-key override.
+- Реальные YouTube playlist mutations, thumbnail upload, captions upload и destructive video delete в этом hardening-проходе намеренно не включались. Их нужно делать отдельными write increments после merge текущей ветки.

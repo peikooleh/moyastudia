@@ -4,7 +4,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Пользователь подключает свой Google-аккаунт и свои YouTube-каналы. Видео остаются на YouTube; MoyaStudia хранит только необходимые метаданные и настройки, поэтому большие видеофайлы не нужно переносить в наше хранилище.
 
-Текущая реализация включает Foundation, channel discovery/selection (Stage 2A/2B) и read-only video catalog/sync (Stage 3). Google OAuth — единственный реализованный identity flow; Apple login и YouTube write operations не включены. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md).
+Текущая реализация включает Foundation, channel discovery/selection (Stage 2A/2B) и read-only video catalog/sync (Stage 3). Google OAuth — единственный реализованный identity flow; Apple login и YouTube write operations не включены. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md). Архитектура следующей функциональной фазы зафиксирована в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md).
 
 ## Что умеем сегодня
 
@@ -20,7 +20,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - Загрузка больших видеофайлов в MoyaStudia.
 - Запись метаданных, плейлистов, обложек и расписания в YouTube.
 - Биллинг и публичный SaaS multi-tenancy.
-- AI-провайдеры и генерация контента — вне архитектуры MoyaStudia.
+- AI-провайдеры пока не подключены. Следующая фаза предусматривает опциональные server-side AI connections только для предложений по метаданным; AI не получает права напрямую изменять YouTube.
 
 ## Стек
 

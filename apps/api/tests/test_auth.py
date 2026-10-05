@@ -44,13 +44,14 @@ def test_identity_oauth_scopes_accept_google_set_and_reject_mismatch():
     ]
     assert IDENTITY_SCOPES == expected_identity_scopes
     assert YOUTUBE_SCOPES == [
+        "https://www.googleapis.com/auth/youtube.force-ssl",
         "https://www.googleapis.com/auth/youtube.readonly",
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
     ]
     assert "email" not in YOUTUBE_SCOPES
     assert "profile" not in YOUTUBE_SCOPES
-    assert "https://www.googleapis.com/auth/youtube.force-ssl" not in YOUTUBE_SCOPES
+    assert "https://www.googleapis.com/auth/youtube.force-ssl" in YOUTUBE_SCOPES
 
     token_response = json.dumps(
         {
@@ -375,7 +376,7 @@ def test_youtube_connection_persists_only_encrypted_token(
     login = client.get("/auth/youtube/login")
     assert login.status_code == 307
     assert "youtube.readonly" in " ".join(YOUTUBE_SCOPES)
-    assert not any("force-ssl" in scope for scope in YOUTUBE_SCOPES)
+    assert any("force-ssl" in scope for scope in YOUTUBE_SCOPES)
     callback = client.get(
         "/auth/youtube/callback",
         params={"code": "authorization-code", "state": state},

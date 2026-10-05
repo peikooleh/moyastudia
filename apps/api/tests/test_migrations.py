@@ -38,7 +38,12 @@ def test_foundation_migration_discards_prototype_records(tmp_path):
         "videos",
         "user_sessions",
         "oauth_states",
+        "youtube_quota_usage",
     } <= set(inspector.get_table_names())
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    assert "write_mode_enabled" in user_columns
+    video_columns = {column["name"] for column in inspector.get_columns("videos")}
+    assert {"language", "working_base_language"} <= video_columns
     assert "refresh_token" not in {
         column["name"] for column in inspector.get_columns("channels")
     }
@@ -128,6 +133,7 @@ def test_video_catalog_migration_preserves_existing_video_rows(tmp_path):
     assert "working_revision" in video_columns
     assert "availability_status" in video_columns
     assert "channel_catalog_syncs" in inspector.get_table_names()
+    assert "local_playlists" in inspector.get_table_names()
     with migrated_engine.connect() as connection:
         video = connection.execute(
             text(

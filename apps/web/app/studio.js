@@ -7,6 +7,7 @@ import {
   catalogVideoDisplayTitle,
   catalogVideoDetailUrl,
   catalogVideoWorkingUrl,
+  catalogVideoPublishUrl,
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
@@ -42,6 +43,20 @@ const SORTS = [
   { id: "date", key: "sortDate" },
   { id: "title", key: "sortTitle" },
   { id: "status", key: "sortStatus" },
+];
+
+const VIDEO_CATEGORIES = [
+  ["1", "Film & Animation"], ["2", "Autos & Vehicles"], ["10", "Music"], ["15", "Pets & Animals"],
+  ["17", "Sports"], ["19", "Travel & Events"], ["20", "Gaming"], ["22", "People & Blogs"],
+  ["23", "Comedy"], ["24", "Entertainment"], ["25", "News & Politics"], ["26", "Howto & Style"],
+  ["27", "Education"], ["28", "Science & Technology"], ["29", "Nonprofits & Activism"],
+];
+
+const VIDEO_LANGUAGES = [
+  ["", "—"], ["de", "Deutsch"], ["en", "English"], ["ru", "Русский"], ["uk", "Українська"],
+  ["fr", "Français"], ["it", "Italiano"], ["es", "Español"], ["pl", "Polski"], ["pt", "Português"],
+  ["tr", "Türkçe"], ["nl", "Nederlands"], ["cs", "Čeština"], ["ro", "Română"], ["ja", "日本語"],
+  ["ko", "한국어"], ["zh", "中文"],
 ];
 
 const WEEKDAY_KEYS = ["dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat", "daySun"];
@@ -142,11 +157,19 @@ function VideoInspector({
   workingStateKey,
   workingStateLabels,
   updateWorkingField,
-  resetWorkingToSnapshot,
-  saveWorkingVideo,
+  confirmResetWorkingToSnapshot,
   resolveWorkingConflict,
+  publishWorkingVideo,
+  writeMode,
 }) {
   const [copyStatus, setCopyStatus] = useState("");
+  const [localCategory, setLocalCategory] = useState("");
+  const [localAudience, setLocalAudience] = useState("");
+
+  useEffect(() => {
+    setLocalCategory(selected?.category || "");
+    setLocalAudience(selected?.madeForKids === true ? "kids" : selected?.madeForKids === false ? "not-kids" : "");
+  }, [selected?.id, selected?.category, selected?.madeForKids, selected?.captions]);
   if (!selected) {
     return <section className="video-inspector empty">{t(uiLang, "catalogSelectVideo")}</section>;
   }
@@ -155,19 +178,20 @@ function VideoInspector({
   const displayDate = selected.slot || selected.publishedAt || "";
   const description = workingDraft?.description ?? selected.description ?? "";
   const tags = workingDraft?.tags ?? selected.tags ?? "";
+  const language = workingDraft?.language ?? selected.language ?? "";
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
-  const categoryName = youtubeVideoCategoryName(selected.category);
-  const categoryValue = categoryName || (selected.category ? t(uiLang, "videoCategoryUnknown", { id: selected.category }) : "—");
 
   return (
     <section className="video-inspector" aria-label={t(uiLang, "selectedVideo")}>
       <header className="video-summary">
         <div className="video-summary-thumbnail">
           {selected.thumb ? <img src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
-          <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "changeThumbnail")}</button>
-          <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "removeThumbnail")}</button>
+          <div className="thumbnail-actions">
+            <button className="btn ghost" type="button" onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; if (file) setCopyStatus(file.name); }} />
+            <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "removeThumbnail")}</button>
+          </div>
         </div>
         <div className="video-summary-copy">
           <h2>{effectiveTitle || t(uiLang, "untitledVideo")}</h2>
@@ -181,12 +205,13 @@ function VideoInspector({
           {copyStatus ? <span role="status">{copyStatus}</span> : null}
           {workingVideo?.dirty ? <span className="item-change">{t(uiLang, "workingModified")}</span> : null}
         </div>
+        {selected.youtubeId ? <div className="video-preview"><iframe src={`https://www.youtube.com/embed/${encodeURIComponent(selected.youtubeId)}?rel=0`} title={t(uiLang, "videoPreview")} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
       </header>
 
       <section className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-title"
             rows={2}
@@ -200,7 +225,7 @@ function VideoInspector({
         </div>
         <div className="description-metadata-layout">
         <div className={`editor-field description-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-description"
             rows={10}
@@ -214,7 +239,7 @@ function VideoInspector({
         </div>
         </div>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" disabled title={t(uiLang, "aiImproveComingLater")}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-tags"
             rows={4}
@@ -230,11 +255,17 @@ function VideoInspector({
 
       <section className="video-properties" aria-labelledby="video-properties-title">
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
-        <label>{t(uiLang, "videoCategory")}<select value={categoryValue} disabled><option value={categoryValue}>{categoryValue}</option></select></label>
-        <fieldset disabled><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" checked={selected.madeForKids === true} readOnly /> {t(uiLang, "audienceKids")}</label><label><input type="radio" checked={selected.madeForKids === false} readOnly /> {t(uiLang, "audienceNotKids")}</label></fieldset>
-        <label>{t(uiLang, "videoLanguage")}<input value={selected.language || "—"} readOnly disabled /></label>
-        <fieldset disabled><legend>{t(uiLang, "videoCaptions")}</legend><label><input type="checkbox" checked={selected.captions === true} readOnly /> {t(uiLang, selected.captions ? "yes" : "no")}</label><small>{t(uiLang, "subtitlesComingLater")}</small></fieldset>
-        <p>{t(uiLang, "writeModeDescription")}</p>
+        <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
+        <label>{t(uiLang, "videoCategory")}<select value={localCategory} onChange={(event) => setLocalCategory(event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+        <fieldset><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "kids"} onChange={() => setLocalAudience("kids")} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "not-kids"} onChange={() => setLocalAudience("not-kids")} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
+        <fieldset className="captions-settings">
+          <legend>{t(uiLang, "videoCaptions")}</legend>
+          <div className="captions-status">
+            <span>{t(uiLang, "captionsYoutubeStatus")}</span>
+            <strong>{t(uiLang, selected.captions === true ? "captionsPresent" : selected.captions === false ? "captionsNotDetected" : "captionsUnknown")}</strong>
+          </div>
+          <button className="btn ghost captions-upload" type="button" onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt" onChange={(event) => { const file = event.target.files?.[0]; if (file) setWorkingError(file.name); }} />
+        </fieldset>
       </section>
 
       <div className="working-controls" aria-live="polite">
@@ -263,21 +294,12 @@ function VideoInspector({
             className="btn ghost"
             type="button"
             disabled={!workingVideo || workingLoading || workingSaving}
-            onClick={resetWorkingToSnapshot}
+            onClick={confirmResetWorkingToSnapshot}
           >
             {t(uiLang, "workingUseSnapshot")}
           </button>
         ) : null}
-        <button
-          className="btn ghost"
-          type="button"
-          disabled={!workingVideo || workingLoading || workingSaving || !Object.keys(workingEdits).length}
-          onClick={saveWorkingVideo}
-        >
-          {workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveLocally")}
-        </button>
-        <button className="btn youtube-write-action" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "saveToYoutube")}</button>
-        <span className="write-action-help">{t(uiLang, "writeModeDescription")}</span>
+        <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} title={!writeMode?.enabled ? t(uiLang, "writeModeDescription") : ""} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
@@ -323,7 +345,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo }) {
   );
 }
 
-export function Studio({ view = "videos", onViewChange = () => {} }) {
+export function Studio({ view = "videos", onViewChange = () => {}, writeMode = { enabled: false } }) {
   const { prefs, uiLang } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
   const [videos, setVideos] = useState([]);
@@ -336,6 +358,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   });
   const [playlistRetry, setPlaylistRetry] = useState(0);
   const [playlistQuery, setPlaylistQuery] = useState("");
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
   const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [playlistContents, setPlaylistContents] = useState({
     channelId: "",
@@ -351,6 +374,9 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const [playlistPage, setPlaylistPage] = useState(0);
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
+  const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
+  const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
+  const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("date");
   const [query, setQuery] = useState("");
@@ -379,6 +405,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
+  const [channelAnalytics, setChannelAnalytics] = useState(null);
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -398,6 +425,26 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     playlistContents.channelId === channelId
     && playlistContents.playlistId === selectedPlaylistId
   ) ? playlistContents : null;
+  useEffect(() => {
+    if (!channelId) {
+      setChannelAnalytics(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    apiFetch(`/channels/${channelId}/analytics/summary`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("analytics unavailable");
+        return response.json();
+      })
+      .then((data) => {
+        if (!controller.signal.aborted) setChannelAnalytics(data);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setChannelAnalytics(null);
+      });
+    return () => controller.abort();
+  }, [channelId]);
+
   useEffect(() => {
     const requestId = ++channelRequestId.current;
     syncRunId.current += 1;
@@ -528,21 +575,29 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     }
     const controller = new AbortController();
     setPlaylistState({ channelId, items: [], loading: true, error: "" });
-    apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(
-            (typeof data?.detail === "string" && data.detail)
-              || t(uiLangRef.current, "playlistsLoadError"),
-          );
+    Promise.all([
+      apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal }),
+      apiFetch(`/channels/${channelId}/local-playlists`, { signal: controller.signal }),
+    ])
+      .then(async ([remoteResponse, localResponse]) => {
+        const [remoteRows, localRows] = await Promise.all([remoteResponse.json(), localResponse.json()]);
+        if (!remoteResponse.ok) {
+          throw new Error((typeof remoteRows?.detail === "string" && remoteRows.detail) || t(uiLangRef.current, "playlistsLoadError"));
         }
-        return data;
+        if (!localResponse.ok) throw new Error(localRows.detail || t(uiLangRef.current, "playlistsLoadError"));
+        return { remoteRows, localRows };
       })
-      .then((rows) => {
+      .then(({ remoteRows, localRows }) => {
         if (controller.signal.aborted) return;
-        const items = Array.isArray(rows) ? rows.map(mapPlaylistForStudio) : [];
-        setPlaylistState({ channelId, items, loading: false, error: "" });
+        const remoteItems = Array.isArray(remoteRows) ? remoteRows.map(mapPlaylistForStudio) : [];
+        const localItems = Array.isArray(localRows) ? localRows.map((row) => ({
+          id: row.id, title: row.title, description: "", thumb: "", publishedAt: "", privacy: "private",
+          itemCount: row.videoIds?.length || 0, localOnly: true,
+        })) : [];
+        const memberships = {};
+        localRows.forEach((row) => { memberships[row.id] = row.videoIds || []; });
+        setLocalPlaylistMemberships(memberships);
+        setPlaylistState({ channelId, items: [...localItems, ...remoteItems], loading: false, error: "" });
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
@@ -567,6 +622,36 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     if (view !== "playlists" || !channelId || !selectedPlaylistId) {
       setPlaylistContents({
         channelId, playlistId: selectedPlaylistId, items: [], nextPageToken: "", loading: false, error: "",
+      });
+      return undefined;
+    }
+    const localPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId && playlist.localOnly);
+    if (localPlaylist) {
+      const memberIds = new Set(localPlaylistMemberships[selectedPlaylistId] || []);
+      const knownVideos = new Map();
+      videos.forEach((video) => {
+        if (video.youtubeId) knownVideos.set(video.youtubeId, video);
+      });
+      Object.entries(localPlaylistVideoCache).forEach(([videoId, video]) => {
+        if (!knownVideos.has(videoId)) knownVideos.set(videoId, video);
+      });
+      const items = [...memberIds]
+        .map((videoId, index) => {
+          const video = knownVideos.get(videoId);
+          if (!video) return null;
+          return {
+            videoId,
+            title: catalogVideoDisplayTitle(video),
+            thumb: video.thumb || "",
+            position: index,
+            privacy: video.privacy || "",
+            catalogVideo: video.id ? video : null,
+            videoSnapshot: video.id ? null : video,
+          };
+        })
+        .filter(Boolean);
+      setPlaylistContents({
+        channelId, playlistId: selectedPlaylistId, items, nextPageToken: "", loading: false, error: "",
       });
       return undefined;
     }
@@ -605,12 +690,11 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
         }
       });
     return () => controller.abort();
-  }, [channelId, selectedPlaylistId, playlistContentsRetry, view]);
+  }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, localPlaylistVideoCache, videos]);
 
   useEffect(() => {
     setPlaylistPage(0);
     setSelectedPlaylistVideoIds(new Set());
-    setPlaylistIdCopyStatus("");
   }, [selectedPlaylistId]);
 
   useEffect(() => {
@@ -765,6 +849,143 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     });
   }
 
+  async function openPlaylistMembershipEditor(mode) {
+    if (!selectedPlaylistVideoIds.size) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
+      return;
+    }
+    const videoIds = [...selectedPlaylistVideoIds];
+    setPlaylistMembershipEditor({ mode, targets: new Set(), loading: true });
+    try {
+      const params = new URLSearchParams();
+      videoIds.forEach((videoId) => params.append("video_id", videoId));
+      const response = await apiFetch(`/channels/${channelId}/playlist-memberships?${params.toString()}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipLoadError"));
+      const remote = data.memberships || {};
+      const targets = new Set();
+      playlists.forEach((playlist) => {
+        const allRemote = !playlist.localOnly && videoIds.every((videoId) => (remote[videoId] || []).includes(playlist.id));
+        const local = localPlaylistMemberships[playlist.id];
+        const allLocal = Array.isArray(local) && videoIds.every((videoId) => local.includes(videoId));
+        if (allRemote || allLocal) targets.add(playlist.id);
+      });
+      setPlaylistMembershipEditor({ mode, targets, loading: false });
+    } catch (error) {
+      setPlaylistMembershipEditor(null);
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
+  function togglePlaylistMembershipTarget(playlistId, checked) {
+    setPlaylistMembershipEditor((current) => {
+      if (!current) return current;
+      const targets = new Set(current.targets);
+      if (checked) targets.add(playlistId);
+      else targets.delete(playlistId);
+      return { ...current, targets };
+    });
+  }
+
+  function applyLocalPlaylistMemberships() {
+    if (!playlistMembershipEditor) return;
+    const videoIds = [...selectedPlaylistVideoIds];
+    const targets = playlistMembershipEditor.targets;
+    const knownItems = currentPlaylistContents?.items || [];
+    setLocalPlaylistVideoCache((current) => {
+      const next = { ...current };
+      knownItems.forEach((item) => {
+        if (videoIds.includes(item.videoId)) {
+          next[item.videoId] = item.catalogVideo || item.videoSnapshot || {
+            youtubeId: item.videoId,
+            title: item.title || "",
+            effectiveTitle: item.title || "",
+            thumb: item.thumb || "",
+            privacy: item.privacy || "",
+          };
+        }
+      });
+      return next;
+    });
+    setLocalPlaylistMemberships((current) => {
+      const next = { ...current };
+      playlists.forEach((playlist) => {
+        const membership = new Set(next[playlist.id] || []);
+        videoIds.forEach((videoId) => {
+          if (targets.has(playlist.id)) membership.add(videoId);
+          else membership.delete(videoId);
+        });
+        next[playlist.id] = [...membership];
+      });
+      return next;
+    });
+    const localTargets = playlists.filter((playlist) => playlist.localOnly);
+    localTargets.forEach((playlist) => {
+      const currentMembership = new Set(localPlaylistMemberships[playlist.id] || []);
+      videoIds.forEach((videoId) => {
+        if (targets.has(playlist.id)) currentMembership.add(videoId);
+        else currentMembership.delete(videoId);
+      });
+      apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(playlist.id)}/membership`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_ids: [...currentMembership] }),
+      }).catch(() => {});
+    });
+    setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
+    setPlaylistMembershipEditor(null);
+  }
+
+  async function removeSelectedFromCurrentPlaylist() {
+    if (!selectedPlaylistVideoIds.size || !selectedPlaylist) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
+      return;
+    }
+    if (!selectedPlaylist.localOnly) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistRemoveYoutubeUnavailable"));
+      return;
+    }
+    const removedIds = new Set(selectedPlaylistVideoIds);
+    const nextVideoIds = (localPlaylistMemberships[selectedPlaylist.id] || []).filter((videoId) => !removedIds.has(videoId));
+    try {
+      const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}/membership`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_ids: nextVideoIds }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipSaveError"));
+      setLocalPlaylistMemberships((current) => ({ ...current, [selectedPlaylist.id]: data.videoIds || nextVideoIds }));
+      setSelectedPlaylistVideoIds(new Set());
+      setPlaylistIdCopyStatus(t(uiLang, "playlistRemovedLocally"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
+  async function deleteLocalPlaylist() {
+    if (!selectedPlaylist?.localOnly) return;
+    if (!window.confirm(t(uiLang, "playlistDeleteLocalConfirm"))) return;
+    setPlaylistIdCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistDeleteLocalError"));
+      const deletedId = selectedPlaylist.id;
+      setPlaylistState((current) => ({ ...current, items: current.items.filter((playlist) => playlist.id !== deletedId) }));
+      setLocalPlaylistMemberships((current) => {
+        const next = { ...current };
+        delete next[deletedId];
+        return next;
+      });
+      setSelectedPlaylistId((current) => (current === deletedId ? "" : current));
+      setPlaylistRetry((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistDeletedLocally"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
   async function copyPlaylistId() {
     if (!selectedPlaylist?.id) return;
     try {
@@ -816,38 +1037,68 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
     setWorkingError("");
   }
 
-  async function saveWorkingVideo() {
-    if (!workingVideo || !Object.keys(workingEdits).length || workingSaving) return;
+  function confirmResetWorkingToSnapshot() {
+    if (!window.confirm(t(uiLang, "discardChangesConfirm"))) return;
+    resetWorkingToSnapshot();
+  }
+
+
+  async function publishWorkingVideo() {
+    if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict) return;
+    if (!workingVideo.dirty && !Object.keys(workingEdits).length) return;
+    if (!window.confirm(t(uiLang, "publishMetadataConfirm"))) return;
     setWorkingSaving(true);
     setWorkingError("");
+    let draft = workingVideo;
     try {
-      const response = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
-        method: "PATCH",
+      if (Object.keys(workingEdits).length) {
+        const saveResponse = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(workingVideoPatch(workingVideo.revision, workingEdits)),
+        });
+        const saved = await saveResponse.json();
+        if (saveResponse.status === 409 && saved.detail?.current) {
+          setWorkingVideo(saved.detail.current);
+          setWorkingDraft(saved.detail.current.effective);
+          setWorkingSaveState("conflict");
+          throw new Error(t(uiLang, "workingRevisionError"));
+        }
+        if (!saveResponse.ok) throw new Error(saved.detail || t(uiLang, "workingSaveError"));
+        draft = saved;
+        setWorkingVideo(saved);
+        setWorkingDraft(saved.effective);
+        setWorkingEdits({});
+        setWorkingSaveState(saved.conflict ? "conflict" : "saved");
+        if (saved.conflict) throw new Error(t(uiLang, "workingRevisionError"));
+      }
+
+      const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(workingVideoPatch(workingVideo.revision, workingEdits)),
+        body: JSON.stringify({ revision: draft.revision }),
       });
       const data = await response.json();
       if (response.status === 409 && data.detail?.current) {
         setWorkingVideo(data.detail.current);
+        setWorkingDraft(data.detail.current.effective);
         setWorkingSaveState("conflict");
-        setWorkingError(t(uiLang, "workingRevisionError"));
-        return;
+        throw new Error(t(uiLang, "workingRevisionError"));
       }
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "workingSaveError"));
+      if (!response.ok) {
+        const code = data.detail?.code;
+        if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+        if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
+        throw new Error(t(uiLang, "youtubePublishError"));
+      }
       setWorkingVideo(data);
       setWorkingDraft(data.effective);
       setWorkingEdits({});
-      setWorkingSaveState(data.conflict ? "conflict" : "saved");
-      setVideos((current) => current.map((video) => (
-        video.id === data.id ? { ...video, effectiveTitle: data.effective.title } : video
-      )));
-      setPlaylistSelectedVideo((current) => (
-        current?.id === data.id
-          ? { ...current, effectiveTitle: data.effective.title, dirty: data.dirty }
-          : current
-      ));
+      setWorkingSaveState("");
+      setWorkingDetailReload((current) => current + 1);
+      setCatalogReload((current) => current + 1);
     } catch (error) {
-      setWorkingSaveState("error");
+      setWorkingSaveState((current) => current === "conflict" ? current : "error");
       setWorkingError(String(error.message || error));
     } finally {
       setWorkingSaving(false);
@@ -1033,18 +1284,9 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
   }
   return (
     <div className="studio-wrap">
-      <div className="studio-mode-placeholder">
-        <span id="write-mode-label" className="mode-switch-label">{t(uiLang, "writeMode")}</span>
-        <button className="mode-switch" type="button" role="switch" aria-checked="false" aria-labelledby="write-mode-label" aria-describedby="write-mode-description" disabled>
-          <span aria-hidden="true" />
-        </button>
-        <span className="mode-coming-later">{t(uiLang, "comingLater")}</span>
-        <p id="write-mode-description">{t(uiLang, "writeModeDescription")}</p>
-      </div>
       {view === "videos" ? (
-        <header className="workspace-heading">
+        <header className="workspace-heading compact-workspace-heading">
           <h1>{t(uiLang, "videos")}</h1>
-          <span>{t(uiLang, "videoCount", { count: catalogTotal })}</span>
         </header>
       ) : null}
 
@@ -1074,10 +1316,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                 : t(uiLang, "catalogUnknown")}
             </strong>
             {catalogStatus.video_count > 0 ? (
-              <span>{t(uiLang, "catalogCacheCount", { count: catalogStatus.video_count })}</span>
-            ) : null}
-            {["LOADING", "PARTIAL"].includes(catalogStatus.state) ? (
-              <span>{t(uiLang, "catalogScannedCount", { count: catalogStatus.scanned_count || 0 })}</span>
+              <span className="catalog-progress">{Math.min(catalogStatus.scanned_count || catalogStatus.video_count, catalogStatus.video_count)}/{catalogStatus.video_count}</span>
             ) : null}
             {catalogStatus.last_success_at ? (
               <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
@@ -1212,9 +1451,10 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             workingStateKey={workingStateKey}
             workingStateLabels={workingStateLabels}
             updateWorkingField={updateWorkingField}
-            resetWorkingToSnapshot={resetWorkingToSnapshot}
-            saveWorkingVideo={saveWorkingVideo}
+            confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
             resolveWorkingConflict={resolveWorkingConflict}
+            publishWorkingVideo={publishWorkingVideo}
+            writeMode={writeMode}
           />
         </div>
         </>
@@ -1237,6 +1477,28 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                 aria-label={t(uiLang, "playlistSearch")}
               />
             </div>
+            <form className="playlist-create" onSubmit={(event) => {
+              event.preventDefault();
+              const title = newPlaylistTitle.trim();
+              if (!title) return;
+              const localId = `local-${Date.now()}`;
+              apiFetch(`/channels/${channelId}/local-playlists`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ local_id: localId, title }),
+              }).then(async (response) => {
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistCreateError"));
+                setPlaylistState((current) => ({ ...current, channelId, items: [{ id: data.id, title: data.title, itemCount: 0, privacy: "private", localOnly: true }, ...current.items] }));
+                setLocalPlaylistMemberships((current) => ({ ...current, [data.id]: data.videoIds || [] }));
+                setSelectedPlaylistId(data.id);
+                setNewPlaylistTitle("");
+                setPlaylistIdCopyStatus(t(uiLang, "playlistCreatedLocally"));
+              }).catch((error) => setPlaylistIdCopyStatus(String(error.message || error)));
+            }}>
+              <input className="search" type="text" value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder={t(uiLang, "playlistNewTitle")} aria-label={t(uiLang, "playlistNewTitle")} maxLength={150} />
+              <button className="btn" type="submit">+ {t(uiLang, "playlistCreate")}</button>
+            </form>
             <div className="playlist-picker-list">
               {currentPlaylistState?.loading ? <p className="empty" role="status">{t(uiLang, "playlistsLoading")}</p> : null}
               {currentPlaylistState?.error ? (
@@ -1258,7 +1520,7 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                   onClick={() => setSelectedPlaylistId(playlist.id)}
                 >
                   {playlist.thumb ? <img src={playlist.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
-                  <span><strong>{playlist.title || t(uiLang, "untitledPlaylist")}</strong><small>{t(uiLang, "playlistVideoCountWithCount", { count: playlist.itemCount ?? "—" })}</small></span>
+                  <span><strong>{playlist.title || t(uiLang, "untitledPlaylist")}</strong><small>{t(uiLang, "playlistVideoCountWithCount", { count: playlist.localOnly ? (localPlaylistMemberships[playlist.id] || []).length : (playlist.itemCount ?? "—") })}</small></span>
                 </button>
               ))}
             </div>
@@ -1266,15 +1528,18 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
           <section className="playlist-content-pane" aria-labelledby="playlist-content-title">
             {selectedPlaylist ? (
               <header className="playlist-summary">
-                {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder" />}
+                {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
                 <div className="playlist-summary-copy">
                   <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2>
                   {selectedPlaylist.description ? <p>{selectedPlaylist.description}</p> : null}
-                  <div className="playlist-summary-meta">
-                    <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
-                    <span>{t(uiLang, "playlistVideoCountWithCount", { count: selectedPlaylist.itemCount ?? "—" })}</span>
-                    {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
-                    {selectedPlaylist.id ? <span className="playlist-id-tools"><span>{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button><a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a></span> : null}
+                  <div className="playlist-summary-footer">
+                    <div className="playlist-summary-meta">
+                      <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
+                      <span>{t(uiLang, "playlistVideoCountWithCount", { count: selectedPlaylist.localOnly ? (localPlaylistMemberships[selectedPlaylist.id] || []).length : (selectedPlaylist.itemCount ?? "—") })}</span>
+                      {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
+                      {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
+                    </div>
+                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{selectedPlaylist.localOnly ? <button className="text-button danger-text" type="button" onClick={deleteLocalPlaylist}>{t(uiLang, "playlistDeleteLocal")}</button> : <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer">{t(uiLang, "openPlaylistOnYoutube")}</a>}</div> : null}
                   </div>
                   {playlistIdCopyStatus ? <span className="playlist-copy-status" role="status">{playlistIdCopyStatus}</span> : null}
                 </div>
@@ -1284,8 +1549,8 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
               <p className="empty" role="status">{t(uiLang, "playlistItemsLoading")}</p>
             ) : null}
             {currentPlaylistContents?.error ? (
-              <p className="empty" role="alert">
-                {currentPlaylistContents.error}
+              <p className="empty playlist-error" role="alert">
+                <span>{currentPlaylistContents.error}</span>
                 <button className="text-button" type="button" onClick={() => setPlaylistContentsRetry((current) => current + 1)}>{t(uiLang, "playlistsRetry")}</button>
               </p>
             ) : null}
@@ -1304,12 +1569,11 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                   {t(uiLang, "playlistSelectPage")}
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
-                <select className="playlist-bulk-select" aria-label={t(uiLang, "playlistBulkActions")} aria-describedby="playlist-bulk-help" defaultValue="">
-                  <option value="" disabled>{t(uiLang, "playlistBulkActions")}</option>
-                  <option value="add" disabled>{t(uiLang, "playlistAddToPlaylist")}</option>
-                  <option value="move" disabled>{t(uiLang, "playlistMoveToPlaylist")}</option>
-                  <option className="playlist-bulk-remove" value="remove" disabled>{t(uiLang, "playlistRemoveFromPlaylist")}</option>
-                </select>
+                <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
+                  <button type="button" title={t(uiLang, "playlistAddToPlaylist")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
+                  <button type="button" disabled={!selectedPlaylistVideoIds.size || !selectedPlaylist?.localOnly} title={selectedPlaylist?.localOnly ? t(uiLang, "playlistRemoveFromPlaylist") : t(uiLang, "playlistRemoveYoutubeUnavailable")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
+                </div>
               </div>
               <label className="playlist-page-size">
                 {t(uiLang, "playlistPageSize")}
@@ -1321,6 +1585,24 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
                   {[10, 30, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
                 </select>
               </label>
+              {playlistMembershipEditor ? (
+                <div className="playlist-membership-editor" role="dialog" aria-label={t(uiLang, "playlistMembershipTitle")}>
+                  <strong>{t(uiLang, "playlistMembershipTitle")}</strong>
+                  <p>{playlistMembershipEditor.loading ? t(uiLang, "playlistMembershipLoading") : t(uiLang, "playlistMembershipHelp")}</p>
+                  <div className="playlist-membership-list">
+                    {playlists.map((playlist) => (
+                      <label key={playlist.id}>
+                        <input type="checkbox" checked={playlistMembershipEditor.targets.has(playlist.id)} disabled={playlistMembershipEditor.loading} onChange={(event) => togglePlaylistMembershipTarget(playlist.id, event.target.checked)} />
+                        <span>{playlist.title || t(uiLang, "untitledPlaylist")}{playlist.localOnly ? ` · ${t(uiLang, "playlistLocalBadge")}` : ""}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="playlist-membership-actions">
+                    <button className="btn ghost" type="button" onClick={() => setPlaylistMembershipEditor(null)}>{t(uiLang, "cancel")}</button>
+                    <button className="btn" type="button" disabled={playlistMembershipEditor.loading} onClick={applyLocalPlaylistMemberships}>{t(uiLang, "applyLocally")}</button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <p className="playlist-bulk-help" id="playlist-bulk-help">
               {t(uiLang, "playlistWritesWithWriteMode")} {t(uiLang, "playlistBulkHelp")}
@@ -1490,17 +1772,15 @@ export function Studio({ view = "videos", onViewChange = () => {} }) {
             <h1>{t(uiLang, "statisticsTab")}</h1>
             <span>{t(uiLang, "statisticsLoadedVideos", { loaded: statistics.loadedVideoCount, total: catalogTotal })}</span>
           </header>
-          <p className="statistics-note">{t(uiLang, "statisticsSnapshotNote")}</p>
           <div className="statistics-cards">
-            {[["videoViews", statistics.views, statistics.viewsCount], ["videoLikes", statistics.likes, statistics.likesCount], ["videoComments", statistics.comments, statistics.commentsCount]].map(([key, value, count]) => (
+            {[["videoViews", statistics.views, statistics.viewsCount], ["videoLikes", statistics.likes, statistics.likesCount], ["videoComments", statistics.comments, statistics.commentsCount], ["statisticsWatchTime", channelAnalytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(channelAnalytics.estimated_minutes_watched / 60) }) : "—", null]].map(([key, value, count]) => (
               <article key={key}>
                 <h2>{t(uiLang, key)}</h2>
                 <strong>{value == null ? "—" : value.toLocaleString(t(uiLang, "calendarLocale"))}</strong>
-                <small>{t(uiLang, "statisticsMetricCount", { count })}</small>
+                {count != null ? <small>{t(uiLang, "statisticsMetricCount", { count })}</small> : null}
               </article>
             ))}
           </div>
-          <p className="statistics-coverage">{t(uiLang, "statisticsCoverage", { count: statistics.loadedVideoCount })}</p>
           <div className="statistics-toolbar">
             <input className="search" type="search" value={statisticsQuery} onChange={(event) => setStatisticsQuery(event.target.value)} placeholder={t(uiLang, "statisticsSearch")} aria-label={t(uiLang, "statisticsSearch")} />
             <label><span>{t(uiLang, "statisticsStatus")}</span><select value={statisticsStatus} onChange={(event) => setStatisticsStatus(event.target.value)}>{FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}</select></label>

@@ -20,6 +20,7 @@ from .models import (
     ChannelCatalogSync,
     GoogleConnection,
     Identity,
+    LocalPlaylist,
     User,
     UserSession,
     Video,
@@ -46,6 +47,7 @@ from .tokens import (
     encrypt_refresh_token,
     validate_encryption_key,
 )
+from . import quota as quota_service
 from . import youtube as yt
 
 app = FastAPI(title="MoyaStudia API")
@@ -53,6 +55,30 @@ app = FastAPI(title="MoyaStudia API")
 
 class ChannelSelection(BaseModel):
     youtube_channel_ids: list[str]
+
+
+class WriteModeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    confirmation: Literal["enable_youtube_writes"] | None = None
+
+
+class LocalPlaylistCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    local_id: str = Field(min_length=1, max_length=64, pattern=r"^local-[A-Za-z0-9_-]+$")
+    title: str = Field(min_length=1, max_length=150)
+
+
+class LocalPlaylistMembershipUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    video_ids: list[str] = Field(default_factory=list, max_length=500)
+
+
+class VideoPublishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    revision: int = Field(ge=0)
 
 
 class CatalogSyncRequest(BaseModel):
@@ -66,6 +92,7 @@ class VideoWorkingPatch(BaseModel):
     title: str | None = None
     description: str | None = None
     tags: str | None = None
+    language: str | None = Field(default=None, max_length=32, pattern=r"^$|^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
     ready: bool = False
     conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
@@ -114,6 +141,32 @@ def _oauth_status_redirect(path: str, parameter: str, status: str, state: str = 
     if state:
         clear_oauth_state_cookie(response, state)
     return response
+
+
+@app.get("/write-mode")
+def get_write_mode(user: User = Depends(get_current_user)):
+    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": True}
+
+
+@app.put("/write-mode", dependencies=[Depends(require_same_origin)])
+def set_write_mode(
+    update: WriteModeUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if update.enabled and update.confirmation != "enable_youtube_writes":
+        raise HTTPException(422, "Explicit Write Mode confirmation is required")
+    user.write_mode_enabled = update.enabled
+    db.commit()
+    return {"enabled": bool(user.write_mode_enabled), "youtube_writes_available": True}
+
+
+@app.get("/quota/today")
+def quota_today(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return quota_service.quota_summary(db)
 
 
 @app.get("/auth/session")
@@ -502,11 +555,37 @@ def _google_connection_or_404(
     return connection
 
 
-def _available_youtube_channels(connection: GoogleConnection) -> list[dict]:
+def _quota_recorder(
+    db: Session,
+    user: User,
+    connection: GoogleConnection | None = None,
+    channel: Channel | None = None,
+):
+    bind = db.get_bind()
+    user_id = user.id
+    connection_id = connection.id if connection else None
+    channel_id = channel.id if channel else None
+
+    def record(operation: str, outcome: str) -> None:
+        quota_service.record_usage_isolated(
+            bind,
+            user_id=user_id,
+            google_connection_id=connection_id,
+            channel_id=channel_id,
+            operation=operation,
+            outcome=outcome,
+        )
+    return record
+
+
+def _available_youtube_channels(
+    connection: GoogleConnection, db: Session, user: User
+) -> list[dict]:
     try:
         token = decrypt_refresh_token(connection.encrypted_refresh_token)
         credentials = yt.creds_from_refresh(token)
-        return yt.list_available_channels(credentials)
+        with yt.quota_recording(_quota_recorder(db, user, connection)):
+            return yt.list_available_channels(credentials)
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -526,7 +605,7 @@ def available_channels(
             "title": item["title"],
             "thumbnail_url": item["thumbnail_url"],
         }
-        for item in _available_youtube_channels(connection)
+        for item in _available_youtube_channels(connection, db, user)
     ]
 
 
@@ -547,7 +626,7 @@ def save_channel_selection(
         raise HTTPException(422, "Select at least one available YouTube channel")
 
     selected_ids = list(dict.fromkeys(selection.youtube_channel_ids))
-    available = _available_youtube_channels(connection)
+    available = _available_youtube_channels(connection, db, user)
     available_by_id = {item["youtube_channel_id"]: item for item in available}
     if any(channel_id not in available_by_id for channel_id in selected_ids):
         raise HTTPException(422, "One or more selected channels are not available")
@@ -842,7 +921,7 @@ def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
     snapshot = _working_video_snapshot(video)
-    working = {field: getattr(video, field) for field in ("title", "description", "tags")}
+    working = {field: getattr(video, field) for field in ("title", "description", "tags", "language")}
     dirty_fields = _working_dirty_fields(snapshot, working)
     return {
         "id": video.id,
@@ -888,6 +967,7 @@ def _working_video_snapshot(video: Video) -> dict[str, str | None]:
         "title": video.youtube_title,
         "description": video.youtube_description,
         "tags": None if video.youtube_tags is None else ", ".join(video.youtube_tags),
+        "language": video.youtube_default_language or video.youtube_default_audio_language or "",
     }
 
 
@@ -896,7 +976,7 @@ def _working_dirty_fields(
 ) -> dict[str, bool]:
     return {
         field: working[field] is not None and working[field] != snapshot[field]
-        for field in ("title", "description", "tags")
+        for field in ("title", "description", "tags", "language")
     }
 
 
@@ -906,16 +986,18 @@ def _video_working_item(video: Video) -> dict:
         "title": video.title,
         "description": video.description,
         "tags": video.tags,
+        "language": video.language,
         "ready": video.working_ready,
     }
     base = {
         "title": video.working_base_title,
         "description": video.working_base_description,
         "tags": video.working_base_tags,
+        "language": video.working_base_language,
     }
     effective = {
         field: working[field] if working[field] is not None else snapshot[field]
-        for field in ("title", "description", "tags")
+        for field in ("title", "description", "tags", "language")
     }
     dirty_fields = _working_dirty_fields(snapshot, working)
     conflict_fields = {
@@ -924,7 +1006,7 @@ def _video_working_item(video: Video) -> dict:
             and base[field] != snapshot[field]
             and working[field] != snapshot[field]
         )
-        for field in ("title", "description", "tags")
+        for field in ("title", "description", "tags", "language")
     }
     return {
         "id": video.id,
@@ -944,18 +1026,22 @@ def _video_working_item(video: Video) -> dict:
 
 
 def _catalog_video_or_404(
-    db: Session, user: User, channel_id: int, video_id: int
+    db: Session,
+    user: User,
+    channel_id: int,
+    video_id: int,
+    *,
+    for_update: bool = False,
 ) -> Video:
     channel = _channel_or_404(db, user, channel_id, require_token=False)
-    video = (
-        db.query(Video)
-        .filter(
-            Video.id == video_id,
-            Video.channel_id == channel.id,
-            Video.youtube_video_id.is_not(None),
-        )
-        .one_or_none()
+    query = db.query(Video).filter(
+        Video.id == video_id,
+        Video.channel_id == channel.id,
+        Video.youtube_video_id.is_not(None),
     )
+    if for_update:
+        query = query.with_for_update()
+    video = query.one_or_none()
     if video is None:
         raise HTTPException(404, "video not found")
     return video
@@ -1194,6 +1280,108 @@ def patch_channel_video_working(
     return _video_working_item(video)
 
 
+@app.post(
+    "/channels/{channel_id}/videos/{video_id}/publish-metadata",
+    dependencies=[Depends(require_same_origin)],
+)
+def publish_channel_video_metadata(
+    channel_id: int,
+    video_id: int,
+    request: VideoPublishRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    # Serialize publishes for this video so two requests cannot send the same revision twice.
+    video = _catalog_video_or_404(db, user, channel_id, video_id, for_update=True)
+    if video.working_revision != request.revision:
+        raise HTTPException(409, detail={"code": "stale_revision", "current": _video_working_item(video)})
+    current = _video_working_item(video)
+    if current["conflict"]:
+        raise HTTPException(409, detail={"code": "working_conflict", "current": current})
+    if video.availability_status != "available":
+        raise HTTPException(409, detail={"code": "video_unavailable"})
+    if not current["dirty"]:
+        raise HTTPException(409, detail={"code": "nothing_to_publish"})
+    if not video.youtube_video_id or not video.youtube_category_id:
+        raise HTTPException(422, detail={"code": "incomplete_youtube_snapshot"})
+
+    title = current["effective"]["title"] or ""
+    description = current["effective"]["description"] or ""
+    tags_text = current["effective"]["tags"] or ""
+    language = (current["effective"]["language"] or "").strip() or None
+    tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+    tags_cost = sum(len(tag) + (2 if " " in tag else 0) + (1 if index else 0) for index, tag in enumerate(tags))
+    if tags_cost > 500:
+        raise HTTPException(422, detail={"code": "invalid_tags"})
+    if not title or len(title) > 100 or "<" in title or ">" in title:
+        raise HTTPException(422, detail={"code": "invalid_title"})
+    if len(description.encode("utf-8")) > 5000 or "<" in description or ">" in description:
+        raise HTTPException(422, detail={"code": "invalid_description"})
+    quota = quota_service.quota_summary(db)
+    if quota["buckets"]["general"]["estimated_remaining"] < quota_service.operation_cost("videos.update")[1]:
+        raise HTTPException(429, detail={"code": "quota_preflight_failed"})
+
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            remote = yt.update_video_metadata(
+                refresh_token,
+                video.youtube_video_id,
+                title=title,
+                description=description,
+                tags=tags,
+                category_id=video.youtube_category_id,
+                language=language,
+            )
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        message = str(exc).lower()
+        if "insufficient" in message or "permission" in message or "scope" in message:
+            raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_update_failed"}) from exc
+
+    video.youtube_title = remote["youtube_title"]
+    video.youtube_description = remote["youtube_description"]
+    video.youtube_tags = remote["youtube_tags"]
+    video.youtube_category_id = remote["youtube_category_id"]
+    video.youtube_default_language = remote["youtube_default_language"]
+    video.title = None
+    video.description = None
+    video.tags = None
+    video.language = None
+    video.working_base_title = None
+    video.working_base_description = None
+    video.working_base_tags = None
+    video.working_base_language = None
+    video.working_ready = False
+    video.working_revision += 1
+    db.commit()
+    db.refresh(video)
+    return _video_working_item(video)
+
+
+@app.get("/channels/{channel_id}/analytics/summary")
+def channel_analytics_summary(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        start_date = (channel.yt_published_at or "2005-02-14")[:10]
+        end_date = _utcnow().date().isoformat()
+        return yt.channel_analytics_summary(token, start_date, end_date)
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, "Stored YouTube credentials are unavailable") from exc
+    except Exception as exc:
+        raise HTTPException(502, "YouTube Analytics is unavailable") from exc
+
+
 @app.get("/channels/{channel_id}/catalog/status")
 def catalog_status(
     channel_id: int,
@@ -1264,13 +1452,16 @@ def continue_catalog_sync(
     sync = _catalog_row(db, channel)
     try:
         refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
-        page = yt.list_videos(
-            refresh_token,
-            channel.youtube_channel_id,
-            page_token=sync.next_page_token,
-            uploads_playlist_id=sync.uploads_playlist_id,
-            limit=50,
-        )
+        with yt.quota_recording(
+            _quota_recorder(db, user, channel.google_connection, channel)
+        ):
+            page = yt.list_videos(
+                refresh_token,
+                channel.youtube_channel_id,
+                page_token=sync.next_page_token,
+                uploads_playlist_id=sync.uploads_playlist_id,
+                limit=50,
+            )
         if page["next_page_token"] and page["next_page_token"] == sync.next_page_token:
             raise RuntimeError("YouTube returned a non-advancing page token")
 
@@ -1398,6 +1589,73 @@ def continue_catalog_sync(
     return _catalog_status(db, channel)
 
 
+@app.get("/channels/{channel_id}/local-playlists")
+def channel_local_playlists(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    rows = db.query(LocalPlaylist).filter(LocalPlaylist.channel_id == channel.id).order_by(LocalPlaylist.created_at).all()
+    return [{"id": row.local_id, "title": row.title, "videoIds": row.video_ids or []} for row in rows]
+
+
+@app.post("/channels/{channel_id}/local-playlists", dependencies=[Depends(require_same_origin)])
+def create_local_playlist(
+    channel_id: int,
+    payload: LocalPlaylistCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    row = LocalPlaylist(channel_id=channel.id, local_id=payload.local_id, title=payload.title.strip(), video_ids=[])
+    if not row.title:
+        raise HTTPException(422, "playlist title is required")
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "local playlist already exists") from exc
+    return {"id": row.local_id, "title": row.title, "videoIds": []}
+
+
+@app.put("/channels/{channel_id}/local-playlists/{local_id}/membership", dependencies=[Depends(require_same_origin)])
+def update_local_playlist_membership(
+    channel_id: int,
+    local_id: str,
+    payload: LocalPlaylistMembershipUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    row = db.query(LocalPlaylist).filter(LocalPlaylist.channel_id == channel.id, LocalPlaylist.local_id == local_id).one_or_none()
+    if row is None:
+        raise HTTPException(404, "local playlist not found")
+    row.video_ids = list(dict.fromkeys(video_id for video_id in payload.video_ids if video_id))
+    db.commit()
+    return {"id": row.local_id, "title": row.title, "videoIds": row.video_ids}
+
+
+@app.delete("/channels/{channel_id}/local-playlists/{local_id}", dependencies=[Depends(require_same_origin)])
+def delete_local_playlist(
+    channel_id: int,
+    local_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id, require_token=False)
+    row = db.query(LocalPlaylist).filter(
+        LocalPlaylist.channel_id == channel.id,
+        LocalPlaylist.local_id == local_id,
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, "local playlist not found")
+    db.delete(row)
+    db.commit()
+    return {"deleted": True, "id": local_id}
+
+
 @app.get("/channels/{channel_id}/playlists")
 def channel_playlists(
     channel_id: int,
@@ -1407,7 +1665,8 @@ def channel_playlists(
     row = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
-        return yt.list_playlists(token, row.youtube_channel_id)
+        with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
+            return yt.list_playlists(token, row.youtube_channel_id)
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -1426,9 +1685,12 @@ def channel_playlist_items(
     channel = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
-        result = yt.list_playlist_items(
-            token, channel.youtube_channel_id, playlist_id, page_token, limit
-        )
+        with yt.quota_recording(
+            _quota_recorder(db, user, channel.google_connection, channel)
+        ):
+            result = yt.list_playlist_items(
+                token, channel.youtube_channel_id, playlist_id, page_token, limit
+            )
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
     except TokenEncryptionError as exc:
@@ -1459,6 +1721,37 @@ def channel_playlist_items(
     }
 
 
+@app.get("/channels/{channel_id}/playlist-memberships")
+def channel_playlist_memberships(
+    channel_id: int,
+    video_id: list[str] = Query(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    video_ids = list(dict.fromkeys(value for value in video_id if value))[:50]
+    if not video_ids:
+        return {"memberships": {}}
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(
+            _quota_recorder(db, user, channel.google_connection, channel)
+        ):
+            playlists = yt.list_playlists(token, channel.youtube_channel_id)
+            playlist_ids = [playlist["id"] for playlist in playlists]
+            memberships = yt.list_playlist_memberships(
+                token,
+                channel.youtube_channel_id,
+                playlist_ids,
+                video_ids,
+            )
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+    return {"memberships": memberships}
+
+
 @app.post(
     "/channels/{channel_id}/refresh-profile",
     dependencies=[Depends(require_same_origin)],
@@ -1472,7 +1765,8 @@ def refresh_profile(
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
         creds = yt.creds_from_refresh(token)
-        info = yt.fetch_channel(creds, row.youtube_channel_id)
+        with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
+            info = yt.fetch_channel(creds, row.youtube_channel_id)
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:

@@ -30,6 +30,8 @@ class User(Base):
     google_connections: Mapped[list["GoogleConnection"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    write_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -91,6 +93,7 @@ class Channel(Base):
     videos: Mapped[list["Video"]] = relationship(
         back_populates="channel", cascade="all, delete-orphan"
     )
+    local_playlists: Mapped[list["LocalPlaylist"]] = relationship(back_populates="channel", cascade="all, delete-orphan")
     catalog_sync: Mapped["ChannelCatalogSync | None"] = relationship(
         back_populates="channel", cascade="all, delete-orphan", uselist=False
     )
@@ -116,6 +119,8 @@ class Video(Base):
     working_base_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     working_base_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     working_base_tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    working_base_language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     working_ready: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     working_revision: Mapped[int] = mapped_column(default=0, server_default="0")
     youtube_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -148,6 +153,21 @@ class Video(Base):
     channel: Mapped[Channel] = relationship(back_populates="videos")
 
 
+class LocalPlaylist(Base):
+    __tablename__ = "local_playlists"
+    __table_args__ = (UniqueConstraint("channel_id", "local_id", name="uq_local_playlist_channel_local_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    local_id: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(150))
+    video_ids: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    channel: Mapped[Channel] = relationship(back_populates="local_playlists")
+
+
 class ChannelCatalogSync(Base):
     __tablename__ = "channel_catalog_syncs"
 
@@ -171,6 +191,30 @@ class ChannelCatalogSync(Base):
     )
 
     channel: Mapped[Channel] = relationship(back_populates="catalog_sync")
+
+
+class YouTubeQuotaUsage(Base):
+    __tablename__ = "youtube_quota_usage"
+    __table_args__ = (
+        Index("ix_youtube_quota_usage_user_occurred", "user_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    google_connection_id: Mapped[int | None] = mapped_column(
+        ForeignKey("google_connections.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    channel_id: Mapped[int | None] = mapped_column(
+        ForeignKey("channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    operation: Mapped[str] = mapped_column(String(64))
+    bucket: Mapped[str] = mapped_column(String(32), default="general")
+    units: Mapped[int] = mapped_column(default=1)
+    request_count: Mapped[int] = mapped_column(default=1)
+    outcome: Mapped[str] = mapped_column(String(32))
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
 
 
 class UserSession(Base):

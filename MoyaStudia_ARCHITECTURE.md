@@ -5,6 +5,8 @@ Status: Architecture baseline
 Purpose: product/domain reference for implementation agents.
 
 > **Важно:** этот документ описывает архитектурный baseline и целевую модель; он не является источником истины о текущем implementation status. Проверяйте реализованные функции и ограничения в [STATUS.md](STATUS.md).
+>
+> Детальный baseline следующей фазы (Write Mode, quota ledger, AI secrets, mutation safety и порядок реализации W1–W9) находится в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md). Он дополняет этот документ и также не означает, что функции уже реализованы.
 
 ## 1. Product goal
 

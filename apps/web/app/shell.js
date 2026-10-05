@@ -20,6 +20,9 @@ export function Shell({ children }) {
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [channelError, setChannelError] = useState(false);
   const [catalogStatus, setCatalogStatus] = useState(null);
+  const [quota, setQuota] = useState(null);
+  const [writeMode, setWriteMode] = useState({ enabled: false, youtube_writes_available: false });
+  const [writeModeBusy, setWriteModeBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +80,72 @@ export function Shell({ children }) {
         if (!controller.signal.aborted) setCatalogStatus({ state: "UNAVAILABLE" });
       });
     return () => controller.abort();
+  }, [channel?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/write-mode")
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "write mode unavailable");
+        if (!cancelled) setWriteMode(data);
+      })
+      .catch(() => {
+        if (!cancelled) setWriteMode({ enabled: false, youtube_writes_available: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleWriteMode() {
+    if (writeModeBusy) return;
+    const nextEnabled = !writeMode.enabled;
+    if (nextEnabled && !window.confirm(t(uiLang, "writeModeConfirm"))) return;
+    setWriteModeBusy(true);
+    try {
+      const response = await apiFetch("/write-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: nextEnabled,
+          confirmation: nextEnabled ? "enable_youtube_writes" : null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setWriteMode((current) => ({ ...current, error: data.detail || t(uiLang, "writeModeUpdateError") }));
+        return;
+      }
+      setWriteMode(data);
+    } catch {
+      setWriteMode((current) => ({ ...current, error: t(uiLang, "writeModeUpdateError") }));
+    } finally {
+      setWriteModeBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadQuota = () => {
+      apiFetch("/quota/today")
+        .then(async (response) => {
+          if (!response.ok) throw new Error("quota unavailable");
+          return response.json();
+        })
+        .then((value) => {
+          if (!cancelled) setQuota(value);
+        })
+        .catch(() => {
+          if (!cancelled) setQuota(null);
+        });
+    };
+    loadQuota();
+    window.addEventListener("focus", loadQuota);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", loadQuota);
+    };
   }, [channel?.id]);
 
   const [workspaceView, setWorkspaceView] = useState("videos");
@@ -152,11 +221,36 @@ export function Shell({ children }) {
             {t(uiLang, "statisticsTab")}
           </button>
         </nav>
-        <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
-          <span>{t(uiLang, "syncStatus")}</span>
-          <strong>{t(uiLang, syncStatusKey)}</strong>
-        </div>
         <div className="spacer" />
+        <div className="header-system-status">
+          {!inCabinet ? (
+            <div className="header-write-mode">
+              <span>{t(uiLang, "writeMode")}</span>
+              <button
+                className={`mode-switch ${writeMode.enabled ? "is-on" : "is-off"}`}
+                type="button"
+                role="switch"
+                aria-checked={writeMode.enabled ? "true" : "false"}
+                aria-label={t(uiLang, "writeMode")}
+                disabled={writeModeBusy}
+                onClick={toggleWriteMode}
+                title={writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}
+              >
+                <span aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+          <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
+            <span>{t(uiLang, "syncStatus")}</span>
+            <strong>{t(uiLang, syncStatusKey)}</strong>
+          </div>
+          {quota?.buckets?.general ? (
+            <div className="sync-status quota-status" title={t(uiLang, "quotaTrackedTitle")}>
+              <span>{t(uiLang, "quotaTracked")}</span>
+              <strong>{quota.buckets.general.used} / {quota.buckets.general.limit}</strong>
+            </div>
+          ) : null}
+        </div>
         <Link href="/cabinet" className="btn ghost cabinet-link">
           {t(uiLang, "cabinet")}
         </Link>
@@ -164,7 +258,7 @@ export function Shell({ children }) {
       </header>
       <div className="shell-content">
         {typeof children === "function"
-          ? children({ view: workspaceView, onViewChange: navigateWorkspace })
+          ? children({ view: workspaceView, onViewChange: navigateWorkspace, writeMode })
           : children}
       </div>
       <footer className="app-footer">

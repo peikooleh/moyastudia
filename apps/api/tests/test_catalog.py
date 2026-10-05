@@ -224,12 +224,14 @@ def test_catalog_rows_include_dirty_state_for_every_video(client, test_database)
         "title": True,
         "description": False,
         "tags": False,
+        "language": False,
     }
     assert items["unchanged"]["dirty"] is False
     assert items["unchanged"]["dirtyFields"] == {
         "title": False,
         "description": False,
         "tags": False,
+        "language": False,
     }
 
 
@@ -761,11 +763,13 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "Snapshot title",
         "description": "Snapshot description",
         "tags": "snapshot, tags",
+        "language": "",
     }
     assert detail.json()["working"] == {
         "title": None,
         "description": None,
         "tags": None,
+        "language": None,
         "ready": False,
     }
     assert detail.json()["effective"] == detail.json()["snapshot"]
@@ -790,10 +794,16 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "title": "",
         "description": "Local description",
         "tags": "local, tags",
+        "language": None,
         "ready": False,
     }
     assert saved_item["effective"]["title"] == ""
-    assert saved_item["base"] == saved_item["snapshot"]
+    assert saved_item["base"] == {
+        "title": "Snapshot title",
+        "description": "Snapshot description",
+        "tags": "snapshot, tags",
+        "language": None,
+    }
     assert saved_item["dirty"] is True
     assert saved_item["revision"] == 1
 
@@ -840,6 +850,7 @@ def test_working_metadata_round_trips_above_youtube_limits(client, test_database
         "title": title,
         "description": description,
         "tags": tags,
+        "language": None,
         "ready": False,
     }
     reloaded = client.get(url)
@@ -848,6 +859,7 @@ def test_working_metadata_round_trips_above_youtube_limits(client, test_database
         "title": title,
         "description": description,
         "tags": tags,
+        "language": "",
     }
 
 
@@ -1122,6 +1134,7 @@ def test_youtube_playlist_items_verify_ownership_and_paginate(monkeypatch):
 
     assert result == {
         "items": [{
+            "playlistItemId": "",
             "videoId": "video-one",
             "title": "Video title",
             "thumb": "",
