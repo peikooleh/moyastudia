@@ -163,13 +163,6 @@ function VideoInspector({
   writeMode,
 }) {
   const [copyStatus, setCopyStatus] = useState("");
-  const [localCategory, setLocalCategory] = useState("");
-  const [localAudience, setLocalAudience] = useState("");
-
-  useEffect(() => {
-    setLocalCategory(selected?.category || "");
-    setLocalAudience(selected?.madeForKids === true ? "kids" : selected?.madeForKids === false ? "not-kids" : "");
-  }, [selected?.id, selected?.category, selected?.madeForKids, selected?.captions]);
   if (!selected) {
     return <section className="video-inspector empty">{t(uiLang, "catalogSelectVideo")}</section>;
   }
@@ -179,6 +172,8 @@ function VideoInspector({
   const description = workingDraft?.description ?? selected.description ?? "";
   const tags = workingDraft?.tags ?? selected.tags ?? "";
   const language = workingDraft?.language ?? selected.language ?? "";
+  const category = workingDraft?.category ?? selected.category ?? "";
+  const madeForKids = workingDraft?.madeForKids ?? selected.madeForKids ?? null;
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
@@ -256,8 +251,8 @@ function VideoInspector({
       <section className="video-properties" aria-labelledby="video-properties-title">
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
         <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
-        <label>{t(uiLang, "videoCategory")}<select value={localCategory} onChange={(event) => setLocalCategory(event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-        <fieldset><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "kids"} onChange={() => setLocalAudience("kids")} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={localAudience === "not-kids"} onChange={() => setLocalAudience("not-kids")} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
+        <label>{t(uiLang, "videoCategory")}<select value={category} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("category", event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+        <fieldset disabled={!workingVideo || workingLoading || workingSaving}><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === true} onChange={() => updateWorkingField("madeForKids", true)} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === false} onChange={() => updateWorkingField("madeForKids", false)} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
         <fieldset className="captions-settings">
           <legend>{t(uiLang, "videoCaptions")}</legend>
           <div className="captions-status">
@@ -299,7 +294,9 @@ function VideoInspector({
             {t(uiLang, "workingUseSnapshot")}
           </button>
         ) : null}
-        <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} title={!writeMode?.enabled ? t(uiLang, "writeModeDescription") : ""} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : ""}>
+          <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+        </span>
       </div>
 
       {workingVideo && (workingVideo.dirty || workingVideo.conflict || Object.keys(workingEdits).length) ? (
