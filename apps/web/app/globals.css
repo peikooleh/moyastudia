@@ -1972,3 +1972,16 @@ body {
   font-size: 11px;
   white-space: nowrap;
 }
+
+
+/* A thumbnail can be replaced through YouTube, but not deleted via Data API. */
+.thumbnail-actions {
+  display: flex;
+  justify-content: center;
+  grid-template-columns: none;
+}
+.thumbnail-actions .thumbnail-change-action {
+  width: auto;
+  min-width: 136px;
+  padding-inline: 14px;
+}
