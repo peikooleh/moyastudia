@@ -1,5 +1,6 @@
 const dict = {
   en: {
+    calendarFutureOnly: "Scheduling is only available for a future date and time.",
     calendarTimeScheduledOnly: "Time can be changed after the video is scheduled.",
     calendarSelectEventHint: "Click a video for details, drag it to reschedule, or right-click for quick actions.",
     calendarTime: "Publication time",
@@ -538,6 +539,7 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    calendarFutureOnly: "Планирование доступно только на будущую дату и время.",
     calendarTimeScheduledOnly: "Время можно изменить после того, как видео запланировано.",
     calendarSelectEventHint: "Нажмите на видео для деталей, перетащите его для переноса или используйте правый клик для быстрых действий.",
     calendarTime: "Время публикации",
@@ -1076,6 +1078,7 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    calendarFutureOnly: "Планування доступне лише на майбутню дату й час.",
     calendarTimeScheduledOnly: "Час можна змінити після того, як відео заплановано.",
     calendarSelectEventHint: "Натисніть на відео для деталей, перетягніть його для перенесення або використайте правий клік для швидких дій.",
     calendarTime: "Час публікації",
