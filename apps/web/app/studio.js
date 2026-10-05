@@ -1113,6 +1113,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (!window.confirm(t(uiLang, "playlistQuickSaveConfirm"))) return;
     setPlaylistSaving(true);
     setPlaylistIdCopyStatus("");
+    let completed = 0;
     try {
       const privacy = playlistQuickDraft.privacy || selectedPlaylist.privacy || "private";
       if (privacy !== (selectedPlaylist.privacy || "private")) {
@@ -1123,7 +1124,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
+        completed += 1;
         setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
+        setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, privacy: "" } : current);
       }
       for (const [playlistItemId, position] of Object.entries(playlistQuickDraft.positions || {})) {
         const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/items/${encodeURIComponent(playlistItemId)}/position`, {
@@ -1133,12 +1136,21 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+        completed += 1;
+        setPlaylistQuickDraft((current) => {
+          if (current.playlistId !== selectedPlaylist.id) return current;
+          const positions = { ...current.positions };
+          delete positions[playlistItemId];
+          return { ...current, positions };
+        });
       }
       setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {}, basePositions: {} });
       setPlaylistContentsRetry((current) => current + 1);
       setPlaylistIdCopyStatus(t(uiLang, "playlistQuickSaved"));
     } catch (error) {
-      setPlaylistIdCopyStatus(String(error.message || error));
+      setPlaylistIdCopyStatus(completed > 0
+        ? t(uiLang, "playlistQuickPartialError", { error: String(error.message || error) })
+        : String(error.message || error));
     } finally {
       setPlaylistSaving(false);
     }
