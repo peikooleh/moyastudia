@@ -601,6 +601,7 @@ def update_video_metadata(
     tags: list[str],
     category_id: str,
     language: str | None,
+    made_for_kids: bool,
     recorder: QuotaRecorder | None = None,
 ) -> dict:
     service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
@@ -614,8 +615,12 @@ def update_video_metadata(
         snippet["defaultLanguage"] = language
     response = _execute(
         service.videos().update(
-            part="snippet",
-            body={"id": youtube_video_id, "snippet": snippet},
+            part="snippet,status",
+            body={
+                "id": youtube_video_id,
+                "snippet": snippet,
+                "status": {"selfDeclaredMadeForKids": made_for_kids},
+            },
         ),
         "videos.update",
         recorder,
@@ -627,6 +632,7 @@ def update_video_metadata(
         "youtube_tags": returned.get("tags") or [],
         "youtube_category_id": returned.get("categoryId") or category_id,
         "youtube_default_language": returned.get("defaultLanguage"),
+        "youtube_made_for_kids": made_for_kids,
     }
 
 
