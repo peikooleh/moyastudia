@@ -1,5 +1,10 @@
 const dict = {
   en: {
+    playlistSearchVideos: "Search playlist videos",
+    playlistSearchVideosHint: "Filter videos in the open playlist by title.",
+    playlistSortVideosHint: "Choose how videos in the open playlist are sorted.",
+    playlistSortPosition: "Playlist order",
+    sortLabel: "Sort",
     playlistVisibility: "Visibility",
     playlistCompositionOrder: "Contents / order",
     playlistVideosCount: "Videos: {count}",
@@ -505,6 +510,11 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    playlistSearchVideos: "Поиск видео в плейлисте",
+    playlistSearchVideosHint: "Фильтровать видео открытого плейлиста по названию.",
+    playlistSortVideosHint: "Выбрать порядок отображения видео открытого плейлиста.",
+    playlistSortPosition: "Порядок плейлиста",
+    sortLabel: "Сортировка",
     playlistVisibility: "Видимость",
     playlistCompositionOrder: "Состав / порядок",
     playlistVideosCount: "Видео: {count}",
@@ -1010,6 +1020,11 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    playlistSearchVideos: "Пошук відео в плейлисті",
+    playlistSearchVideosHint: "Фільтрувати відео відкритого плейлиста за назвою.",
+    playlistSortVideosHint: "Вибрати порядок відображення відео відкритого плейлиста.",
+    playlistSortPosition: "Порядок плейлиста",
+    sortLabel: "Сортування",
     playlistVisibility: "Видимість",
     playlistCompositionOrder: "Склад / порядок",
     playlistVideosCount: "Відео: {count}",
