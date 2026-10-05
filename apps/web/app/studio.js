@@ -137,7 +137,6 @@ function MetadataLimitNotice({ uiLang, state, characters }) {
       aria-live="polite"
     >
       <span>{t(uiLang, "youtubeLimitCharacters", { count: characters })}</span>
-      {state.unit === "bytes" ? <span>{t(uiLang, "youtubeDescriptionByteRule")}</span> : null}
       {state.nearLimit ? <span>{t(uiLang, "youtubeLimitNear")}</span> : null}
       {state.exceedsLimit ? <span>{t(uiLang, "youtubeLimitExceeded")}</span> : null}
       {state.hasUnsupportedCharacters ? <span>{t(uiLang, "youtubeUnsupportedCharacters")}</span> : null}
@@ -1350,31 +1349,24 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             ) : (
               <>
                 <button
-                  className="btn"
+                  className="btn ghost catalog-refresh-icon"
                   type="button"
                   title={t(uiLang, "tipRefreshCatalog")}
+                  aria-label={t(uiLang, "catalogRefresh")}
                   disabled={syncBusy}
                   onClick={() => runCatalogSync("incremental")}
                 >
-                  {syncBusy ? t(uiLang, "catalogRefreshing") : t(uiLang, "catalogRefresh")}
+                  <span aria-hidden="true">↻</span>
                 </button>
-                <details className="catalog-more-actions">
-                  <summary className="btn ghost" title={t(uiLang, "catalogMoreActions")} aria-label={t(uiLang, "catalogMoreActions")}>⋯</summary>
-                  <div className="catalog-more-menu">
-                    <button
-                      className="text-button"
-                      type="button"
-                      title={t(uiLang, "tipReconcileCatalog")}
-                      disabled={syncBusy}
-                      onClick={(event) => {
-                        runCatalogSync("reconcile");
-                        event.currentTarget.closest("details")?.removeAttribute("open");
-                      }}
-                    >
-                      {t(uiLang, "catalogReconcile")}
-                    </button>
-                  </div>
-                </details>
+                <button
+                  className="btn ghost catalog-reconcile-action"
+                  type="button"
+                  title={t(uiLang, "tipReconcileCatalog")}
+                  disabled={syncBusy}
+                  onClick={() => runCatalogSync("reconcile")}
+                >
+                  {t(uiLang, "catalogReconcile")}
+                </button>
               </>
             )
           ) : null}
