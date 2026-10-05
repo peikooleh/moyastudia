@@ -572,6 +572,7 @@ def update_playlist_metadata(
     *,
     title: str,
     description: str,
+    privacy: str,
     recorder: QuotaRecorder | None = None,
 ) -> dict:
     service = service_for(refresh_token)
@@ -583,7 +584,7 @@ def update_playlist_metadata(
             body={
                 "id": playlist_id,
                 "snippet": {"title": title, "description": description},
-                "status": {"privacyStatus": status.get("privacyStatus") or "private"},
+                "status": {"privacyStatus": privacy},
             },
         ),
         "playlists.update",
@@ -629,6 +630,43 @@ def set_playlist_thumbnail(
             recorder,
         )
     return {"ok": True, "id": response.get("id") or "", "playlistId": playlist_id}
+
+
+def update_playlist_item_position(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    playlist_item_id: str,
+    position: int,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    listed = _execute(
+        service.playlistItems().list(part="snippet", id=playlist_item_id, maxResults=1),
+        "playlistItems.list",
+        recorder,
+    ).get("items") or []
+    if not listed or (listed[0].get("snippet") or {}).get("playlistId") != playlist_id:
+        raise LookupError("playlist item does not belong to the selected playlist")
+    snippet = listed[0].get("snippet") or {}
+    resource = snippet.get("resourceId") or {}
+    response = _execute(
+        service.playlistItems().update(
+            part="snippet",
+            body={
+                "id": playlist_item_id,
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": resource.get("kind") or "youtube#video", "videoId": resource.get("videoId")},
+                    "position": position,
+                },
+            },
+        ),
+        "playlistItems.update",
+        recorder,
+    )
+    return {"id": response.get("id") or playlist_item_id, "position": (response.get("snippet") or {}).get("position", position)}
 
 
 def add_videos_to_playlist(
