@@ -257,6 +257,17 @@ export default function CabinetPage() {
     setAiError("");
   }
 
+  function cancelAiSettings() {
+    const saved = aiConnections.find(
+      (item) => item.provider === aiProvider && item.model === aiModel.trim(),
+    );
+    setAiTitlePrompt(saved?.title_prompt || "");
+    setAiDescriptionPrompt(saved?.description_prompt || "");
+    setAiError("");
+    setAiNotice("");
+    setAiSettingsOpen(false);
+  }
+
   async function saveAiConnection() {
     if (!aiModel.trim()) {
       setAiError(t(uiLang, "aiModelRequired"));
@@ -447,7 +458,7 @@ export default function CabinetPage() {
                     <label>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
                     <label>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
                     <label>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
-                    <button className={`btn ghost ai-settings-button ${aiSettingsOpen ? "active" : ""}`} type="button" onClick={() => setAiSettingsOpen((open) => !open)} aria-expanded={aiSettingsOpen}>⚙ {t(uiLang, "aiSettings")}</button>
+                    <button className={`btn ghost ai-settings-button ${aiSettingsOpen ? "active" : ""}`} type="button" title={t(uiLang, "aiSettings")} onClick={() => (aiSettingsOpen ? cancelAiSettings() : setAiSettingsOpen(true))} aria-expanded={aiSettingsOpen}>⚙ {t(uiLang, "aiSettings")}</button>
                   </div>
                   {aiSettingsOpen ? (
                     <div className="ai-model-settings">
@@ -458,7 +469,7 @@ export default function CabinetPage() {
                   ) : null}
                   {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                   {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
-                  <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={() => setAiSettingsOpen(false)}>{t(uiLang, "cancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
+                  <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
                 </section>
               </div>
             ) : null}
