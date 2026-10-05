@@ -428,6 +428,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
   const [playlistVideoPicker, setPlaylistVideoPicker] = useState(null);
   const [playlistDraft, setPlaylistDraft] = useState(null);
+  const [playlistEditing, setPlaylistEditing] = useState(false);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
@@ -917,6 +918,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   function resetPlaylistDraft() {
     if (!selectedPlaylist) return;
     setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" });
+    setPlaylistEditing(false);
+    setPlaylistIdCopyStatus("");
+  }
+
+  function beginPlaylistEditing() {
+    if (!selectedPlaylist || selectedPlaylist.localOnly) return;
+    setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" });
+    setPlaylistEditing(true);
     setPlaylistIdCopyStatus("");
   }
 
@@ -943,6 +952,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
       setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
       setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description });
+      setPlaylistEditing(false);
       setPlaylistIdCopyStatus(t(uiLang, "playlistSavedToYoutube"));
     } catch (error) {
       setPlaylistIdCopyStatus(String(error.message || error));
@@ -1742,25 +1752,39 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </div>
                 <div className="playlist-summary-copy">
                   {selectedPlaylist.localOnly ? <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2> : (
-                    <div className="playlist-metadata-editor">
-                      <label>
-                        <span>{t(uiLang, "videoTitle")}</span>
-                        <input value={effectivePlaylistDraft?.title || ""} maxLength={150} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("title", event.target.value)} />
-                        <small>{(effectivePlaylistDraft?.title || "").length} / 150</small>
-                        <button className="text-button" type="button" onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "improveWithAi")}</button>
-                      </label>
-                      <label>
-                        <span>{t(uiLang, "videoDescription")}</span>
-                        <textarea value={effectivePlaylistDraft?.description || ""} maxLength={5000} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("description", event.target.value)} />
-                        <small>{(effectivePlaylistDraft?.description || "").length} / 5000</small>
-                        <button className="text-button" type="button" onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "improveWithAi")}</button>
-                      </label>
-                      <div className="playlist-metadata-actions">
-                        <button className="btn ghost" type="button" disabled={!playlistMetadataDirty || playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "discardChanges")}</button>
-                        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
-                          <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
-                        </span>
+                    <div className={`playlist-metadata-editor ${playlistEditing ? "editing" : ""}`}>
+                      <div className="playlist-metadata-field">
+                        <div className="playlist-field-heading">
+                          <span>{t(uiLang, "videoTitle")}</span>
+                          {!playlistEditing ? <button className="playlist-edit-icon" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button>}
+                        </div>
+                        {playlistEditing ? (
+                          <>
+                            <textarea className="playlist-title-input" rows={2} value={effectivePlaylistDraft?.title || ""} maxLength={150} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("title", event.target.value)} />
+                            <small>{(effectivePlaylistDraft?.title || "").length} / 150</small>
+                          </>
+                        ) : <div className="playlist-metadata-value playlist-title-value">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</div>}
                       </div>
+                      <div className="playlist-metadata-field">
+                        <div className="playlist-field-heading">
+                          <span>{t(uiLang, "videoDescription")}</span>
+                          {!playlistEditing ? <button className="playlist-edit-icon" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button>}
+                        </div>
+                        {playlistEditing ? (
+                          <>
+                            <textarea className="playlist-description-input" rows={7} value={effectivePlaylistDraft?.description || ""} maxLength={5000} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("description", event.target.value)} />
+                            <small>{(effectivePlaylistDraft?.description || "").length} / 5000</small>
+                          </>
+                        ) : <div className="playlist-metadata-value playlist-description-value">{selectedPlaylist.description || "—"}</div>}
+                      </div>
+                      {playlistEditing ? (
+                        <div className="playlist-metadata-actions">
+                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "cancel")}</button>
+                          <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
+                            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                   <div className="playlist-summary-footer">
