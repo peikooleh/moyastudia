@@ -613,14 +613,33 @@ def update_video_metadata(
     }
     if language:
         snippet["defaultLanguage"] = language
+    current_response = _execute(
+        service.videos().list(part="status", id=youtube_video_id),
+        "videos.list",
+        recorder,
+    )
+    current_items = current_response.get("items") or []
+    if not current_items:
+        raise RuntimeError("YouTube video status is unavailable")
+    current_status = current_items[0].get("status") or {}
+    mutable_status_fields = (
+        "privacyStatus",
+        "publishAt",
+        "license",
+        "embeddable",
+        "publicStatsViewable",
+        "containsSyntheticMedia",
+    )
+    status = {
+        field: current_status[field]
+        for field in mutable_status_fields
+        if field in current_status
+    }
+    status["selfDeclaredMadeForKids"] = made_for_kids
     response = _execute(
         service.videos().update(
             part="snippet,status",
-            body={
-                "id": youtube_video_id,
-                "snippet": snippet,
-                "status": {"selfDeclaredMadeForKids": made_for_kids},
-            },
+            body={"id": youtube_video_id, "snippet": snippet, "status": status},
         ),
         "videos.update",
         recorder,
