@@ -239,7 +239,7 @@ function VideoInspector({
         <div className="video-summary-thumbnail">
           {thumbnailPreview || selected.thumb ? <img src={thumbnailPreview || selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
           <div className="thumbnail-actions">
-            <button className="btn ghost thumbnail-change-action" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : "Обложка YouTube: JPEG или PNG, до 50 МБ"} onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadThumbnail(file); }} />
+            <button className="btn ghost thumbnail-change-action" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "thumbnailUploadHint")} onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadThumbnail(file); }} />
           </div>
         </div>
         <div className="video-summary-copy">
@@ -249,7 +249,7 @@ function VideoInspector({
             <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : "videoPublishedAt")}</dt><dd>{displayDate ? formatStudioDate(displayDate, uiLang) : "—"}</dd></div>
             <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
             <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
-            <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button>{selected.youtubeId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(selected.youtubeId)}`} target="_blank" rel="noreferrer">{t(uiLang, "openVideo")}</a> : null}</dd></div>
+            <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} title={t(uiLang, "copyVideoIdHint")} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button>{selected.youtubeId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(selected.youtubeId)}`} target="_blank" rel="noreferrer" title={t(uiLang, "openVideoHint")}>{t(uiLang, "openVideo")}</a> : null}</dd></div>
           </dl>
           {copyStatus ? <span role="status">{copyStatus}</span> : null}
           {workingVideo?.dirty ? <span className="item-change">{t(uiLang, "workingModified")}</span> : null}
@@ -304,16 +304,16 @@ function VideoInspector({
 
       <section className="video-properties" aria-labelledby="video-properties-title">
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
-        <label>{t(uiLang, "videoLanguage")}<select value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
-        <label>{t(uiLang, "videoCategory")}<select value={category} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("category", event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-        <fieldset disabled={!workingVideo || workingLoading || workingSaving}><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === true} onChange={() => updateWorkingField("madeForKids", true)} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === false} onChange={() => updateWorkingField("madeForKids", false)} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
+        <label>{t(uiLang, "videoLanguage")}<select title={t(uiLang, "videoLanguageHint")} value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
+        <label>{t(uiLang, "videoCategory")}<select title={t(uiLang, "videoCategoryHint")} value={category} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("category", event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+        <fieldset title={t(uiLang, "videoAudienceHint")} disabled={!workingVideo || workingLoading || workingSaving}><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === true} onChange={() => updateWorkingField("madeForKids", true)} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === false} onChange={() => updateWorkingField("madeForKids", false)} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
         <fieldset className="captions-settings">
           <legend>{t(uiLang, "videoCaptions")}</legend>
           <div className="captions-status">
             <span>{t(uiLang, "captionsYoutubeStatus")}</span>
             <strong>{t(uiLang, selected.captions === true ? "captionsPresent" : selected.captions === false ? "captionsNotDetected" : "captionsUnknown")}</strong>
           </div>
-          <button className="btn ghost captions-upload" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : "Файл субтитров YouTube: SRT или VTT, до 100 МБ"} onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadCaptions(file); }} />
+          <button className="btn ghost captions-upload" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "captionsUploadHint")} onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadCaptions(file); }} />
         </fieldset>
       </section>
 
@@ -348,7 +348,7 @@ function VideoInspector({
             {t(uiLang, "workingUseSnapshot")}
           </button>
         ) : null}
-        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : ""}>
+        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "publishVideoHint")}>
           <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || (!workingVideo?.dirty && !Object.keys(workingEdits).length) || workingVideo?.conflict || workingSaving} onClick={publishWorkingVideo}>{workingSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
         </span>
       </div>
