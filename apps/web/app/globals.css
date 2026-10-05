@@ -2444,3 +2444,33 @@ body {
     width: 100%;
   }
 }
+
+
+/* Playlist staged-write controls mirror the Video page save treatment. */
+.playlist-quick-save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.playlist-quick-save > span {
+  display: inline-flex;
+}
+.playlist-quick-save .btn {
+  min-height: 34px;
+  white-space: nowrap;
+}
+.playlist-quick-save .youtube-write-action:not(:disabled) {
+  background: var(--youtube);
+  border-color: var(--youtube);
+  color: #fff;
+}
+.playlist-quick-save .youtube-write-action:not(:disabled):hover {
+  background: var(--youtube-hover);
+}
+.playlist-quick-save .youtube-write-action:disabled {
+  border: 1px solid color-mix(in srgb, var(--youtube) 32%, var(--line));
+  background: color-mix(in srgb, var(--youtube) 8%, var(--bg-raise));
+  color: color-mix(in srgb, var(--youtube) 58%, var(--muted));
+}
