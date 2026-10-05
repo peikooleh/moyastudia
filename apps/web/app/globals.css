@@ -1786,3 +1786,35 @@ body {
 .catalog-reconcile-action {
   white-space: nowrap;
 }
+
+
+/* Video catalog action hierarchy: refresh is primary, reconciliation is secondary. */
+.catalog-state > .catalog-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.catalog-actions .catalog-refresh-icon {
+  flex: 0 0 var(--control-h);
+}
+.catalog-actions .catalog-reconcile-action {
+  min-height: var(--control-h);
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.catalog-actions .catalog-reconcile-action:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.catalog-actions .catalog-reconcile-action:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
