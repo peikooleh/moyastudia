@@ -14,7 +14,13 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
       </head>
-      <body>
+      <body
+        style={{
+          fontFamily: '"Manrope", "Segoe UI", system-ui, sans-serif',
+          fontWeight: 400,
+          textRendering: "optimizeLegibility",
+        }}
+      >
         <PrefsProvider>{children}</PrefsProvider>
       </body>
     </html>
