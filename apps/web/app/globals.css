@@ -2856,3 +2856,17 @@ body {
 .interface-popover .opt { padding: 10px 12px; }
 .app-top:not(:has(.header-write-mode)) .header-system-status { padding-left: 0; border-left: 0; }
 @media (max-width: 800px) { .interface-popover { position: fixed; top: 68px; right: 12px; left: 12px; width: auto; } }
+
+
+/* AI connection settings */
+.ai-connection-grid { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(220px, 1fr) minmax(280px, 1.4fr) auto; gap: 14px; align-items: end; }
+.ai-connection-grid label, .ai-model-settings label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; }
+.ai-connection-grid input, .ai-connection-grid select, .ai-model-settings textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--text); }
+.ai-settings-button { min-height: 39px; white-space: nowrap; }
+.ai-settings-button.active { background: var(--bg-hover); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.ai-model-settings { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-raise); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ai-model-settings h3 { grid-column: 1 / -1; margin: 0; font-size: 14px; }
+.ai-model-settings textarea { min-height: 150px; resize: vertical; line-height: 1.45; }
+.ai-connection-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+@media (max-width: 1100px) { .ai-connection-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 800px) { .ai-connection-grid, .ai-model-settings { grid-template-columns: 1fr; } .ai-model-settings h3 { grid-column: auto; } }
