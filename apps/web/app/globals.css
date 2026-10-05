@@ -2867,6 +2867,6 @@ body {
 .ai-model-settings { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-raise); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .ai-model-settings h3 { grid-column: 1 / -1; margin: 0; font-size: 14px; }
 .ai-model-settings textarea { min-height: 150px; resize: vertical; line-height: 1.45; }
-.ai-connection-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.ai-connection-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 @media (max-width: 1100px) { .ai-connection-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 800px) { .ai-connection-grid, .ai-model-settings { grid-template-columns: 1fr; } .ai-model-settings h3 { grid-column: auto; } }
