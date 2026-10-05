@@ -2258,3 +2258,49 @@ body {
 .playlist-metadata-editor .ai-improve-btn {
   color: var(--accent);
 }
+
+
+/* Compact playlist read mode: one edit affordance, clamped description. */
+.playlist-metadata-editor:not(.editing) {
+  position: relative;
+  padding-right: 36px;
+}
+.playlist-edit-metadata {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.playlist-edit-metadata:hover {
+  border-color: var(--line);
+  background: var(--bg-hover);
+}
+.playlist-metadata-editor:not(.editing) .playlist-description-value {
+  display: -webkit-box;
+  max-height: none;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.playlist-metadata-editor:not(.editing) .playlist-description-value.expanded {
+  display: block;
+  max-height: 16rem;
+  overflow-y: auto;
+  -webkit-line-clamp: unset;
+}
+.playlist-description-toggle {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
