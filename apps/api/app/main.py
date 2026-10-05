@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from . import db as database
 from .db import get_db
 from .models import (
+    AIConnection,
     Channel,
     ChannelCatalogSync,
     GoogleConnection,
@@ -51,6 +52,16 @@ from . import quota as quota_service
 from . import youtube as yt
 
 app = FastAPI(title="MoyaStudia API")
+
+
+class AIConnectionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: Literal["openai", "gemini", "anthropic"]
+    model: str = Field(min_length=1, max_length=128)
+    api_key: str | None = Field(default=None, min_length=1, max_length=4096)
+    title_prompt: str = Field(default="", max_length=12000)
+    description_prompt: str = Field(default="", max_length=12000)
 
 
 class ChannelSelection(BaseModel):
@@ -490,6 +501,71 @@ def youtube_callback(
     )
     clear_oauth_state_cookie(response, state)
     return response
+
+
+@app.get("/ai-connections")
+def list_ai_connections(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(AIConnection)
+        .filter(AIConnection.user_id == user.id)
+        .order_by(AIConnection.provider, AIConnection.model)
+        .all()
+    )
+    return [
+        {
+            "id": row.id,
+            "provider": row.provider,
+            "model": row.model,
+            "has_api_key": bool(row.encrypted_api_key),
+            "title_prompt": row.title_prompt or "",
+            "description_prompt": row.description_prompt or "",
+        }
+        for row in rows
+    ]
+
+
+@app.put("/ai-connections", dependencies=[Depends(require_same_origin)])
+def save_ai_connection(
+    payload: AIConnectionUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    provider = payload.provider.strip().lower()
+    model = payload.model.strip()
+    row = (
+        db.query(AIConnection)
+        .filter(
+            AIConnection.user_id == user.id,
+            AIConnection.provider == provider,
+            AIConnection.model == model,
+        )
+        .one_or_none()
+    )
+    if row is None:
+        if not payload.api_key:
+            raise HTTPException(422, "api_key is required for a new AI connection")
+        row = AIConnection(user_id=user.id, provider=provider, model=model, encrypted_api_key="")
+        db.add(row)
+    if payload.api_key:
+        try:
+            row.encrypted_api_key = encrypt_refresh_token(payload.api_key)
+        except TokenEncryptionError as exc:
+            raise HTTPException(503, "API key encryption configuration is invalid") from exc
+    row.title_prompt = payload.title_prompt.strip()
+    row.description_prompt = payload.description_prompt.strip()
+    db.commit()
+    db.refresh(row)
+    return {
+        "id": row.id,
+        "provider": row.provider,
+        "model": row.model,
+        "has_api_key": True,
+        "title_prompt": row.title_prompt or "",
+        "description_prompt": row.description_prompt or "",
+    }
 
 
 @app.get("/channels")
