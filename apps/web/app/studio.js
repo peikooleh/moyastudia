@@ -1844,6 +1844,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           </select>
                         ) : <strong>{statusLabel(uiLang, selectedPlaylist.privacy)}</strong>}
                       </div>
+                      <div className="playlist-setting playlist-youtube-setting">
+                        <span>YouTube</span>
+                        <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer" title={t(uiLang, "openPlaylistYoutubeHint")}>{t(uiLang, "openPlaylistOnYoutube")}</a>
+                      </div>
                       <div className="playlist-setting playlist-order-setting">
                         <span>{t(uiLang, "playlistCompositionOrder")}</span>
                         <strong>{t(uiLang, "playlistVideosCount", { count: selectedPlaylist.itemCount ?? currentPlaylistContents?.items?.length ?? 0 })}</strong>
@@ -1858,7 +1862,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {selectedPlaylist.publishedAt ? <span>{t(uiLang, "playlistDateLabel")}: <time dateTime={selectedPlaylist.publishedAt}>{formatPlaylistDate(selectedPlaylist.publishedAt, uiLang) || "—"}</time></span> : null}
                       {selectedPlaylist.id ? <span className="playlist-id-value">{t(uiLang, "playlistIdLabel")}: <code>{selectedPlaylist.id}</code></span> : null}
                     </div>
-                    {selectedPlaylist.id ? <div className="playlist-id-tools"><button className="text-button" type="button" title={t(uiLang, "copyPlaylistIdHint")} onClick={copyPlaylistId}>{t(uiLang, "copyId")}</button>{selectedPlaylist.localOnly ? <button className="text-button danger-text" type="button" onClick={deleteLocalPlaylist}>{t(uiLang, "playlistDeleteLocal")}</button> : <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer" title={t(uiLang, "openPlaylistYoutubeHint")}>{t(uiLang, "openPlaylistOnYoutube")}</a>}</div> : null}
+                    {selectedPlaylist.id && selectedPlaylist.localOnly ? <div className="playlist-id-tools"><button className="text-button danger-text" type="button" onClick={deleteLocalPlaylist}>{t(uiLang, "playlistDeleteLocal")}</button></div> : null}
                   </div>
                   {playlistIdCopyStatus ? <span className="playlist-copy-status" role="status">{playlistIdCopyStatus}</span> : null}
                 </div>
