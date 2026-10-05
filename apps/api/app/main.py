@@ -93,6 +93,8 @@ class VideoWorkingPatch(BaseModel):
     description: str | None = None
     tags: str | None = None
     language: str | None = Field(default=None, max_length=32, pattern=r"^$|^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
+    category: str | None = Field(default=None, max_length=32)
+    madeForKids: bool | None = None
     ready: bool = False
     conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
@@ -921,7 +923,7 @@ def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
     snapshot = _working_video_snapshot(video)
-    working = {field: getattr(video, field) for field in ("title", "description", "tags", "language")}
+    working = {field: getattr(video, field) for field in ("title", "description", "tags", "language", "category", "madeForKids")}
     dirty_fields = _working_dirty_fields(snapshot, working)
     return {
         "id": video.id,
@@ -968,6 +970,8 @@ def _working_video_snapshot(video: Video) -> dict[str, str | None]:
         "description": video.youtube_description,
         "tags": None if video.youtube_tags is None else ", ".join(video.youtube_tags),
         "language": video.youtube_default_language or video.youtube_default_audio_language or "",
+        "category": video.youtube_category_id or "",
+        "madeForKids": video.youtube_made_for_kids,
     }
 
 
@@ -976,7 +980,7 @@ def _working_dirty_fields(
 ) -> dict[str, bool]:
     return {
         field: working[field] is not None and working[field] != snapshot[field]
-        for field in ("title", "description", "tags", "language")
+        for field in ("title", "description", "tags", "language", "category", "madeForKids")
     }
 
 
@@ -987,6 +991,8 @@ def _video_working_item(video: Video) -> dict:
         "description": video.description,
         "tags": video.tags,
         "language": video.language,
+        "category": video.category,
+        "madeForKids": video.made_for_kids,
         "ready": video.working_ready,
     }
     base = {
@@ -994,10 +1000,12 @@ def _video_working_item(video: Video) -> dict:
         "description": video.working_base_description,
         "tags": video.working_base_tags,
         "language": video.working_base_language,
+        "category": video.working_base_category,
+        "madeForKids": video.working_base_made_for_kids,
     }
     effective = {
         field: working[field] if working[field] is not None else snapshot[field]
-        for field in ("title", "description", "tags", "language")
+        for field in ("title", "description", "tags", "language", "category", "madeForKids")
     }
     dirty_fields = _working_dirty_fields(snapshot, working)
     conflict_fields = {
@@ -1006,7 +1014,7 @@ def _video_working_item(video: Video) -> dict:
             and base[field] != snapshot[field]
             and working[field] != snapshot[field]
         )
-        for field in ("title", "description", "tags", "language")
+        for field in ("title", "description", "tags", "language", "category", "madeForKids")
     }
     return {
         "id": video.id,
@@ -1250,11 +1258,12 @@ def patch_channel_video_working(
             if field == "ready":
                 values["working_ready"] = value
                 continue
-            values[field] = value
-            base_field = f"working_base_{field}"
+            model_field = "made_for_kids" if field == "madeForKids" else field
+            values[model_field] = value
+            base_field = f"working_base_{model_field}"
             if value is None:
                 values[base_field] = None
-            elif getattr(video, field) is None:
+            elif getattr(video, model_field) is None:
                 values[base_field] = snapshot[field]
 
     values["working_revision"] = Video.working_revision + 1
@@ -1304,13 +1313,15 @@ def publish_channel_video_metadata(
         raise HTTPException(409, detail={"code": "video_unavailable"})
     if not current["dirty"]:
         raise HTTPException(409, detail={"code": "nothing_to_publish"})
-    if not video.youtube_video_id or not video.youtube_category_id:
+    if not video.youtube_video_id or not category_id or made_for_kids is None:
         raise HTTPException(422, detail={"code": "incomplete_youtube_snapshot"})
 
     title = current["effective"]["title"] or ""
     description = current["effective"]["description"] or ""
     tags_text = current["effective"]["tags"] or ""
     language = (current["effective"]["language"] or "").strip() or None
+    category_id = (current["effective"]["category"] or "").strip()
+    made_for_kids = current["effective"]["madeForKids"]
     tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
     tags_cost = sum(len(tag) + (2 if " " in tag else 0) + (1 if index else 0) for index, tag in enumerate(tags))
     if tags_cost > 500:
@@ -1333,8 +1344,9 @@ def publish_channel_video_metadata(
                 title=title,
                 description=description,
                 tags=tags,
-                category_id=video.youtube_category_id,
+                category_id=category_id,
                 language=language,
+                made_for_kids=made_for_kids,
             )
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
@@ -1349,14 +1361,19 @@ def publish_channel_video_metadata(
     video.youtube_tags = remote["youtube_tags"]
     video.youtube_category_id = remote["youtube_category_id"]
     video.youtube_default_language = remote["youtube_default_language"]
+    video.youtube_made_for_kids = remote["youtube_made_for_kids"]
     video.title = None
     video.description = None
     video.tags = None
     video.language = None
+    video.category = None
+    video.made_for_kids = None
     video.working_base_title = None
     video.working_base_description = None
     video.working_base_tags = None
     video.working_base_language = None
+    video.working_base_category = None
+    video.working_base_made_for_kids = None
     video.working_ready = False
     video.working_revision += 1
     db.commit()
