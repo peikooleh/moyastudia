@@ -545,6 +545,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [calendarSaving, setCalendarSaving] = useState(false);
   const [calendarSaveStatus, setCalendarSaveStatus] = useState("");
   const [calendarContext, setCalendarContext] = useState(null);
+  const [calendarQueueOpen, setCalendarQueueOpen] = useState(false);
+  const [calendarQueueQuery, setCalendarQueueQuery] = useState("");
   const [statisticsQuery, setStatisticsQuery] = useState("");
   const [statisticsStatus, setStatisticsStatus] = useState("all");
   const [statisticsSort, setStatisticsSort] = useState("views");
@@ -1688,6 +1690,13 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     };
   });
   const calendarSelected = effectiveCalendarVideos.find((video) => video.id === selectedId) || null;
+  const calendarQueueVideos = effectiveCalendarVideos.filter((video) => {
+    const needle = calendarQueueQuery.trim().toLocaleLowerCase();
+    const unscheduledPrivate = video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing;
+    const matchesQuery = !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
+    return unscheduledPrivate && matchesQuery;
+  });
+  const calendarQueueCount = effectiveCalendarVideos.filter((video) => video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing).length;
   const statistics = cachedVideoMetricSummary(videos);
   const statisticsRows = [...videos]
     .filter((video) => {
@@ -2356,10 +2365,51 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       ) : null}
 
       {view === "calendar" ? (
-        <main className="calendar-workspace">
+        <main className={`calendar-workspace ${calendarQueueOpen ? "queue-open" : ""}`}>
+          {calendarQueueOpen ? (
+            <aside className="calendar-queue" aria-label={t(uiLang, "calendarQueue")}>
+              <header>
+                <div>
+                  <h2>{t(uiLang, "calendarQueue")}</h2>
+                  <span>{t(uiLang, "calendarQueueCount", { count: calendarQueueCount })}</span>
+                </div>
+                <button className="btn ghost" type="button" title={t(uiLang, "close")} aria-label={t(uiLang, "close")} onClick={() => setCalendarQueueOpen(false)}>×</button>
+              </header>
+              <input className="search" value={calendarQueueQuery} onChange={(event) => setCalendarQueueQuery(event.target.value)} placeholder={t(uiLang, "calendarQueueSearch")} aria-label={t(uiLang, "calendarQueueSearch")} />
+              <p className="calendar-queue-help">{t(uiLang, "calendarQueueHelp")}</p>
+              <div className="calendar-queue-list">
+                {calendarQueueVideos.length ? calendarQueueVideos.map((video) => (
+                  <button
+                    key={video.id}
+                    className={`calendar-queue-item ${video.id === selectedId ? "active" : ""}`}
+                    type="button"
+                    draggable
+                    title={t(uiLang, "calendarQueueDragHint")}
+                    onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
+                    onClick={() => {
+                      setPlaylistSelectedVideo(null);
+                      setSelectedId(video.id);
+                      setCalendarContext(null);
+                    }}
+                  >
+                    {video.thumb ? <img src={video.thumb} alt="" /> : <span className="calendar-queue-empty-thumb" />}
+                    <span>
+                      <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
+                      <small>{t(uiLang, "filterPrivate")}</small>
+                    </span>
+                  </button>
+                )) : <div className="calendar-queue-empty">{t(uiLang, calendarQueueQuery ? "calendarQueueNoResults" : "calendarQueueEmpty")}</div>}
+              </div>
+            </aside>
+          ) : null}
           <section className="calendar-panel">
             <header className="calendar-heading">
               <h1>{t(uiLang, "calendarTab")}</h1>
+              <div className="calendar-heading-actions">
+                <button className={`btn ghost calendar-queue-toggle ${calendarQueueOpen ? "active" : ""}`} type="button" title={t(uiLang, "calendarQueueHint")} onClick={() => setCalendarQueueOpen((open) => !open)}>
+                  {t(uiLang, "calendarQueue")} <span>{calendarQueueCount}</span>
+                </button>
+              </div>
               <div className="cal-nav">
                 <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
