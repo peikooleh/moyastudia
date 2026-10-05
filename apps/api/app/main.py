@@ -1392,6 +1392,80 @@ def publish_channel_video_metadata(
     return _video_working_item(video)
 
 
+
+@app.put(
+    "/channels/{channel_id}/videos/{video_id}/thumbnail",
+    dependencies=[Depends(require_same_origin)],
+)
+async def upload_channel_video_thumbnail(
+    channel_id: int,
+    video_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    video = _catalog_video_or_404(db, user, channel_id, video_id)
+    if video.availability_status != "available" or not video.youtube_video_id:
+        raise HTTPException(409, detail={"code": "video_unavailable"})
+    content_type = (request.headers.get("content-type") or "").split(";")[0].lower()
+    if content_type not in {"image/jpeg", "image/png"}:
+        raise HTTPException(415, detail={"code": "invalid_thumbnail_type"})
+    data = await request.body()
+    if not data or len(data) > 50 * 1024 * 1024:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            thumbnail_url = yt.set_video_thumbnail(token, video.youtube_video_id, data, content_type)
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        raise HTTPException(502, detail={"code": "youtube_thumbnail_update_failed"}) from exc
+    if thumbnail_url:
+        video.youtube_thumbnail_url = thumbnail_url
+        db.commit()
+    return {"ok": True, "thumbnail_url": thumbnail_url or video.youtube_thumbnail_url or ""}
+
+
+@app.post(
+    "/channels/{channel_id}/videos/{video_id}/captions",
+    dependencies=[Depends(require_same_origin)],
+)
+async def upload_channel_video_captions(
+    channel_id: int,
+    video_id: int,
+    request: Request,
+    language: str = Query(..., min_length=2, max_length=32),
+    name: str = Query("MoyaStudia", min_length=1, max_length=150),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    video = _catalog_video_or_404(db, user, channel_id, video_id)
+    if video.availability_status != "available" or not video.youtube_video_id:
+        raise HTTPException(409, detail={"code": "video_unavailable"})
+    content_type = (request.headers.get("content-type") or "application/octet-stream").split(";")[0].lower()
+    data = await request.body()
+    if not data or len(data) > 100 * 1024 * 1024:
+        raise HTTPException(413, detail={"code": "invalid_caption_size"})
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            result = yt.insert_video_caption(token, video.youtube_video_id, data, content_type, language, name)
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        raise HTTPException(502, detail={"code": "youtube_caption_upload_failed"}) from exc
+    video.youtube_captions_available = True
+    db.commit()
+    return {"ok": True, **result}
+
+
 @app.get("/channels/{channel_id}/analytics/summary")
 def channel_analytics_summary(
     channel_id: int,
