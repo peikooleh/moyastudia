@@ -428,7 +428,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
   const [playlistVideoPicker, setPlaylistVideoPicker] = useState(null);
   const [playlistDraft, setPlaylistDraft] = useState(null);
-  const [playlistEditing, setPlaylistEditing] = useState(false);
   const [playlistDescriptionExpanded, setPlaylistDescriptionExpanded] = useState(false);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
@@ -920,7 +919,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   function resetPlaylistDraft() {
     if (!selectedPlaylist) return;
     setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" });
-    setPlaylistEditing(false);
     setPlaylistIdCopyStatus("");
   }
 
@@ -955,7 +953,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
       setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
       setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description, privacy: data.privacy || effectivePlaylistDraft.privacy });
-      setPlaylistEditing(false);
       setPlaylistIdCopyStatus(t(uiLang, "playlistSavedToYoutube"));
     } catch (error) {
       setPlaylistIdCopyStatus(String(error.message || error));
@@ -1456,6 +1453,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     : selectedPlaylist
       ? { id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" }
       : null;
+  const playlistEditing = Boolean(writeMode?.enabled && selectedPlaylist && !selectedPlaylist.localOnly);
   const playlistMetadataDirty = Boolean(selectedPlaylist && effectivePlaylistDraft && (
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
@@ -1816,10 +1814,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           </>
                         )}
                       </div>
-                      {!playlistEditing ? <button className="playlist-edit-metadata" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : null}
                       {playlistEditing ? (
                         <div className="playlist-metadata-actions">
-                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
+                          <button className="btn ghost" type="button" disabled={!playlistMetadataDirty || playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
                           <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
                             <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
                           </span>
