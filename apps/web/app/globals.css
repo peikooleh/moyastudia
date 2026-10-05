@@ -1958,3 +1958,17 @@ body {
 .inspector-edit {
   padding-top: 14px;
 }
+
+
+/* Keep thumbnail actions compact so they do not increase the video summary height. */
+.thumbnail-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.thumbnail-actions .btn {
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
