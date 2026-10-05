@@ -429,6 +429,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistVideoPicker, setPlaylistVideoPicker] = useState(null);
   const [playlistDraft, setPlaylistDraft] = useState(null);
   const [playlistEditing, setPlaylistEditing] = useState(false);
+  const [playlistDescriptionExpanded, setPlaylistDescriptionExpanded] = useState(false);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
@@ -926,6 +927,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (!selectedPlaylist || selectedPlaylist.localOnly) return;
     setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" });
     setPlaylistEditing(true);
+    setPlaylistDescriptionExpanded(false);
     setPlaylistIdCopyStatus("");
   }
 
@@ -1756,7 +1758,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoTitle")}</span>
-                          {!playlistEditing ? <button className="playlist-edit-icon" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button>}
+                          {playlistEditing ? <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button> : null}
                         </div>
                         {playlistEditing ? (
                           <>
@@ -1768,15 +1770,21 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoDescription")}</span>
-                          {!playlistEditing ? <button className="playlist-edit-icon" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button>}
+                          {playlistEditing ? <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button> : null}
                         </div>
                         {playlistEditing ? (
                           <>
                             <textarea className="playlist-description-input" rows={7} value={effectivePlaylistDraft?.description || ""} maxLength={5000} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("description", event.target.value)} />
                             <small>{(effectivePlaylistDraft?.description || "").length} / 5000</small>
                           </>
-                        ) : <div className="playlist-metadata-value playlist-description-value">{selectedPlaylist.description || "—"}</div>}
+                        ) : (
+                          <>
+                            <div className={`playlist-metadata-value playlist-description-value ${playlistDescriptionExpanded ? "expanded" : ""}`}>{selectedPlaylist.description || "—"}</div>
+                            {selectedPlaylist.description ? <button className="playlist-description-toggle text-button" type="button" onClick={() => setPlaylistDescriptionExpanded((current) => !current)}>{t(uiLang, playlistDescriptionExpanded ? "playlistShowLess" : "playlistShowMore")}</button> : null}
+                          </>
+                        )}
                       </div>
+                      {!playlistEditing ? <button className="playlist-edit-metadata" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : null}
                       {playlistEditing ? (
                         <div className="playlist-metadata-actions">
                           <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "cancel")}</button>
