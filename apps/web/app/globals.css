@@ -1265,6 +1265,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .video-properties fieldset:disabled label { color: var(--muted); }
 .working-controls > .btn.ghost:disabled { opacity: 1; border-color: var(--line); background: var(--bg); color: var(--muted); }
 .working-controls > .youtube-write-action:disabled { opacity: 1; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line)); background: color-mix(in srgb, var(--accent) 18%, var(--bg-raise)); color: var(--accent); }
+.youtube-write-tooltip { display: inline-flex; cursor: help; }
+.youtube-write-tooltip .youtube-write-action { width: 100%; }
 @media (min-width: 721px) {
   .studio-list .item { grid-template-columns: 72px minmax(0, 1fr); }
   .studio-list .item-thumb { width: 72px; }
