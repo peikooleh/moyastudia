@@ -255,6 +255,20 @@ test("statistics summarize only metrics present in the loaded catalog rows", () 
   });
 });
 
+test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () => {
+  const keys = [
+    "actionCancel", "aiConnections", "aiConnectionsHint", "aiProvider", "aiModel", "aiApiKey",
+    "aiSettings", "aiModelSettings", "aiModelPlaceholder", "aiApiKeySaved", "aiTitlePrompt",
+    "aiTitlePromptPlaceholder", "aiDescriptionPrompt", "aiDescriptionPromptPlaceholder",
+    "aiSave", "aiSaving", "aiSaved", "aiLoadError", "aiSaveError", "aiModelRequired", "aiApiKeyRequired",
+  ];
+  for (const lang of ["en", "ru", "uk"]) {
+    for (const key of keys) assert.notEqual(t(lang, key), key, `${lang}:${key}`);
+  }
+  assert.equal(t("ru", "actionCancel"), "Отмена");
+  assert.equal(t("uk", "actionCancel"), "Скасувати");
+});
+
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
   const keys = [
     "more", "statisticsTab", "calendarToday", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
