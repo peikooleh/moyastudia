@@ -1,5 +1,6 @@
 const dict = {
   en: {
+    calendarTimeScheduledOnly: "Time can be changed after the video is scheduled.",
     calendarSelectEventHint: "Click a video for details, drag it to reschedule, or right-click for quick actions.",
     calendarTime: "Publication time",
     calendarCancelSchedule: "Cancel scheduling",
@@ -537,6 +538,7 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    calendarTimeScheduledOnly: "Время можно изменить после того, как видео запланировано.",
     calendarSelectEventHint: "Нажмите на видео для деталей, перетащите его для переноса или используйте правый клик для быстрых действий.",
     calendarTime: "Время публикации",
     calendarCancelSchedule: "Отменить планирование",
@@ -1074,6 +1076,7 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    calendarTimeScheduledOnly: "Час можна змінити після того, як відео заплановано.",
     calendarSelectEventHint: "Натисніть на відео для деталей, перетягніть його для перенесення або використайте правий клік для швидких дій.",
     calendarTime: "Час публікації",
     calendarCancelSchedule: "Скасувати планування",
