@@ -146,6 +146,7 @@ function MetadataLimitNotice({ uiLang, state, characters }) {
 
 function VideoInspector({
   uiLang,
+  channelId,
   selected,
   workingLoading,
   workingVideo,
@@ -162,6 +163,61 @@ function VideoInspector({
   writeMode,
 }) {
   const [copyStatus, setCopyStatus] = useState("");
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
+
+  async function uploadThumbnail(file) {
+    if (!file) return;
+    if (!writeMode?.enabled) {
+      setCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!window.confirm(`Отправить новую обложку «${file.name}» на YouTube?`)) return;
+    setMediaBusy(true);
+    setCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/videos/${selected.id}/thumbnail`, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail?.code || data?.detail || "Не удалось обновить обложку");
+      setThumbnailPreview(data.thumbnail_url || URL.createObjectURL(file));
+      setCopyStatus("Обложка обновлена на YouTube");
+    } catch (error) {
+      setCopyStatus(String(error.message || error));
+    } finally {
+      setMediaBusy(false);
+    }
+  }
+
+  async function uploadCaptions(file) {
+    if (!file) return;
+    if (!writeMode?.enabled) {
+      setCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    const captionLanguage = language || "ru";
+    if (!window.confirm(`Загрузить субтитры «${file.name}» на YouTube (${captionLanguage})?`)) return;
+    setMediaBusy(true);
+    setCopyStatus("");
+    try {
+      const params = new URLSearchParams({ language: captionLanguage, name: file.name.slice(0, 150) });
+      const response = await apiFetch(`/channels/${channelId}/videos/${selected.id}/captions?${params.toString()}`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail?.code || data?.detail || "Не удалось загрузить субтитры");
+      setCopyStatus("Субтитры отправлены на YouTube");
+    } catch (error) {
+      setCopyStatus(String(error.message || error));
+    } finally {
+      setMediaBusy(false);
+    }
+  }
   if (!selected) {
     return <section className="video-inspector empty">{t(uiLang, "catalogSelectVideo")}</section>;
   }
@@ -181,10 +237,10 @@ function VideoInspector({
     <section className="video-inspector" aria-label={t(uiLang, "selectedVideo")}>
       <header className="video-summary">
         <div className="video-summary-thumbnail">
-          {selected.thumb ? <img src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
+          {thumbnailPreview || selected.thumb ? <img src={thumbnailPreview || selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : <span className="item-thumb empty-thumb" />}
           <div className="thumbnail-actions">
-            <button className="btn ghost" type="button" onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; if (file) setCopyStatus(file.name); }} />
-            <button className="btn ghost" type="button" disabled title={t(uiLang, "writeModeDescription")}>{t(uiLang, "removeThumbnail")}</button>
+            <button className="btn ghost" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : ""} onClick={() => document.getElementById(`thumbnail-file-${selected.id}`)?.click()}>{t(uiLang, "changeThumbnail")}</button><input id={`thumbnail-file-${selected.id}`} className="visually-hidden" type="file" accept="image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadThumbnail(file); }} />
+            <button className="btn ghost" type="button" disabled title="YouTube Data API не предоставляет операции удаления пользовательской обложки">{t(uiLang, "removeThumbnail")}</button>
           </div>
         </div>
         <div className="video-summary-copy">
@@ -258,7 +314,7 @@ function VideoInspector({
             <span>{t(uiLang, "captionsYoutubeStatus")}</span>
             <strong>{t(uiLang, selected.captions === true ? "captionsPresent" : selected.captions === false ? "captionsNotDetected" : "captionsUnknown")}</strong>
           </div>
-          <button className="btn ghost captions-upload" type="button" title="Файл субтитров YouTube: SRT или VTT, до 100 МБ" onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; if (file) setWorkingError(file.name); }} />
+          <button className="btn ghost captions-upload" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : "Файл субтитров YouTube: SRT или VTT, до 100 МБ"} onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadCaptions(file); }} />
         </fieldset>
       </section>
 
@@ -1438,6 +1494,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           </aside>
           <VideoInspector
             uiLang={uiLang}
+            channelId={channelId}
             selected={selected}
             workingLoading={workingLoading}
             workingVideo={workingVideo}
