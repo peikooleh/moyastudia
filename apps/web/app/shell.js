@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { t } from "../lib/i18n";
 import { apiFetch } from "../lib/api";
+import { UI_LANGS } from "../lib/prefs";
 import { usePrefs } from "./providers";
+import { ThemePicker } from "./theme-picker";
 import { LogoutControl } from "./logout-control";
 
 export function Shell({ children }) {
@@ -23,6 +25,8 @@ export function Shell({ children }) {
   const [quota, setQuota] = useState(null);
   const [writeMode, setWriteMode] = useState({ enabled: false, youtube_writes_available: false });
   const [writeModeBusy, setWriteModeBusy] = useState(false);
+  const [interfaceOpen, setInterfaceOpen] = useState(false);
+  const interfaceMenuRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +152,22 @@ export function Shell({ children }) {
     };
   }, [channel?.id]);
 
+  useEffect(() => {
+    if (!interfaceOpen) return undefined;
+    const closeInterfaceMenu = (event) => {
+      if (!interfaceMenuRef.current?.contains(event.target)) setInterfaceOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setInterfaceOpen(false);
+    };
+    document.addEventListener("pointerdown", closeInterfaceMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeInterfaceMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [interfaceOpen]);
+
   const [workspaceView, setWorkspaceView] = useState("videos");
 
   useEffect(() => {
@@ -248,6 +268,29 @@ export function Shell({ children }) {
             <div className="sync-status quota-status" title={t(uiLang, "quotaTrackedTitle")}>
               <span>{t(uiLang, "quotaTracked")}</span>
               <strong>{quota.buckets.general.used} / {quota.buckets.general.limit}</strong>
+            </div>
+          ) : null}
+        </div>
+        <div className="header-interface" ref={interfaceMenuRef}>
+          <button type="button" className={`btn ghost interface-trigger ${interfaceOpen ? "active" : ""}`} aria-expanded={interfaceOpen} aria-haspopup="dialog" onClick={() => setInterfaceOpen((open) => !open)}>
+            {t(uiLang, "interface")}
+          </button>
+          {interfaceOpen ? (
+            <div className="interface-popover" role="dialog" aria-label={t(uiLang, "interface")}>
+              <section>
+                <h2>{t(uiLang, "uiLangTitle")}</h2>
+                <div className="interface-language-options">
+                  {UI_LANGS.filter((language) => language.id !== "auto").map((language) => (
+                    <button key={language.id} type="button" className={prefs.uiLang === language.id ? "active" : ""} onClick={() => update({ uiLang: language.id })}>
+                      {language.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h2>{t(uiLang, "themeTitle")}</h2>
+                <ThemePicker />
+              </section>
             </div>
           ) : null}
         </div>
