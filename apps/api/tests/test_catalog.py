@@ -234,6 +234,8 @@ def test_catalog_rows_include_dirty_state_for_every_video(client, test_database)
         "description": False,
         "tags": False,
         "language": False,
+        "category": False,
+        "madeForKids": False,
     }
 
 
@@ -801,6 +803,8 @@ def test_catalog_video_working_routes_are_owner_scoped_and_preserve_snapshot(
         "description": "Local description",
         "tags": "local, tags",
         "language": None,
+        "category": None,
+        "madeForKids": None,
         "ready": False,
     }
     assert saved_item["effective"]["title"] == ""
@@ -857,6 +861,8 @@ def test_working_metadata_round_trips_above_youtube_limits(client, test_database
         "description": description,
         "tags": tags,
         "language": None,
+        "category": None,
+        "madeForKids": None,
         "ready": False,
     }
     reloaded = client.get(url)
