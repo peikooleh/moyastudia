@@ -404,7 +404,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
       <div className="calendar-manipulation-panel">
         <label>
           <span>{t(uiLang, "calendarTime")}</span>
-          <input type="time" value={timeValue} disabled={!date} onChange={(event) => onTime(selected, event.target.value)} />
+          <input type="time" value={timeValue} disabled={!selected.slot} title={!selected.slot ? t(uiLang, "calendarTimeScheduledOnly") : undefined} onChange={(event) => onTime(selected, event.target.value)} />
         </label>
         <label>
           <span>{t(uiLang, "videoVisibility")}</span>
@@ -2398,10 +2398,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
               return (
                 <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu">
-                  <label>
-                    <span>{t(uiLang, "calendarChangeTime")}</span>
-                    <input type="time" defaultValue={time} onChange={(event) => stageCalendarTime(video, event.target.value)} />
-                  </label>
+                  {video.slot ? (
+                    <label>
+                      <span>{t(uiLang, "calendarChangeTime")}</span>
+                      <input type="time" defaultValue={time} onChange={(event) => stageCalendarTime(video, event.target.value)} />
+                    </label>
+                  ) : null}
                   <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "public", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterPublic")}</button>
                   <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "unlisted", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterUnlisted")}</button>
                   <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>
