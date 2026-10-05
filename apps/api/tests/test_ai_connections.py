@@ -147,3 +147,25 @@ def test_new_ai_connection_requires_api_key(client, test_database):
     assert response.status_code == 422
     with test_database() as db:
         assert db.query(AIConnection).count() == 0
+
+
+def test_ai_connection_rejects_blank_model_and_blank_new_key(client, test_database):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    headers = {"Origin": settings.frontend_origin}
+
+    blank_model = client.put(
+        "/ai-connections",
+        json=_payload(model="   "),
+        headers=headers,
+    )
+    blank_key = client.put(
+        "/ai-connections",
+        json=_payload(model="another-model", api_key="   "),
+        headers=headers,
+    )
+
+    assert blank_model.status_code == 422
+    assert blank_key.status_code == 422
+    with test_database() as db:
+        assert db.query(AIConnection).count() == 0
