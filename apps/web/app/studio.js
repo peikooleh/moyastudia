@@ -1712,6 +1712,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     const sourceDate = source ? new Date(source) : new Date();
     const [year, monthValue, day] = dayKey.split("-").map(Number);
     const next = new Date(year, monthValue - 1, day, sourceDate.getHours(), sourceDate.getMinutes(), 0, 0);
+    if (next.getTime() <= Date.now()) {
+      setCalendarSaveStatus(t(uiLang, "calendarFutureOnly"));
+      return;
+    }
     stageCalendarChange(video, { privacy: "private", publishAt: next.toISOString() });
   }
 
