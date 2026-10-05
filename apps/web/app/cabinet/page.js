@@ -458,7 +458,7 @@ export default function CabinetPage() {
                   ) : null}
                   {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                   {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
-                  <div className="ai-connection-actions"><button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
+                  <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={() => setAiSettingsOpen(false)}>{t(uiLang, "cancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
                 </section>
               </div>
             ) : null}
