@@ -239,7 +239,7 @@ def test_catalog_rows_include_dirty_state_for_every_video(client, test_database)
     }
 
 
-def test_list_videos_resolves_selected_channel_and_returns_one_page(monkeypatch):
+def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
     calls = []
 
     class FakeResource:
@@ -251,22 +251,10 @@ def test_list_videos_resolves_selected_channel_and_returns_one_page(monkeypatch)
             return SimpleNamespace(execute=lambda: self.response)
 
     class FakeService:
-        def channels(self):
+        def search(self):
             return FakeResource(
                 {
-                    "items": [
-                        {
-                            "id": "selected-channel",
-                            "contentDetails": {"relatedPlaylists": {"uploads": "selected-uploads"}},
-                        }
-                    ]
-                }
-            )
-
-        def playlistItems(self):
-            return FakeResource(
-                {
-                    "items": [{"contentDetails": {"videoId": "selected-video"}}],
+                    "items": [{"id": {"videoId": "selected-video"}}],
                     "nextPageToken": "next-page",
                 }
             )
@@ -281,7 +269,7 @@ def test_list_videos_resolves_selected_channel_and_returns_one_page(monkeypatch)
                                 "channelId": "selected-channel",
                                 "title": "Selected video",
                             },
-                            "status": {},
+                            "status": {"privacyStatus": "private", "publishAt": "2026-10-07T05:00:00Z"},
                             "contentDetails": {},
                             "statistics": {},
                         }
@@ -294,12 +282,14 @@ def test_list_videos_resolves_selected_channel_and_returns_one_page(monkeypatch)
 
     result = youtube.list_videos("token", "selected-channel", limit=50)
 
-    assert calls[0]["id"] == "selected-channel"
-    assert "mine" not in calls[0]
-    assert calls[1]["playlistId"] == "selected-uploads"
-    assert calls[1]["maxResults"] == 50
+    assert calls[0]["forMine"] is True
+    assert calls[0]["type"] == "video"
+    assert calls[0]["order"] == "date"
+    assert calls[0]["maxResults"] == 50
     assert result["next_page_token"] == "next-page"
+    assert result["uploads_playlist_id"] is None
     assert result["videos"][0]["youtube_video_id"] == "selected-video"
+    assert result["videos"][0]["youtube_scheduled_at"] == "2026-10-07T05:00:00Z"
 
 
 def test_channel_playlists_are_scoped_to_selected_channel(

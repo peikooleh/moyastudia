@@ -528,6 +528,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [catalogSummary, setCatalogSummary] = useState({});
   const [nextCursor, setNextCursor] = useState(null);
   const [calendarCursor, setCalendarCursor] = useState(null);
+  const [catalogDataVersion, setCatalogDataVersion] = useState(0);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -859,28 +860,32 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedId("");
     setCalendarDetailDay("");
     setLoadingCalendar(true);
-    apiFetch(
-      catalogVideosUrl(channelId, { dateFrom: start, dateTo: end, sort: "date", filter, query }),
-      { signal: controller.signal },
-    )
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
-        return data;
-      })
-      .then((data) => {
+    (async () => {
+      try {
+        const items = [];
+        let cursor = null;
+        do {
+          const response = await apiFetch(
+            catalogVideosUrl(channelId, { cursor, dateFrom: start, dateTo: end, sort: "date", filter, query }),
+            { signal: controller.signal },
+          );
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
+          if (controller.signal.aborted) return;
+          items.push(...(data.items || []));
+          cursor = data.next_cursor || null;
+        } while (cursor);
         if (controller.signal.aborted) return;
-        setCalendarVideos(data.items || []);
-        setCalendarCursor(data.next_cursor || null);
-      })
-      .catch((error) => {
+        setCalendarVideos(items);
+        setCalendarCursor(null);
+      } catch (error) {
         if (!controller.signal.aborted) setErr(String(error.message || error));
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setLoadingCalendar(false);
-      });
+      }
+    })();
     return () => controller.abort();
-  }, [channelId, filter, month, query, view]);
+  }, [channelId, filter, month, query, view, catalogDataVersion]);
 
   useEffect(() => {
     const activeVideos = view === "calendar" ? calendarVideos : videos;
@@ -1622,6 +1627,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         setSelectedId(data.items?.[0]?.id || "");
         setWorkingDetailReload((current) => current + 1);
       }
+
+      if (runId === syncRunId.current && channelIdRef.current === channelId) {
+        setPlaylistRetry((current) => current + 1);
+        setPlaylistContentsRetry((current) => current + 1);
+        setCatalogDataVersion((current) => current + 1);
+      }
     } catch (error) {
       if (runId === syncRunId.current && channelIdRef.current === channelId) {
         setErr(String(error.message || error));
@@ -1659,16 +1670,30 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
   ));
+  const playlistItemDate = (item) => (
+    item.catalogVideo?.slot
+    || item.catalogVideo?.publishedAt
+    || item.videoSnapshot?.slot
+    || item.videoSnapshot?.publishedAt
+    || ""
+  );
   const filteredPlaylistItems = [...(currentPlaylistContents?.items || [])]
     .filter((item) => {
       const needle = playlistVideoQuery.trim().toLocaleLowerCase();
-      return !needle || (item.title || "").toLocaleLowerCase().includes(needle);
+      const title = item.catalogVideo
+        ? catalogVideoDisplayTitle(item.catalogVideo)
+        : item.videoSnapshot?.title || item.title || "";
+      return !needle || title.toLocaleLowerCase().includes(needle);
     })
     .sort((a, b) => {
-      if (playlistVideoSort === "title") return (a.title || "").localeCompare(b.title || "", t(uiLang, "calendarLocale"));
+      if (playlistVideoSort === "title") {
+        const aTitle = a.catalogVideo ? catalogVideoDisplayTitle(a.catalogVideo) : a.videoSnapshot?.title || a.title || "";
+        const bTitle = b.catalogVideo ? catalogVideoDisplayTitle(b.catalogVideo) : b.videoSnapshot?.title || b.title || "";
+        return aTitle.localeCompare(bTitle, t(uiLang, "calendarLocale"));
+      }
       if (playlistVideoSort === "date") {
-        const av = Date.parse(a.publishedAt || "");
-        const bv = Date.parse(b.publishedAt || "");
+        const av = Date.parse(playlistItemDate(a));
+        const bv = Date.parse(playlistItemDate(b));
         if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
         if (!Number.isFinite(av)) return 1;
         if (!Number.isFinite(bv)) return -1;
@@ -1859,9 +1884,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         </header>
       ) : null}
 
-      {view === "videos" ? (
-        <>
-        <section className="catalog-state" aria-live="polite">
+      <section className="catalog-state" aria-live="polite">
           <div>
             <strong>
               {{
@@ -1944,7 +1967,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             )
           ) : null}
           {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
-        </section>
+      </section>
+
+      {view === "videos" ? (
+        <>
         <div className="studio">
           <aside className="studio-list">
             <div className="video-toolbar">
@@ -2339,7 +2365,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
                       <span className="playlist-video-copy">
                         <strong>{title || t(uiLang, "untitledVideo")}</strong>
-                        {(cached?.publishedAt || item.videoSnapshot?.publishedAt) ? <small><time dateTime={cached?.publishedAt || item.videoSnapshot?.publishedAt}>{formatPlaylistDate(cached?.publishedAt || item.videoSnapshot?.publishedAt, uiLang) || "—"}</time></small> : <small>—</small>}
+                        {playlistItemDate(item) ? <small><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time>{cached?.slot ? ` · ${statusLabel(uiLang, "scheduled")}` : ""}</small> : <small>—</small>}
                         {!cached ? <small>{t(uiLang, selectable ? "playlistReadOnlyVideo" : "playlistVideoNotCached")}</small> : null}
                       </span>
                       {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
@@ -2500,17 +2526,21 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               return (
                 <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu">
                   {video.slot ? (
-                    <label>
-                      <span>{t(uiLang, "calendarChangeTime")}</span>
-                      <input type="time" defaultValue={time} onChange={(event) => stageCalendarTime(video, event.target.value)} />
+                    <label className="calendar-context-time">
+                      <span className="calendar-context-icon" aria-hidden="true">◷</span>
+                      <span>{t(uiLang, "calendarTime")}</span>
+                      <input aria-label={t(uiLang, "calendarTime")} type="time" defaultValue={time} onChange={(event) => stageCalendarTime(video, event.target.value)} />
                     </label>
                   ) : null}
-                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "public", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterPublic")}</button>
-                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "unlisted", publishAt: null }); setCalendarContext(null); }}>{t(uiLang, "filterUnlisted")}</button>
-                  <button type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}>
-                    {video.slot ? t(uiLang, "calendarCancelSchedule") : video.privacy === "public" ? t(uiLang, "calendarUnpublish") : t(uiLang, "filterPrivate")}
-                  </button>
-                  <button className="calendar-context-close" type="button" onClick={() => setCalendarContext(null)}>{t(uiLang, "close")}</button>
+                  <div className="calendar-context-heading">{t(uiLang, "calendarChangeVisibility")}</div>
+                  <button type="button" role="menuitem" disabled={video.privacy === "public" && !video.slot} onClick={() => { stageCalendarChange(video, { privacy: "public", publishAt: null }); setCalendarContext(null); }}><span className="calendar-context-icon context-public" aria-hidden="true">{video.privacy === "public" && !video.slot ? "✓" : "◎"}</span><span>{t(uiLang, "calendarMakePublic")}</span></button>
+                  <button type="button" role="menuitem" disabled={video.privacy === "unlisted" && !video.slot} onClick={() => { stageCalendarChange(video, { privacy: "unlisted", publishAt: null }); setCalendarContext(null); }}><span className="calendar-context-icon context-unlisted" aria-hidden="true">{video.privacy === "unlisted" && !video.slot ? "✓" : "↗"}</span><span>{t(uiLang, "calendarMakeUnlisted")}</span></button>
+                  <button type="button" role="menuitem" disabled={!video.slot && video.privacy === "private"} onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}><span className="calendar-context-icon context-private" aria-hidden="true">{!video.slot && video.privacy === "private" ? "✓" : "▢"}</span><span>{t(uiLang, "calendarMakePrivate")}</span></button>
+                  {video.slot ? (
+                    <button className="calendar-context-danger" type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}><span className="calendar-context-icon" aria-hidden="true">⊠</span><span>{t(uiLang, "calendarCancelSchedule")}</span></button>
+                  ) : video.privacy === "public" ? (
+                    <button className="calendar-context-danger" type="button" role="menuitem" onClick={() => { stageCalendarChange(video, { privacy: "private", publishAt: null }); setCalendarContext(null); }}><span className="calendar-context-icon" aria-hidden="true">⊘</span><span>{t(uiLang, "calendarUnpublish")}</span></button>
+                  ) : null}
                 </div>
               );
             })() : null}
