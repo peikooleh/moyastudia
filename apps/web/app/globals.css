@@ -1743,3 +1743,46 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .playlist-list-controls { grid-template-columns: minmax(0, 1fr); }
   .playlist-page-size { grid-column: 1; grid-row: auto; margin-left: 0; }
 }
+
+
+/* Video polish: clearer typography and immediately visible catalog actions. */
+body {
+  font-family: "Manrope", "Segoe UI", system-ui, sans-serif;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+.app-top,
+.workspace-nav,
+.studio,
+.video-inspector,
+.app-footer {
+  font-weight: 500;
+}
+.meta,
+.item-meta,
+.catalog-state span,
+.studio-card label,
+.video-properties label,
+.field-limit,
+.app-footer,
+.ai-improve-btn {
+  font-weight: 500;
+}
+.catalog-state strong,
+.video-summary-meta dd,
+.editor-field-heading label,
+.video-properties legend,
+.captions-status strong {
+  font-weight: 600;
+}
+.catalog-refresh-icon {
+  width: var(--control-h);
+  min-width: var(--control-h);
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+.catalog-reconcile-action {
+  white-space: nowrap;
+}
