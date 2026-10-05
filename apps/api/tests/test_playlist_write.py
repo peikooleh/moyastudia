@@ -1,4 +1,4 @@
-from app import main
+from app import main, youtube
 from app.models import Channel, GoogleConnection, User
 from app.settings import settings
 from app.tokens import encrypt_refresh_token
@@ -226,3 +226,102 @@ def test_playlist_writes_require_same_origin(client, test_database, monkeypatch)
     )
 
     assert response.status_code == 403
+
+
+def test_youtube_playlist_thumbnail_insert_is_owned_and_uses_custom_image(monkeypatch):
+    calls = []
+
+    class Request:
+        def __init__(self, response):
+            self.response = response
+
+        def execute(self):
+            return self.response
+
+    class Resource:
+        def __init__(self, name):
+            self.name = name
+
+        def list(self, **kwargs):
+            calls.append((self.name, "list", kwargs))
+            if self.name == "playlists":
+                return Request({"items": [{"snippet": {"channelId": "playlist-channel"}}]})
+            return Request({"items": []})
+
+        def insert(self, **kwargs):
+            calls.append((self.name, "insert", kwargs))
+            return Request({"id": "image-one"})
+
+    class Service:
+        def playlists(self):
+            return Resource("playlists")
+
+        def playlistImages(self):
+            return Resource("playlistImages")
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+    result = youtube.set_playlist_thumbnail(
+        "refresh", "playlist-channel", "playlist-one", b"png", "image/png"
+    )
+
+    assert result == {"ok": True, "id": "image-one", "playlistId": "playlist-one"}
+    image_insert = next(call for call in calls if call[0:2] == ("playlistImages", "insert"))
+    assert image_insert[2]["body"] == {
+        "snippet": {"playlistId": "playlist-one", "type": "custom"}
+    }
+    assert image_insert[2]["media_body"].mimetype() == "image/png"
+
+
+def test_youtube_playlist_reorder_verifies_item_membership(monkeypatch):
+    update_calls = []
+
+    class Request:
+        def __init__(self, response):
+            self.response = response
+
+        def execute(self):
+            return self.response
+
+    class Playlists:
+        def list(self, **kwargs):
+            return Request({"items": [{"snippet": {"channelId": "playlist-channel"}}]})
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            return Request(
+                {
+                    "items": [
+                        {
+                            "id": "item-one",
+                            "snippet": {
+                                "playlistId": "playlist-one",
+                                "resourceId": {"kind": "youtube#video", "videoId": "video-one"},
+                                "position": 0,
+                            },
+                        }
+                    ]
+                }
+            )
+
+        def update(self, **kwargs):
+            update_calls.append(kwargs)
+            return Request({"id": "item-one", "snippet": {"position": 3}})
+
+    class Service:
+        def playlists(self):
+            return Playlists()
+
+        def playlistItems(self):
+            return PlaylistItems()
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+    result = youtube.update_playlist_item_position(
+        "refresh", "playlist-channel", "playlist-one", "item-one", 3
+    )
+
+    assert result == {"id": "item-one", "position": 3}
+    body = update_calls[0]["body"]
+    assert body["id"] == "item-one"
+    assert body["snippet"]["playlistId"] == "playlist-one"
+    assert body["snippet"]["resourceId"]["videoId"] == "video-one"
+    assert body["snippet"]["position"] == 3
