@@ -719,25 +719,28 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setPlaylistContents({
       channelId, playlistId: selectedPlaylistId, items: [], nextPageToken: "", loading: true, error: "",
     });
-    apiFetch(playlistItemsUrl(channelId, selectedPlaylistId, "", 50), { signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "playlistItemsLoadError"));
-        return data;
-      })
-      .then((data) => {
+    (async () => {
+      try {
+        const items = [];
+        let pageToken = "";
+        do {
+          const response = await apiFetch(playlistItemsUrl(channelId, selectedPlaylistId, pageToken, 50), { signal: controller.signal });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "playlistItemsLoadError"));
+          items.push(...(data.items || []));
+          pageToken = data.nextPageToken || "";
+        } while (pageToken && !controller.signal.aborted);
         if (!controller.signal.aborted) {
           setPlaylistContents({
             channelId,
             playlistId: selectedPlaylistId,
-            items: data.items || [],
-            nextPageToken: data.nextPageToken || "",
+            items,
+            nextPageToken: "",
             loading: false,
             error: "",
           });
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         if (!controller.signal.aborted) {
           setPlaylistContents({
             channelId,
@@ -748,7 +751,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             error: error.message || t(uiLangRef.current, "playlistItemsLoadError"),
           });
         }
-      });
+      }
+    })();
     return () => controller.abort();
   }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, localPlaylistVideoCache, videos]);
 
@@ -1128,21 +1132,20 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
         setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, privacy: "" } : current);
       }
-      for (const [playlistItemId, position] of Object.entries(playlistQuickDraft.positions || {})) {
-        const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/items/${encodeURIComponent(playlistItemId)}/position`, {
+      if (Object.keys(playlistQuickDraft.positions || {}).length) {
+        const orderedIds = [...(currentPlaylistContents?.items || [])]
+          .sort((x, y) => Number(x.position ?? 0) - Number(y.position ?? 0))
+          .map((item) => item.playlistItemId)
+          .filter(Boolean);
+        const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/order`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ position }),
+          body: JSON.stringify({ playlist_item_ids: orderedIds }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
         completed += 1;
-        setPlaylistQuickDraft((current) => {
-          if (current.playlistId !== selectedPlaylist.id) return current;
-          const positions = { ...current.positions };
-          delete positions[playlistItemId];
-          return { ...current, positions };
-        });
+        setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, positions: {}, basePositions: {} } : current);
       }
       setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {}, basePositions: {} });
       setPlaylistContentsRetry((current) => current + 1);
@@ -1255,11 +1258,35 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
       return;
     }
+    const removedIds = new Set(selectedPlaylistVideoIds);
     if (!selectedPlaylist.localOnly) {
-      setPlaylistIdCopyStatus(t(uiLang, "playlistRemoveYoutubeUnavailable"));
+      if (!writeMode?.enabled) {
+        setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+        return;
+      }
+      const targets = (currentPlaylistContents?.items || []).filter((item) => removedIds.has(item.videoId) && item.playlistItemId);
+      if (!targets.length) return;
+      if (!window.confirm(t(uiLang, "playlistRemoveYoutubeConfirm", { count: targets.length }))) return;
+      setPlaylistSaving(true);
+      setPlaylistIdCopyStatus("");
+      try {
+        for (const item of targets) {
+          const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/items/${encodeURIComponent(item.playlistItemId)}`, { method: "DELETE" });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistRemoveYoutubeError"));
+        }
+        setSelectedPlaylistVideoIds(new Set());
+        setPlaylistContentsRetry((current) => current + 1);
+        setPlaylistRetry((current) => current + 1);
+        setPlaylistIdCopyStatus(t(uiLang, "playlistRemovedYoutube", { count: targets.length }));
+      } catch (error) {
+        setPlaylistContentsRetry((current) => current + 1);
+        setPlaylistIdCopyStatus(String(error.message || error));
+      } finally {
+        setPlaylistSaving(false);
+      }
       return;
     }
-    const removedIds = new Set(selectedPlaylistVideoIds);
     const nextVideoIds = (localPlaylistMemberships[selectedPlaylist.id] || []).filter((videoId) => !removedIds.has(videoId));
     try {
       const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}/membership`, {
