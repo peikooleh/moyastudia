@@ -1670,16 +1670,30 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
   ));
+  const playlistItemDate = (item) => (
+    item.catalogVideo?.slot
+    || item.catalogVideo?.publishedAt
+    || item.videoSnapshot?.slot
+    || item.videoSnapshot?.publishedAt
+    || ""
+  );
   const filteredPlaylistItems = [...(currentPlaylistContents?.items || [])]
     .filter((item) => {
       const needle = playlistVideoQuery.trim().toLocaleLowerCase();
-      return !needle || (item.title || "").toLocaleLowerCase().includes(needle);
+      const title = item.catalogVideo
+        ? catalogVideoDisplayTitle(item.catalogVideo)
+        : item.videoSnapshot?.title || item.title || "";
+      return !needle || title.toLocaleLowerCase().includes(needle);
     })
     .sort((a, b) => {
-      if (playlistVideoSort === "title") return (a.title || "").localeCompare(b.title || "", t(uiLang, "calendarLocale"));
+      if (playlistVideoSort === "title") {
+        const aTitle = a.catalogVideo ? catalogVideoDisplayTitle(a.catalogVideo) : a.videoSnapshot?.title || a.title || "";
+        const bTitle = b.catalogVideo ? catalogVideoDisplayTitle(b.catalogVideo) : b.videoSnapshot?.title || b.title || "";
+        return aTitle.localeCompare(bTitle, t(uiLang, "calendarLocale"));
+      }
       if (playlistVideoSort === "date") {
-        const av = Date.parse(a.publishedAt || "");
-        const bv = Date.parse(b.publishedAt || "");
+        const av = Date.parse(playlistItemDate(a));
+        const bv = Date.parse(playlistItemDate(b));
         if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
         if (!Number.isFinite(av)) return 1;
         if (!Number.isFinite(bv)) return -1;
@@ -2351,7 +2365,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
                       <span className="playlist-video-copy">
                         <strong>{title || t(uiLang, "untitledVideo")}</strong>
-                        {(cached?.publishedAt || item.videoSnapshot?.publishedAt) ? <small><time dateTime={cached?.publishedAt || item.videoSnapshot?.publishedAt}>{formatPlaylistDate(cached?.publishedAt || item.videoSnapshot?.publishedAt, uiLang) || "—"}</time></small> : <small>—</small>}
+                        {playlistItemDate(item) ? <small><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time>{cached?.slot ? ` · ${statusLabel(uiLang, "scheduled")}` : ""}</small> : <small>—</small>}
                         {!cached ? <small>{t(uiLang, selectable ? "playlistReadOnlyVideo" : "playlistVideoNotCached")}</small> : null}
                       </span>
                       {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
