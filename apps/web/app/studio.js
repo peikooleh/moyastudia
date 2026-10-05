@@ -432,6 +432,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistDraft, setPlaylistDraft] = useState(null);
   const [playlistDescriptionExpanded, setPlaylistDescriptionExpanded] = useState(false);
   const [playlistMetadataEditing, setPlaylistMetadataEditing] = useState(false);
+  const [playlistQuickDraft, setPlaylistQuickDraft] = useState({ playlistId: "", privacy: "", positions: {} });
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
@@ -754,6 +755,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   useEffect(() => {
     setPlaylistPage(0);
     setSelectedPlaylistVideoIds(new Set());
+    setPlaylistMetadataEditing(false);
+    setPlaylistQuickDraft({ playlistId: selectedPlaylistId, privacy: "", positions: {} });
   }, [selectedPlaylistId]);
 
   useEffect(() => {
@@ -1083,32 +1086,88 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  async function movePlaylistItem(item, direction) {
+  function movePlaylistItem(item, direction) {
     if (!selectedPlaylist || selectedPlaylist.localOnly || playlistSaving) return;
+    const items = [...(currentPlaylistContents?.items || [])].sort((x, y) => Number(x.position ?? 0) - Number(y.position ?? 0));
+    const index = items.findIndex((entry) => entry.playlistItemId === item.playlistItemId);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
+    const other = items[targetIndex];
+    const itemPosition = Number(item.position);
+    const otherPosition = Number(other.position);
+    setPlaylistContents((current) => ({
+      ...current,
+      items: current.items.map((entry) => {
+        if (entry.playlistItemId === item.playlistItemId) return { ...entry, position: otherPosition };
+        if (entry.playlistItemId === other.playlistItemId) return { ...entry, position: itemPosition };
+        return entry;
+      }),
+    }));
+    setPlaylistQuickDraft((current) => ({
+      playlistId: selectedPlaylist.id,
+      privacy: current.playlistId === selectedPlaylist.id ? current.privacy : "",
+      positions: {
+        ...(current.playlistId === selectedPlaylist.id ? current.positions : {}),
+        [item.playlistItemId]: otherPosition,
+        [other.playlistItemId]: itemPosition,
+      },
+    }));
+  }
+
+  function stagePlaylistPrivacy(privacy) {
+    if (!selectedPlaylist || selectedPlaylist.localOnly) return;
+    setPlaylistQuickDraft((current) => ({
+      playlistId: selectedPlaylist.id,
+      privacy,
+      positions: current.playlistId === selectedPlaylist.id ? current.positions : {},
+    }));
+  }
+
+  async function savePlaylistQuickChanges() {
+    if (!selectedPlaylist || selectedPlaylist.localOnly || !playlistQuickDirty || playlistSaving) return;
     if (!writeMode?.enabled) {
       setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    const target = Number(item.position) + direction;
-    if (target < 0) return;
-    if (!window.confirm(t(uiLang, direction < 0 ? "playlistMoveUpConfirm" : "playlistMoveDownConfirm"))) return;
+    if (!window.confirm(t(uiLang, "playlistQuickSaveConfirm"))) return;
     setPlaylistSaving(true);
     setPlaylistIdCopyStatus("");
     try {
-      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/items/${encodeURIComponent(item.playlistItemId)}/position`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position: target }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+      const privacy = playlistQuickDraft.privacy || selectedPlaylist.privacy || "private";
+      if (privacy !== (selectedPlaylist.privacy || "private")) {
+        const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
+        setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
+      }
+      for (const [playlistItemId, position] of Object.entries(playlistQuickDraft.positions || {})) {
+        const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/items/${encodeURIComponent(playlistItemId)}/position`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ position }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+      }
+      setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {} });
       setPlaylistContentsRetry((current) => current + 1);
-      setPlaylistIdCopyStatus(t(uiLang, "playlistReorderSuccess"));
+      setPlaylistIdCopyStatus(t(uiLang, "playlistQuickSaved"));
     } catch (error) {
       setPlaylistIdCopyStatus(String(error.message || error));
     } finally {
       setPlaylistSaving(false);
     }
+  }
+
+  function discardPlaylistQuickChanges() {
+    if (!selectedPlaylist) return;
+    setPlaylistQuickDraft({ playlistId: selectedPlaylist.id, privacy: "", positions: {} });
+    setPlaylistContentsRetry((current) => current + 1);
+    setPlaylistIdCopyStatus("");
   }
 
   async function openPlaylistMembershipEditor(mode) {
@@ -1485,7 +1544,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     : selectedPlaylist
       ? { id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" }
       : null;
-  const playlistEditing = Boolean(writeMode?.enabled && playlistMetadataEditing && selectedPlaylist && !selectedPlaylist.localOnly);
+  const playlistEditing = Boolean(playlistMetadataEditing && selectedPlaylist && !selectedPlaylist.localOnly);
+  const playlistQuickDirty = Boolean(selectedPlaylist && playlistQuickDraft.playlistId === selectedPlaylist.id && (
+    (playlistQuickDraft.privacy && playlistQuickDraft.privacy !== (selectedPlaylist.privacy || "private"))
+    || Object.keys(playlistQuickDraft.positions || {}).length
+  ));
   const playlistMetadataDirty = Boolean(selectedPlaylist && effectivePlaylistDraft && (
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
@@ -1833,7 +1896,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-summary-copy">
                   {selectedPlaylist.localOnly ? <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2> : (
                     <div className={`playlist-metadata-editor ${playlistEditing ? "editing" : ""}`}>
-                      {writeMode?.enabled && !playlistEditing ? <button className="playlist-edit-metadata" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : null}
+                      {!playlistEditing ? <button className="playlist-edit-metadata" type="button" title={t(uiLang, "playlistEditMetadataHint")} aria-label={t(uiLang, "playlistEditMetadataHint")} onClick={beginPlaylistEditing}>✎</button> : null}
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoTitle")}</span>
@@ -1878,10 +1941,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-setting">
                         <span>{t(uiLang, "playlistVisibility")}</span>
                         <select
-                          value={selectedPlaylist.privacy || "private"}
+                          value={(playlistQuickDraft.playlistId === selectedPlaylist.id && playlistQuickDraft.privacy) || selectedPlaylist.privacy || "private"}
                           disabled={playlistSaving}
-                          title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistVisibilityHint")}
-                          onChange={(event) => changePlaylistPrivacy(event.target.value)}
+                          title={t(uiLang, "playlistVisibilityStageHint")}
+                          onChange={(event) => stagePlaylistPrivacy(event.target.value)}
                         >
                           <option value="public">{t(uiLang, "filterPublic")}</option>
                           <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
@@ -1897,6 +1960,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         <strong>{t(uiLang, "playlistVideosCount", { count: selectedPlaylist.itemCount ?? currentPlaylistContents?.items?.length ?? 0 })}</strong>
                         <small>{t(uiLang, "playlistOrderHint")}</small>
                       </div>
+                      {playlistQuickDirty ? (
+                        <div className="playlist-quick-save">
+                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={discardPlaylistQuickChanges}>{t(uiLang, "actionCancel")}</button>
+                          <span title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistQuickSaveHint")}>
+                            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || playlistSaving} onClick={savePlaylistQuickChanges}>{t(uiLang, "saveToYoutube")}</button>
+                          </span>
+                        </div>
+                      ) : null}
                     </aside>
                   ) : null}
                   <div className="playlist-summary-footer">
@@ -2054,8 +2125,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     </button>
                     {!selectedPlaylist?.localOnly ? (
                       <span className="playlist-order-buttons" aria-label={t(uiLang, "playlistOrderControls")}>
-                        <button type="button" disabled={playlistSaving || Number(item.position) <= 0} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistMoveUpHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
-                        <button type="button" disabled={playlistSaving || (!currentPlaylistContents?.nextPageToken && Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1)} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistMoveDownHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
+                        <button type="button" disabled={playlistSaving || Number(item.position) <= 0} title={t(uiLang, "playlistMoveUpStageHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
+                        <button type="button" disabled={playlistSaving || (!currentPlaylistContents?.nextPageToken && Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1)} title={t(uiLang, "playlistMoveDownStageHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
                       </span>
                     ) : null}
                   </li>
