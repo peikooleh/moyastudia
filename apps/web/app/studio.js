@@ -1347,9 +1347,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogResume")}
               </button>
             ) : (
-              <>
+              <div className="catalog-actions">
                 <button
-                  className="btn ghost catalog-refresh-icon"
+                  className="btn catalog-refresh-icon"
                   type="button"
                   title={t(uiLang, "tipRefreshCatalog")}
                   aria-label={t(uiLang, "catalogRefresh")}
@@ -1359,7 +1359,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   <span aria-hidden="true">↻</span>
                 </button>
                 <button
-                  className="btn ghost catalog-reconcile-action"
+                  className="catalog-reconcile-action"
                   type="button"
                   title={t(uiLang, "tipReconcileCatalog")}
                   disabled={syncBusy}
@@ -1367,7 +1367,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 >
                   {t(uiLang, "catalogReconcile")}
                 </button>
-              </>
+              </div>
             )
           ) : null}
           {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
