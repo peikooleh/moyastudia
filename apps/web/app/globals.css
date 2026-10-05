@@ -2640,3 +2640,88 @@ body {
     width: min(310px, calc(100vw - 16px));
   }
 }
+
+
+/* Shared native form controls: keep both app themes visually continuous. */
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.app-shell select,
+.app-shell textarea,
+.studio input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.studio select,
+.studio textarea,
+.playlist-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.playlist-workspace select,
+.playlist-workspace textarea,
+.calendar-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.calendar-workspace select,
+.calendar-workspace textarea,
+.statistics-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.statistics-workspace select,
+.statistics-workspace textarea {
+  border: 1px solid var(--line);
+  background-color: var(--bg-raise);
+  color: var(--text);
+  color-scheme: light dark;
+}
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="time"],
+[data-theme="dark"] select {
+  color-scheme: dark;
+}
+[data-theme="light"] input[type="date"],
+[data-theme="light"] input[type="time"],
+[data-theme="light"] select {
+  color-scheme: light;
+}
+.app-shell input::placeholder,
+.studio input::placeholder,
+.playlist-workspace input::placeholder,
+.calendar-workspace input::placeholder,
+.statistics-workspace input::placeholder,
+.app-shell textarea::placeholder,
+.studio textarea::placeholder {
+  color: var(--muted);
+  opacity: .82;
+}
+.app-shell input:focus,
+.app-shell select:focus,
+.app-shell textarea:focus,
+.studio input:focus,
+.studio select:focus,
+.studio textarea:focus,
+.playlist-workspace input:focus,
+.playlist-workspace select:focus,
+.playlist-workspace textarea:focus,
+.calendar-workspace input:focus,
+.calendar-workspace select:focus,
+.calendar-workspace textarea:focus,
+.statistics-workspace input:focus,
+.statistics-workspace select:focus,
+.statistics-workspace textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.app-shell select:disabled,
+.studio select:disabled,
+.playlist-workspace select:disabled,
+.calendar-workspace select:disabled,
+.statistics-workspace select:disabled,
+.app-shell input:disabled,
+.studio input:disabled,
+.playlist-workspace input:disabled,
+.calendar-workspace input:disabled,
+.statistics-workspace input:disabled {
+  background-color: var(--bg-hover);
+  color: var(--muted);
+  opacity: .78;
+}
+.calendar-manipulation-panel input,
+.calendar-manipulation-panel select,
+.playlist-page-size select,
+.playlist-list-controls select,
+.playlist-summary select,
+.statistics-toolbar select {
+  background-color: var(--bg-raise);
+  color: var(--text);
+  color-scheme: light dark;
+}
