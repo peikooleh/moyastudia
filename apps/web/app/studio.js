@@ -423,6 +423,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistSelectedVideo, setPlaylistSelectedVideo] = useState(null);
   const [playlistPageSize, setPlaylistPageSize] = useState(10);
   const [playlistPage, setPlaylistPage] = useState(0);
+  const [playlistVideoQuery, setPlaylistVideoQuery] = useState("");
+  const [playlistVideoSort, setPlaylistVideoSort] = useState("position");
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
@@ -1459,9 +1461,26 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
     || effectivePlaylistDraft.privacy !== (selectedPlaylist.privacy || "private")
   ));
-  const visiblePlaylistItems = playlistPageItems(currentPlaylistContents?.items, playlistPage, playlistPageSize);
+  const filteredPlaylistItems = [...(currentPlaylistContents?.items || [])]
+    .filter((item) => {
+      const needle = playlistVideoQuery.trim().toLocaleLowerCase();
+      return !needle || (item.title || "").toLocaleLowerCase().includes(needle);
+    })
+    .sort((a, b) => {
+      if (playlistVideoSort === "title") return (a.title || "").localeCompare(b.title || "", t(uiLang, "calendarLocale"));
+      if (playlistVideoSort === "date") {
+        const av = Date.parse(a.publishedAt || "");
+        const bv = Date.parse(b.publishedAt || "");
+        if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
+        if (!Number.isFinite(av)) return 1;
+        if (!Number.isFinite(bv)) return -1;
+        return bv - av;
+      }
+      return Number(a.position ?? 0) - Number(b.position ?? 0);
+    });
+  const visiblePlaylistItems = playlistPageItems(filteredPlaylistItems, playlistPage, playlistPageSize);
   const hasNextPlaylistPage = Boolean(currentPlaylistContents?.nextPageToken)
-    || (currentPlaylistContents?.items?.length || 0) > (playlistPage + 1) * playlistPageSize;
+    || filteredPlaylistItems.length > (playlistPage + 1) * playlistPageSize;
   const calendarSelected = calendarVideos.find((video) => video.id === selectedId) || null;
   const statistics = cachedVideoMetricSummary(videos);
   const statisticsRows = [...videos]
@@ -1877,6 +1896,25 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             {!currentPlaylistContents?.loading && !currentPlaylistContents?.error && selectedPlaylist && !currentPlaylistContents?.items.length ? (
               <p className="empty">{t(uiLang, "playlistItemsEmpty")}</p>
             ) : null}
+            <div className="playlist-video-tools">
+              <input
+                className="search"
+                type="search"
+                value={playlistVideoQuery}
+                placeholder={t(uiLang, "playlistSearchVideos")}
+                aria-label={t(uiLang, "playlistSearchVideos")}
+                title={t(uiLang, "playlistSearchVideosHint")}
+                onChange={(event) => { setPlaylistVideoQuery(event.target.value); setPlaylistPage(0); }}
+              />
+              <label title={t(uiLang, "playlistSortVideosHint")}>
+                <span>{t(uiLang, "sortLabel")}</span>
+                <select value={playlistVideoSort} onChange={(event) => { setPlaylistVideoSort(event.target.value); setPlaylistPage(0); }}>
+                  <option value="position">{t(uiLang, "playlistSortPosition")}</option>
+                  <option value="date">{t(uiLang, "sortDate")}</option>
+                  <option value="title">{t(uiLang, "sortTitle")}</option>
+                </select>
+              </label>
+            </div>
             <div className="playlist-list-controls">
               <div className="playlist-selection-controls">
                 <label className="playlist-select-all" title={t(uiLang, "playlistSelectPageHint")}>
