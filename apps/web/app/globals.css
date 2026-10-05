@@ -2161,3 +2161,100 @@ body {
   .playlist-summary-media { max-width: 240px; }
   .playlist-video-picker-head { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* Playlist metadata follows the accepted Video editor visual language. */
+.playlist-metadata-editor {
+  gap: 14px;
+}
+.playlist-metadata-field {
+  min-width: 0;
+}
+.playlist-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  margin-bottom: 6px;
+}
+.playlist-field-heading > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.playlist-edit-icon {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.playlist-edit-icon:hover {
+  border-color: var(--line);
+  background: var(--bg-hover);
+}
+.playlist-metadata-value {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.playlist-title-value {
+  padding: 4px 0 7px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.playlist-description-value {
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+  font-size: 13px;
+}
+.playlist-metadata-editor.editing textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: 0;
+  background: var(--bg-raise);
+  color: var(--text);
+  line-height: 1.45;
+  resize: vertical;
+}
+.playlist-metadata-editor.editing textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.playlist-metadata-editor.editing .playlist-title-input {
+  min-height: 5.5rem;
+  max-height: 11rem;
+}
+.playlist-metadata-editor.editing .playlist-description-input {
+  min-height: 12rem;
+  max-height: 26rem;
+}
+.playlist-metadata-editor.editing small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.playlist-metadata-editor .ai-improve-btn {
+  color: var(--accent);
+}
