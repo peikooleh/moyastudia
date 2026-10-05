@@ -528,6 +528,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [catalogSummary, setCatalogSummary] = useState({});
   const [nextCursor, setNextCursor] = useState(null);
   const [calendarCursor, setCalendarCursor] = useState(null);
+  const [catalogDataVersion, setCatalogDataVersion] = useState(0);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -884,7 +885,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       }
     })();
     return () => controller.abort();
-  }, [channelId, filter, month, query, view]);
+  }, [channelId, filter, month, query, view, catalogDataVersion]);
 
   useEffect(() => {
     const activeVideos = view === "calendar" ? calendarVideos : videos;
@@ -1626,6 +1627,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         setSelectedId(data.items?.[0]?.id || "");
         setWorkingDetailReload((current) => current + 1);
       }
+
+      if (runId === syncRunId.current && channelIdRef.current === channelId) {
+        setPlaylistRetry((current) => current + 1);
+        setPlaylistContentsRetry((current) => current + 1);
+        setCatalogDataVersion((current) => current + 1);
+      }
     } catch (error) {
       if (runId === syncRunId.current && channelIdRef.current === channelId) {
         setErr(String(error.message || error));
@@ -1863,9 +1870,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         </header>
       ) : null}
 
-      {view === "videos" ? (
-        <>
-        <section className="catalog-state" aria-live="polite">
+      <section className="catalog-state" aria-live="polite">
           <div>
             <strong>
               {{
@@ -1948,7 +1953,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             )
           ) : null}
           {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
-        </section>
+      </section>
+
+      {view === "videos" ? (
+        <>
         <div className="studio">
           <aside className="studio-list">
             <div className="video-toolbar">
