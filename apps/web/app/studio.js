@@ -1358,15 +1358,23 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 >
                   {syncBusy ? t(uiLang, "catalogRefreshing") : t(uiLang, "catalogRefresh")}
                 </button>
-                <button
-                  className="btn ghost"
-                  type="button"
-                  title={t(uiLang, "tipReconcileCatalog")}
-                  disabled={syncBusy}
-                  onClick={() => runCatalogSync("reconcile")}
-                >
-                  {t(uiLang, "catalogReconcile")}
-                </button>
+                <details className="catalog-more-actions">
+                  <summary className="btn ghost" title={t(uiLang, "catalogMoreActions")} aria-label={t(uiLang, "catalogMoreActions")}>⋯</summary>
+                  <div className="catalog-more-menu">
+                    <button
+                      className="text-button"
+                      type="button"
+                      title={t(uiLang, "tipReconcileCatalog")}
+                      disabled={syncBusy}
+                      onClick={(event) => {
+                        runCatalogSync("reconcile");
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      }}
+                    >
+                      {t(uiLang, "catalogReconcile")}
+                    </button>
+                  </div>
+                </details>
               </>
             )
           ) : null}
