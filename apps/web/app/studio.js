@@ -426,6 +426,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
+  const [playlistVideoPicker, setPlaylistVideoPicker] = useState(null);
+  const [playlistDraft, setPlaylistDraft] = useState(null);
+  const [playlistSaving, setPlaylistSaving] = useState(false);
+  const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
   const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
   const [filter, setFilter] = useState("all");
@@ -900,6 +904,143 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     });
   }
 
+  function updatePlaylistDraft(field, value) {
+    if (!selectedPlaylist) return;
+    setPlaylistDraft((current) => ({
+      id: selectedPlaylist.id,
+      title: current?.id === selectedPlaylist.id ? current.title : (selectedPlaylist.title || ""),
+      description: current?.id === selectedPlaylist.id ? current.description : (selectedPlaylist.description || ""),
+      [field]: value,
+    }));
+  }
+
+  function resetPlaylistDraft() {
+    if (!selectedPlaylist) return;
+    setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" });
+    setPlaylistIdCopyStatus("");
+  }
+
+  async function savePlaylistMetadata() {
+    if (!selectedPlaylist || selectedPlaylist.localOnly || !playlistMetadataDirty || playlistSaving) return;
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!effectivePlaylistDraft.title.trim()) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistTitleRequired"));
+      return;
+    }
+    if (!window.confirm(t(uiLang, "playlistSaveConfirm"))) return;
+    setPlaylistSaving(true);
+    setPlaylistIdCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: effectivePlaylistDraft.title.trim(), description: effectivePlaylistDraft.description }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
+      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
+      setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description });
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSavedToYoutube"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    } finally {
+      setPlaylistSaving(false);
+    }
+  }
+
+  async function uploadPlaylistThumbnail(file) {
+    if (!file || !selectedPlaylist || selectedPlaylist.localOnly || playlistMediaBusy) return;
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!window.confirm(t(uiLang, "playlistThumbnailConfirm", { name: file.name }))) return;
+    setPlaylistMediaBusy(true);
+    setPlaylistIdCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/thumbnail`, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistThumbnailError"));
+      const preview = URL.createObjectURL(file);
+      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: preview } : playlist) }));
+      setPlaylistIdCopyStatus(t(uiLang, "playlistThumbnailSuccess"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    } finally {
+      setPlaylistMediaBusy(false);
+    }
+  }
+
+  function openCurrentPlaylistVideoPicker() {
+    if (!selectedPlaylist) return;
+    const existing = new Set((currentPlaylistContents?.items || []).map((item) => item.videoId));
+    (localPlaylistMemberships[selectedPlaylist.id] || []).forEach((videoId) => existing.add(videoId));
+    setPlaylistVideoPicker({ selected: new Set(), query: "", existing, loading: false });
+  }
+
+  function togglePlaylistPickerVideo(videoId, checked) {
+    setPlaylistVideoPicker((current) => {
+      if (!current) return current;
+      const selected = new Set(current.selected);
+      if (checked) selected.add(videoId); else selected.delete(videoId);
+      return { ...current, selected };
+    });
+  }
+
+  async function addPickedVideosToCurrentPlaylist() {
+    if (!playlistVideoPicker?.selected.size || !selectedPlaylist) return;
+    const videoIds = [...playlistVideoPicker.selected];
+    if (selectedPlaylist.localOnly) {
+      const nextIds = [...new Set([...(localPlaylistMemberships[selectedPlaylist.id] || []), ...videoIds])];
+      setPlaylistVideoPicker((current) => current ? { ...current, loading: true } : current);
+      try {
+        const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(selectedPlaylist.id)}/membership`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_ids: nextIds }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipSaveError"));
+        setLocalPlaylistMemberships((current) => ({ ...current, [selectedPlaylist.id]: data.videoIds || nextIds }));
+        setPlaylistVideoPicker(null);
+        setPlaylistIdCopyStatus(t(uiLang, "playlistVideosAddedLocally"));
+      } catch (error) {
+        setPlaylistVideoPicker((current) => current ? { ...current, loading: false } : current);
+        setPlaylistIdCopyStatus(String(error.message || error));
+      }
+      return;
+    }
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    if (!window.confirm(t(uiLang, "playlistAddVideosConfirm", { count: videoIds.length }))) return;
+    setPlaylistVideoPicker((current) => current ? { ...current, loading: true } : current);
+    try {
+      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/videos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_ids: videoIds }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistAddVideosError"));
+      setPlaylistVideoPicker(null);
+      setPlaylistContentsRetry((current) => current + 1);
+      setPlaylistRetry((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistVideosAddedYoutube", { count: videoIds.length }));
+    } catch (error) {
+      setPlaylistVideoPicker((current) => current ? { ...current, loading: false } : current);
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
   async function openPlaylistMembershipEditor(mode) {
     if (!selectedPlaylistVideoIds.size) {
       setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
@@ -1269,6 +1410,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     || (view === "videos" && playlistSelectedVideo?.id === selectedId ? playlistSelectedVideo : null)
     || null;
   const selectedPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId) || null;
+  const effectivePlaylistDraft = playlistDraft?.id === selectedPlaylistId
+    ? playlistDraft
+    : selectedPlaylist
+      ? { id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" }
+      : null;
+  const playlistMetadataDirty = Boolean(selectedPlaylist && effectivePlaylistDraft && (
+    effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
+    || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
+  ));
   const visiblePlaylistItems = playlistPageItems(currentPlaylistContents?.items, playlistPage, playlistPageSize);
   const hasNextPlaylistPage = Boolean(currentPlaylistContents?.nextPageToken)
     || (currentPlaylistContents?.items?.length || 0) > (playlistPage + 1) * playlistPageSize;
@@ -1581,10 +1731,38 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           <section className="playlist-content-pane" aria-labelledby="playlist-content-title">
             {selectedPlaylist ? (
               <header className="playlist-summary">
-                {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
+                <div className="playlist-summary-media">
+                  {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
+                  {!selectedPlaylist.localOnly ? (
+                    <label className="btn ghost playlist-thumbnail-action" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistThumbnailHint")}>
+                      {t(uiLang, "changeThumbnail")}
+                      <input className="visually-hidden" type="file" accept="image/jpeg,image/png" disabled={playlistMediaBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) uploadPlaylistThumbnail(file); }} />
+                    </label>
+                  ) : null}
+                </div>
                 <div className="playlist-summary-copy">
-                  <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2>
-                  {selectedPlaylist.description ? <p>{selectedPlaylist.description}</p> : null}
+                  {selectedPlaylist.localOnly ? <h2 id="playlist-content-title">{selectedPlaylist.title || t(uiLang, "untitledPlaylist")}</h2> : (
+                    <div className="playlist-metadata-editor">
+                      <label>
+                        <span>{t(uiLang, "videoTitle")}</span>
+                        <input value={effectivePlaylistDraft?.title || ""} maxLength={150} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("title", event.target.value)} />
+                        <small>{(effectivePlaylistDraft?.title || "").length} / 150</small>
+                        <button className="text-button" type="button" onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "improveWithAi")}</button>
+                      </label>
+                      <label>
+                        <span>{t(uiLang, "videoDescription")}</span>
+                        <textarea value={effectivePlaylistDraft?.description || ""} maxLength={5000} disabled={playlistSaving} onChange={(event) => updatePlaylistDraft("description", event.target.value)} />
+                        <small>{(effectivePlaylistDraft?.description || "").length} / 5000</small>
+                        <button className="text-button" type="button" onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "improveWithAi")}</button>
+                      </label>
+                      <div className="playlist-metadata-actions">
+                        <button className="btn ghost" type="button" disabled={!playlistMetadataDirty || playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "discardChanges")}</button>
+                        <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
+                          <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <div className="playlist-summary-footer">
                     <div className="playlist-summary-meta">
                       <span>{t(uiLang, "videoVisibility")}: {selectedPlaylist.privacy ? t(uiLang, ({ public: "filterPublic", private: "filterPrivate", unlisted: "filterUnlisted" })[selectedPlaylist.privacy] || "playlistVisibilityUnknown") : "—"}</span>
@@ -1623,7 +1801,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
                 <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
-                  <button type="button" title={t(uiLang, "playlistAddToPlaylist")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToPlaylist")}</button>
+                  <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
+                  <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylist")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylistVideoIds.size || !selectedPlaylist?.localOnly} title={selectedPlaylist?.localOnly ? t(uiLang, "playlistRemoveFromPlaylist") : t(uiLang, "playlistRemoveYoutubeUnavailable")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
@@ -1638,6 +1817,35 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   {[10, 30, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
                 </select>
               </label>
+              {playlistVideoPicker ? (
+                <div className="playlist-video-picker" role="dialog" aria-label={t(uiLang, "playlistAddVideos")}>
+                  <div className="playlist-video-picker-head">
+                    <strong>{t(uiLang, "playlistChooseVideos")}</strong>
+                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
+                  </div>
+                  <div className="playlist-video-picker-list">
+                    {videos.filter((video) => {
+                      const needle = playlistVideoPicker.query.trim().toLocaleLowerCase();
+                      return !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
+                    }).map((video) => {
+                      const videoId = video.youtubeId;
+                      const already = playlistVideoPicker.existing.has(videoId);
+                      return (
+                        <label key={video.id} className={already ? "already" : ""}>
+                          <input type="checkbox" disabled={already || playlistVideoPicker.loading} checked={already || playlistVideoPicker.selected.has(videoId)} onChange={(event) => togglePlaylistPickerVideo(videoId, event.target.checked)} />
+                          {video.thumb ? <img src={video.thumb} alt="" /> : <span className="playlist-thumb-placeholder" />}
+                          <span><strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>{already ? <small>{t(uiLang, "playlistAlreadyAdded")}</small> : null}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="playlist-membership-actions">
+                    <span>{t(uiLang, "playlistSelectedCount", { count: playlistVideoPicker.selected.size })}</span>
+                    <button className="btn ghost" type="button" onClick={() => setPlaylistVideoPicker(null)}>{t(uiLang, "cancel")}</button>
+                    <button className="btn" type="button" disabled={!playlistVideoPicker.selected.size || playlistVideoPicker.loading} onClick={addPickedVideosToCurrentPlaylist}>{t(uiLang, "playlistAddSelected")}</button>
+                  </div>
+                </div>
+              ) : null}
               {playlistMembershipEditor ? (
                 <div className="playlist-membership-editor" role="dialog" aria-label={t(uiLang, "playlistMembershipTitle")}>
                   <strong>{t(uiLang, "playlistMembershipTitle")}</strong>
@@ -1657,9 +1865,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </div>
               ) : null}
             </div>
-            <p className="playlist-bulk-help" id="playlist-bulk-help">
-              {t(uiLang, "playlistWritesWithWriteMode")} {t(uiLang, "playlistBulkHelp")}
-            </p>
+
             <ol className="playlist-video-list">
               {visiblePlaylistItems.map((item, index) => {
                 const cached = item.catalogVideo;
