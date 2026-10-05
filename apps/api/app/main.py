@@ -75,6 +75,17 @@ class LocalPlaylistMembershipUpdate(BaseModel):
     video_ids: list[str] = Field(default_factory=list, max_length=500)
 
 
+class PlaylistMetadataUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=150)
+    description: str = Field(default="", max_length=5000)
+
+
+class PlaylistVideosUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    video_ids: list[str] = Field(min_length=1, max_length=500)
+
+
 class VideoPublishRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1769,6 +1780,87 @@ def channel_playlists(
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
             return yt.list_playlists(token, row.youtube_channel_id)
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.put("/channels/{channel_id}/playlists/{playlist_id}", dependencies=[Depends(require_same_origin)])
+def update_channel_playlist(
+    channel_id: int,
+    playlist_id: str,
+    payload: PlaylistMetadataUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, "write_mode_off")
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            return yt.update_playlist_metadata(
+                token,
+                channel.youtube_channel_id,
+                playlist_id,
+                title=payload.title.strip(),
+                description=payload.description,
+            )
+    except LookupError as exc:
+        raise HTTPException(404, "playlist not found for selected channel") from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.put("/channels/{channel_id}/playlists/{playlist_id}/thumbnail", dependencies=[Depends(require_same_origin)])
+async def upload_channel_playlist_thumbnail(
+    channel_id: int,
+    playlist_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, "write_mode_off")
+    content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if content_type not in {"image/jpeg", "image/png"}:
+        raise HTTPException(415, "playlist thumbnail must be JPEG or PNG")
+    data = await request.body()
+    if not data or len(data) > 50 * 1024 * 1024:
+        raise HTTPException(413, "playlist thumbnail must be between 1 byte and 50 MB")
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            return yt.set_playlist_thumbnail(token, channel.youtube_channel_id, playlist_id, data, content_type)
+    except LookupError as exc:
+        raise HTTPException(404, "playlist not found for selected channel") from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.post("/channels/{channel_id}/playlists/{playlist_id}/videos", dependencies=[Depends(require_same_origin)])
+def add_channel_playlist_videos(
+    channel_id: int,
+    playlist_id: str,
+    payload: PlaylistVideosUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, "write_mode_off")
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            return {"items": yt.add_videos_to_playlist(token, channel.youtube_channel_id, playlist_id, payload.video_ids)}
+    except LookupError as exc:
+        raise HTTPException(404, "playlist not found for selected channel") from exc
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
