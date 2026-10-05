@@ -1,5 +1,11 @@
 const dict = {
   en: {
+    thumbnailUploadConfirm: "Send the new thumbnail “{name}” to YouTube?",
+    thumbnailUploadError: "Could not update the thumbnail.",
+    thumbnailUploadSuccess: "Thumbnail updated on YouTube.",
+    captionsUploadConfirm: "Upload subtitles “{name}” to YouTube ({language})?",
+    captionsUploadError: "Could not upload subtitles.",
+    captionsUploadSuccess: "Subtitles sent to YouTube.",
     thumbnailUploadHint: "YouTube thumbnail: JPEG or PNG, up to 50 MB.",
     captionsUploadHint: "YouTube subtitle file: SRT or VTT, up to 100 MB.",
     copyVideoIdHint: "Copy the YouTube video ID to the clipboard.",
@@ -448,6 +454,12 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    thumbnailUploadConfirm: "Отправить новую обложку «{name}» на YouTube?",
+    thumbnailUploadError: "Не удалось обновить обложку.",
+    thumbnailUploadSuccess: "Обложка обновлена на YouTube.",
+    captionsUploadConfirm: "Загрузить субтитры «{name}» на YouTube ({language})?",
+    captionsUploadError: "Не удалось загрузить субтитры.",
+    captionsUploadSuccess: "Субтитры отправлены на YouTube.",
     thumbnailUploadHint: "Обложка YouTube: JPEG или PNG, до 50 МБ.",
     captionsUploadHint: "Файл субтитров YouTube: SRT или VTT, до 100 МБ.",
     copyVideoIdHint: "Скопировать ID видео YouTube в буфер обмена.",
@@ -896,6 +908,12 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    thumbnailUploadConfirm: "Надіслати нову обкладинку «{name}» на YouTube?",
+    thumbnailUploadError: "Не вдалося оновити обкладинку.",
+    thumbnailUploadSuccess: "Обкладинку оновлено на YouTube.",
+    captionsUploadConfirm: "Завантажити субтитри «{name}» на YouTube ({language})?",
+    captionsUploadError: "Не вдалося завантажити субтитри.",
+    captionsUploadSuccess: "Субтитри надіслано на YouTube.",
     thumbnailUploadHint: "Обкладинка YouTube: JPEG або PNG, до 50 МБ.",
     captionsUploadHint: "Файл субтитрів YouTube: SRT або VTT, до 100 МБ.",
     copyVideoIdHint: "Скопіювати ID відео YouTube у буфер обміну.",
