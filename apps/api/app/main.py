@@ -92,6 +92,11 @@ class PlaylistItemPositionUpdate(BaseModel):
     position: int = Field(ge=0)
 
 
+class PlaylistOrderUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    playlist_item_ids: list[str] = Field(min_length=1, max_length=500)
+
+
 class VideoPublishRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1868,6 +1873,58 @@ def add_channel_playlist_videos(
             return {"items": yt.add_videos_to_playlist(token, channel.youtube_channel_id, playlist_id, payload.video_ids)}
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.put("/channels/{channel_id}/playlists/{playlist_id}/order", dependencies=[Depends(require_same_origin)])
+def reorder_channel_playlist(
+    channel_id: int,
+    playlist_id: str,
+    payload: PlaylistOrderUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, "write_mode_off")
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            return yt.reorder_playlist_items(
+                token, channel.youtube_channel_id, playlist_id, payload.playlist_item_ids
+            )
+    except LookupError as exc:
+        raise HTTPException(404, "playlist not found for selected channel") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, "Google token encryption configuration is invalid") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.delete("/channels/{channel_id}/playlists/{playlist_id}/items/{playlist_item_id}", dependencies=[Depends(require_same_origin)])
+def delete_channel_playlist_item(
+    channel_id: int,
+    playlist_id: str,
+    playlist_item_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, "write_mode_off")
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            return yt.delete_playlist_item(
+                token, channel.youtube_channel_id, playlist_id, playlist_item_id
+            )
+    except LookupError as exc:
+        raise HTTPException(404, "playlist item not found for selected channel") from exc
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
