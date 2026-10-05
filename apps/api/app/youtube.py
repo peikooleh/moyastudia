@@ -1,3 +1,5 @@
+import io
+
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -7,6 +9,7 @@ from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 from .settings import settings
 
@@ -591,6 +594,47 @@ def remove_playlist_item(
         recorder,
     )
 
+
+
+def set_video_thumbnail(
+    refresh_token: str,
+    youtube_video_id: str,
+    data: bytes,
+    content_type: str,
+    recorder: QuotaRecorder | None = None,
+) -> str:
+    service = service_for(refresh_token)
+    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
+    response = _execute(
+        service.thumbnails().set(videoId=youtube_video_id, media_body=media),
+        "thumbnails.set",
+        recorder,
+    )
+    items = response.get("items") or []
+    return _pick_thumb(items[0] if items else {})
+
+
+def insert_video_caption(
+    refresh_token: str,
+    youtube_video_id: str,
+    data: bytes,
+    content_type: str,
+    language: str,
+    name: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
+    response = _execute(
+        service.captions().insert(
+            part="snippet",
+            body={"snippet": {"videoId": youtube_video_id, "language": language, "name": name, "isDraft": False}},
+            media_body=media,
+        ),
+        "captions.insert",
+        recorder,
+    )
+    return {"id": response.get("id") or "", "status": (response.get("snippet") or {}).get("status") or ""}
 
 def update_video_metadata(
     refresh_token: str,
