@@ -1321,15 +1321,14 @@ def publish_channel_video_metadata(
         raise HTTPException(409, detail={"code": "video_unavailable"})
     if not current["dirty"]:
         raise HTTPException(409, detail={"code": "nothing_to_publish"})
-    if not video.youtube_video_id or not category_id or made_for_kids is None:
-        raise HTTPException(422, detail={"code": "incomplete_youtube_snapshot"})
-
     title = current["effective"]["title"] or ""
     description = current["effective"]["description"] or ""
     tags_text = current["effective"]["tags"] or ""
     language = (current["effective"]["language"] or "").strip() or None
     category_id = (current["effective"]["category"] or "").strip()
     made_for_kids = current["effective"]["madeForKids"]
+    if not video.youtube_video_id or not category_id or made_for_kids is None:
+        raise HTTPException(422, detail={"code": "incomplete_youtube_snapshot"})
     tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
     tags_cost = sum(len(tag) + (2 if " " in tag else 0) + (1 if index else 0) for index, tag in enumerate(tags))
     if tags_cost > 500:
