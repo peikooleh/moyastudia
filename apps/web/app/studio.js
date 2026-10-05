@@ -258,7 +258,7 @@ function VideoInspector({
             <span>{t(uiLang, "captionsYoutubeStatus")}</span>
             <strong>{t(uiLang, selected.captions === true ? "captionsPresent" : selected.captions === false ? "captionsNotDetected" : "captionsUnknown")}</strong>
           </div>
-          <button className="btn ghost captions-upload" type="button" onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt" onChange={(event) => { const file = event.target.files?.[0]; if (file) setWorkingError(file.name); }} />
+          <button className="btn ghost captions-upload" type="button" title="Файл субтитров YouTube: SRT или VTT, до 100 МБ" onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; if (file) setWorkingError(file.name); }} />
         </fieldset>
       </section>
 
