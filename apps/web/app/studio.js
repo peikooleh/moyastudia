@@ -2050,7 +2050,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylistHint")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
-                  <button type="button" disabled={!selectedPlaylistVideoIds.size || !selectedPlaylist?.localOnly} title={selectedPlaylist?.localOnly ? t(uiLang, "playlistRemoveFromPlaylistHint") : t(uiLang, "playlistRemoveYoutubeUnavailable")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
+                  <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={!selectedPlaylist?.localOnly && !writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistRemoveFromPlaylistHint")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
               <label className="playlist-page-size" title={t(uiLang, "playlistPageSizeHint")}>
@@ -2145,8 +2145,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     </button>
                     {!selectedPlaylist?.localOnly ? (
                       <span className="playlist-order-buttons" aria-label={t(uiLang, "playlistOrderControls")}>
-                        <button type="button" disabled={playlistSaving || Number(item.position) <= 0} title={t(uiLang, "playlistMoveUpStageHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
-                        <button type="button" disabled={playlistSaving || (!currentPlaylistContents?.nextPageToken && Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1)} title={t(uiLang, "playlistMoveDownStageHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
+                        <button type="button" disabled={playlistSaving || playlistVideoSort !== "position" || Number(item.position) <= 0} title={t(uiLang, playlistVideoSort === "position" ? "playlistMoveUpStageHint" : "playlistReorderPositionSortHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
+                        <button type="button" disabled={playlistSaving || playlistVideoSort !== "position" || Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1} title={t(uiLang, playlistVideoSort === "position" ? "playlistMoveDownStageHint" : "playlistReorderPositionSortHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
                       </span>
                     ) : null}
                   </li>
