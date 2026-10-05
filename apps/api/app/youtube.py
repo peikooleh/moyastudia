@@ -1,3 +1,5 @@
+import io
+
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -7,6 +9,7 @@ from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 from .settings import settings
 
@@ -550,6 +553,223 @@ def create_playlist(
     }
 
 
+def _owned_playlist(service, youtube_channel_id: str, playlist_id: str, recorder: QuotaRecorder | None = None) -> dict:
+    response = _execute(
+        service.playlists().list(part="snippet,status", id=playlist_id, maxResults=1),
+        "playlists.list",
+        recorder,
+    )
+    items = response.get("items") or []
+    if not items or (items[0].get("snippet") or {}).get("channelId") != youtube_channel_id:
+        raise LookupError("playlist does not belong to the selected channel")
+    return items[0]
+
+
+def update_playlist_metadata(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    *,
+    title: str,
+    description: str,
+    privacy: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    current = _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    status = current.get("status") or {}
+    response = _execute(
+        service.playlists().update(
+            part="snippet,status",
+            body={
+                "id": playlist_id,
+                "snippet": {"title": title, "description": description},
+                "status": {"privacyStatus": privacy},
+            },
+        ),
+        "playlists.update",
+        recorder,
+    )
+    snippet = response.get("snippet") or {}
+    return {
+        "id": response.get("id") or playlist_id,
+        "title": snippet.get("title") or title,
+        "description": snippet.get("description") or description,
+        "privacy": (response.get("status") or {}).get("privacyStatus") or status.get("privacyStatus") or "",
+        "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
+    }
+
+
+def set_playlist_thumbnail(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    data: bytes,
+    content_type: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
+    existing = _execute(
+        service.playlistImages().list(part="snippet", playlistId=playlist_id, maxResults=50),
+        "playlistImages.list",
+        recorder,
+    ).get("items") or []
+    body = {"snippet": {"playlistId": playlist_id, "type": "custom"}}
+    if existing:
+        response = _execute(
+            service.playlistImages().update(part="snippet", body=body, media_body=media),
+            "playlistImages.update",
+            recorder,
+        )
+    else:
+        response = _execute(
+            service.playlistImages().insert(part="snippet", body=body, media_body=media),
+            "playlistImages.insert",
+            recorder,
+        )
+    return {"ok": True, "id": response.get("id") or "", "playlistId": playlist_id}
+
+
+def update_playlist_item_position(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    playlist_item_id: str,
+    position: int,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    listed = _execute(
+        service.playlistItems().list(part="snippet", id=playlist_item_id, maxResults=1),
+        "playlistItems.list",
+        recorder,
+    ).get("items") or []
+    if not listed or (listed[0].get("snippet") or {}).get("playlistId") != playlist_id:
+        raise LookupError("playlist item does not belong to the selected playlist")
+    snippet = listed[0].get("snippet") or {}
+    resource = snippet.get("resourceId") or {}
+    response = _execute(
+        service.playlistItems().update(
+            part="snippet",
+            body={
+                "id": playlist_item_id,
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {"kind": resource.get("kind") or "youtube#video", "videoId": resource.get("videoId")},
+                    "position": position,
+                },
+            },
+        ),
+        "playlistItems.update",
+        recorder,
+    )
+    return {"id": response.get("id") or playlist_item_id, "position": (response.get("snippet") or {}).get("position", position)}
+
+
+def reorder_playlist_items(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    playlist_item_ids: list[str],
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    wanted = list(dict.fromkeys(value for value in playlist_item_ids if value))
+    current = []
+    token = None
+    while True:
+        kwargs = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
+        if token:
+            kwargs["pageToken"] = token
+        response = _execute(service.playlistItems().list(**kwargs), "playlistItems.list", recorder)
+        current.extend(response.get("items") or [])
+        token = response.get("nextPageToken")
+        if not token:
+            break
+    current_ids = [item.get("id") or "" for item in current]
+    if len(wanted) != len(current_ids) or set(wanted) != set(current_ids):
+        raise ValueError("playlist order must contain every current playlist item exactly once")
+    by_id = {item.get("id"): item for item in current}
+    working = list(current_ids)
+    updated = 0
+    for target_position, playlist_item_id in enumerate(wanted):
+        current_position = working.index(playlist_item_id)
+        if current_position == target_position:
+            continue
+        snippet = (by_id[playlist_item_id].get("snippet") or {})
+        resource = snippet.get("resourceId") or {}
+        _execute(
+            service.playlistItems().update(
+                part="snippet",
+                body={
+                    "id": playlist_item_id,
+                    "snippet": {
+                        "playlistId": playlist_id,
+                        "resourceId": {
+                            "kind": resource.get("kind") or "youtube#video",
+                            "videoId": resource.get("videoId"),
+                        },
+                        "position": target_position,
+                    },
+                },
+            ),
+            "playlistItems.update",
+            recorder,
+        )
+        working.pop(current_position)
+        working.insert(target_position, playlist_item_id)
+        updated += 1
+    return {"ok": True, "playlistId": playlist_id, "updated": updated, "playlistItemIds": working}
+
+
+def delete_playlist_item(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    playlist_item_id: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    listed = _execute(
+        service.playlistItems().list(part="snippet", id=playlist_item_id, maxResults=1),
+        "playlistItems.list",
+        recorder,
+    ).get("items") or []
+    if not listed or (listed[0].get("snippet") or {}).get("playlistId") != playlist_id:
+        raise LookupError("playlist item does not belong to the selected playlist")
+    _execute(service.playlistItems().delete(id=playlist_item_id), "playlistItems.delete", recorder)
+    return {"ok": True, "playlistItemId": playlist_item_id}
+
+
+
+def add_videos_to_playlist(
+    refresh_token: str,
+    youtube_channel_id: str,
+    playlist_id: str,
+    video_ids: list[str],
+    recorder: QuotaRecorder | None = None,
+) -> list[dict]:
+    service = service_for(refresh_token)
+    _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
+    out = []
+    for video_id in dict.fromkeys(video_id for video_id in video_ids if video_id):
+        response = _execute(
+            service.playlistItems().insert(
+                part="snippet",
+                body={"snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
+            ),
+            "playlistItems.insert",
+            recorder,
+        )
+        out.append({"playlistItemId": response.get("id") or "", "videoId": video_id})
+    return out
+
+
 def add_video_to_playlist(
     refresh_token: str,
     *,
@@ -592,6 +812,47 @@ def remove_playlist_item(
     )
 
 
+
+def set_video_thumbnail(
+    refresh_token: str,
+    youtube_video_id: str,
+    data: bytes,
+    content_type: str,
+    recorder: QuotaRecorder | None = None,
+) -> str:
+    service = service_for(refresh_token)
+    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
+    response = _execute(
+        service.thumbnails().set(videoId=youtube_video_id, media_body=media),
+        "thumbnails.set",
+        recorder,
+    )
+    items = response.get("items") or []
+    return _pick_thumb(items[0] if items else {})
+
+
+def insert_video_caption(
+    refresh_token: str,
+    youtube_video_id: str,
+    data: bytes,
+    content_type: str,
+    language: str,
+    name: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
+    response = _execute(
+        service.captions().insert(
+            part="snippet",
+            body={"snippet": {"videoId": youtube_video_id, "language": language, "name": name, "isDraft": False}},
+            media_body=media,
+        ),
+        "captions.insert",
+        recorder,
+    )
+    return {"id": response.get("id") or "", "status": (response.get("snippet") or {}).get("status") or ""}
+
 def update_video_metadata(
     refresh_token: str,
     youtube_video_id: str,
@@ -601,6 +862,7 @@ def update_video_metadata(
     tags: list[str],
     category_id: str,
     language: str | None,
+    made_for_kids: bool,
     recorder: QuotaRecorder | None = None,
 ) -> dict:
     service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
@@ -612,10 +874,33 @@ def update_video_metadata(
     }
     if language:
         snippet["defaultLanguage"] = language
+    current_response = _execute(
+        service.videos().list(part="status", id=youtube_video_id),
+        "videos.list",
+        recorder,
+    )
+    current_items = current_response.get("items") or []
+    if not current_items:
+        raise RuntimeError("YouTube video status is unavailable")
+    current_status = current_items[0].get("status") or {}
+    mutable_status_fields = (
+        "privacyStatus",
+        "publishAt",
+        "license",
+        "embeddable",
+        "publicStatsViewable",
+        "containsSyntheticMedia",
+    )
+    status = {
+        field: current_status[field]
+        for field in mutable_status_fields
+        if field in current_status
+    }
+    status["selfDeclaredMadeForKids"] = made_for_kids
     response = _execute(
         service.videos().update(
-            part="snippet",
-            body={"id": youtube_video_id, "snippet": snippet},
+            part="snippet,status",
+            body={"id": youtube_video_id, "snippet": snippet, "status": status},
         ),
         "videos.update",
         recorder,
@@ -627,6 +912,7 @@ def update_video_metadata(
         "youtube_tags": returned.get("tags") or [],
         "youtube_category_id": returned.get("categoryId") or category_id,
         "youtube_default_language": returned.get("defaultLanguage"),
+        "youtube_made_for_kids": made_for_kids,
     }
 
 

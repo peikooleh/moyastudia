@@ -176,7 +176,7 @@ export function workingVideoPatch(revision, changes) {
 
 export function resetWorkingVideoPatch(video) {
   const changes = {};
-  for (const field of ["title", "description", "tags", "language"]) {
+  for (const field of ["title", "description", "tags", "language", "category", "madeForKids"]) {
     if (video?.working?.[field] !== null && video?.working?.[field] !== undefined) {
       changes[field] = null;
     }

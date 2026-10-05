@@ -33,6 +33,10 @@ OPERATION_QUOTA = {
     "playlists.insert": ("general", 50),
     "playlists.update": ("general", 50),
     "playlists.delete": ("general", 50),
+    "playlistImages.list": ("general", 1),
+    "playlistImages.insert": ("general", 50),
+    "playlistImages.update": ("general", 50),
+    "playlistImages.delete": ("general", 50),
     "search.list": ("search", 1),
     "videos.insert": ("video_upload", 1),
 }

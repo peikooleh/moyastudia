@@ -43,7 +43,14 @@ def test_foundation_migration_discards_prototype_records(tmp_path):
     user_columns = {column["name"] for column in inspector.get_columns("users")}
     assert "write_mode_enabled" in user_columns
     video_columns = {column["name"] for column in inspector.get_columns("videos")}
-    assert {"language", "working_base_language"} <= video_columns
+    assert {
+        "language",
+        "working_base_language",
+        "category",
+        "working_base_category",
+        "made_for_kids",
+        "working_base_made_for_kids",
+    } <= video_columns
     assert "refresh_token" not in {
         column["name"] for column in inspector.get_columns("channels")
     }

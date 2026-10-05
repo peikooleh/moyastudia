@@ -34,19 +34,40 @@ def _video_fixture(test_database, *, write_mode=True):
             youtube_tags=["old"],
             youtube_category_id="27",
             youtube_default_language="ru",
+            youtube_made_for_kids=False,
             title="New title",
             description="New description",
             tags="new tag, german",
             language="de",
+            category="22",
+            made_for_kids=True,
             working_base_title="Old title",
             working_base_description="Old description",
             working_base_tags="old",
             working_base_language="ru",
+            working_base_category="27",
+            working_base_made_for_kids=False,
             working_revision=4,
         )
         db.add(video)
         db.commit()
         return session_token, channel.id, video.id
+
+
+def test_video_settings_patch_tracks_category_and_audience(client, test_database):
+    token, channel_id, video_id = _video_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    response = client.patch(
+        f"/channels/{channel_id}/videos/{video_id}/working",
+        headers={"Origin": settings.frontend_origin},
+        json={"revision": 4, "category": "24", "madeForKids": False},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["effective"]["category"] == "24"
+    assert body["effective"]["madeForKids"] is False
+    assert body["dirtyFields"]["category"] is True
+    assert body["dirtyFields"]["madeForKids"] is False
 
 
 def test_single_video_publish_requires_write_mode(client, test_database, monkeypatch):
@@ -75,6 +96,7 @@ def test_single_video_publish_updates_snapshot_and_clears_working_copy(client, t
             "youtube_tags": kwargs["tags"],
             "youtube_category_id": kwargs["category_id"],
             "youtube_default_language": kwargs["language"],
+            "youtube_made_for_kids": kwargs["made_for_kids"],
         }
 
     monkeypatch.setattr(main.yt, "update_video_metadata", fake_update)
@@ -89,15 +111,22 @@ def test_single_video_publish_updates_snapshot_and_clears_working_copy(client, t
     assert body["dirty"] is False
     assert body["snapshot"]["title"] == "New title"
     assert body["snapshot"]["language"] == "de"
+    assert body["snapshot"]["category"] == "22"
+    assert body["snapshot"]["madeForKids"] is True
     assert captured["youtube_video_id"] == "youtube-video"
     assert captured["tags"] == ["new tag", "german"]
-    assert captured["category_id"] == "27"
+    assert captured["category_id"] == "22"
     assert captured["language"] == "de"
+    assert captured["made_for_kids"] is True
     with test_database() as db:
         video = db.get(Video, video_id)
         assert video.title is None
         assert video.language is None
+        assert video.category is None
+        assert video.made_for_kids is None
         assert video.youtube_default_language == "de"
+        assert video.youtube_category_id == "22"
+        assert video.youtube_made_for_kids is True
 
 
 def test_single_video_publish_rejects_stale_revision(client, test_database, monkeypatch):
