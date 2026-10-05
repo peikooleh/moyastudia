@@ -437,40 +437,25 @@ def list_videos(
     credentials = creds_from_refresh(refresh_token)
     service = build("youtube", "v3", credentials=credentials)
 
-    if uploads_playlist_id is None:
-        channel_response = _execute(
-            service.channels().list(
-                part="contentDetails",
-                id=youtube_channel_id,
-                maxResults=1,
-            ),
-            "channels.list",
-            recorder,
-        )
-        channel_items = channel_response.get("items") or []
-        if not channel_items or channel_items[0].get("id") != youtube_channel_id:
-            raise LookupError("selected YouTube channel is unavailable to this connection")
-        uploads_playlist_id = (
-            channel_items[0].get("contentDetails", {})
-            .get("relatedPlaylists", {})
-            .get("uploads")
-        )
-        if not uploads_playlist_id:
-            raise LookupError("selected YouTube channel has no uploads playlist")
-
-    page_kwargs = {
-        "part": "contentDetails",
-        "playlistId": uploads_playlist_id,
+    search_kwargs = {
+        "part": "id",
+        "forMine": True,
+        "type": "video",
+        "order": "date",
         "maxResults": page_size,
     }
     if page_token:
-        page_kwargs["pageToken"] = page_token
-    playlist_response = _execute(service.playlistItems().list(**page_kwargs), "playlistItems.list", recorder)
+        search_kwargs["pageToken"] = page_token
+    search_response = _execute(
+        service.search().list(**search_kwargs),
+        "search.list",
+        recorder,
+    )
     video_ids = list(
         dict.fromkeys(
-            item.get("contentDetails", {}).get("videoId")
-            for item in playlist_response.get("items") or []
-            if item.get("contentDetails", {}).get("videoId")
+            item.get("id", {}).get("videoId")
+            for item in search_response.get("items") or []
+            if item.get("id", {}).get("videoId")
         )
     )
 
@@ -518,10 +503,10 @@ def list_videos(
             )
 
     return {
-        "uploads_playlist_id": uploads_playlist_id,
+        "uploads_playlist_id": None,
         "video_ids": video_ids,
         "videos": videos,
-        "next_page_token": playlist_response.get("nextPageToken"),
+        "next_page_token": search_response.get("nextPageToken"),
     }
 
 
