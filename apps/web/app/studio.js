@@ -1017,7 +1017,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setWorkingEdits((current) => {
       const changes = { ...current };
       const nextValue = value;
-      if (nextValue === workingVideo.working[field]) delete changes[field];
+      if (nextValue === workingVideo.effective[field]) delete changes[field];
       else changes[field] = nextValue;
       return changes;
     });
