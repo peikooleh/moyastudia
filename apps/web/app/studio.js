@@ -371,6 +371,7 @@ function VideoInspector({
 }
 
 function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onTime }) {
+  const [linkStatus, setLinkStatus] = useState("");
   if (!selected) {
     return (
       <aside className="calendar-event-details empty">
@@ -400,7 +401,25 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
         <div><dt>{t(uiLang, "videoViews")}</dt><dd>{selected.views ?? "—"}</dd></div>
         <div><dt>{t(uiLang, "videoLikes")}</dt><dd>{selected.likes ?? "—"}</dd></div>
         <div><dt>{t(uiLang, "videoComments")}</dt><dd>{selected.comments ?? "—"}</dd></div>
+        {selected.youtubeId ? (
+          <div className="calendar-youtube-link">
+            <dt>{t(uiLang, "calendarYoutubeLink")}</dt>
+            <dd>
+              <code>{`youtu.be/${selected.youtubeId}`}</code>
+              <button className="text-button" type="button" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(`https://youtu.be/${selected.youtubeId}`);
+                  setLinkStatus(t(uiLang, "calendarLinkCopied"));
+                } catch {
+                  setLinkStatus(t(uiLang, "calendarLinkCopyFailed"));
+                }
+              }}>{t(uiLang, "calendarCopyLink")}</button>
+              <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(selected.youtubeId)}`} target="_blank" rel="noreferrer">{t(uiLang, "openVideo")}</a>
+            </dd>
+          </div>
+        ) : null}
       </dl>
+      {linkStatus ? <span className="calendar-link-status" role="status">{linkStatus}</span> : null}
       <div className="calendar-manipulation-panel">
         <label>
           <span>{t(uiLang, "calendarTime")}</span>
