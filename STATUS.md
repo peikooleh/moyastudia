@@ -799,3 +799,17 @@ Security:
 - Добавлены backend tests для local playlist persistence, same-origin и cross-user ownership; migration test проверяет наличие `local_playlists`.
 - Исправлена локализация playlist removal: en/ru/uk keys снова находятся в своих языковых секциях, без duplicate-key override.
 - Реальные YouTube playlist mutations, thumbnail upload, captions upload и destructive video delete в этом hardening-проходе намеренно не включались. Их нужно делать отдельными write increments после merge текущей ветки.
+
+## Запись 2026-10-05 — AI connections и Cabinet polish
+
+- Добавлена migration `0011_ai_connections`: пользовательские AI connections хранят provider/model, зашифрованный API key и отдельные prompts для улучшения title/description. Уникальность — на `(user_id, provider, model)`.
+- Backend реализует owner-scoped `GET /ai-connections` и same-origin `PUT /ai-connections`. Plaintext API key не возвращается: клиент получает только `has_api_key`; новый/заменённый ключ шифруется тем же server-side encryption boundary. Реальных вызовов OpenAI/Gemini/Anthropic и AI Improve actions пока нет.
+- Cabinet → Account теперь редактирует provider/model/API key и prompts. Сохранённый ключ отображается только как masked state; пустое поле при повторном сохранении не заменяет существующий ключ.
+- Полировка Cabinet: кнопка отмены полностью локализована через общий `actionCancel`; отмена/повторное закрытие настроек восстанавливает сохранённые prompts, очищает transient notice/error и не сохраняет изменения. Текст AI-блока приведён в соответствие фактической server-side encrypted persistence.
+- Ветка реализации: `feature-ai-connections`. Документация ниже/выше может содержать исторические записи этапов; эта запись является актуализацией фактического состояния AI connections на 2026-10-05.
+
+### Ограничения / следующий шаг
+
+- AI provider calls всё ещё отключены; наличие connection не означает, что MoyaStudia отправляет данные внешнему AI provider.
+- Нужны автоматизированные backend tests именно для AI ownership/same-origin/encryption/no-plaintext-response и frontend helper/UI tests для cancel/dirty/validation перед merge.
+- `HOWTOSTART.md` должен считать `0011_ai_connections` текущим migration head после merge этой ветки.
