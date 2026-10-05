@@ -1865,7 +1865,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       </div>
                       {playlistEditing ? (
                         <div className="playlist-metadata-actions">
-                          <button className="btn ghost" type="button" disabled={!playlistMetadataDirty || playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
+                          <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
                           <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
                             <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
                           </span>
@@ -1877,18 +1877,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <aside className="playlist-settings-panel">
                       <div className="playlist-setting">
                         <span>{t(uiLang, "playlistVisibility")}</span>
-                        {writeMode?.enabled ? (
-                          <select
-                            value={selectedPlaylist.privacy || "private"}
-                            disabled={playlistSaving}
-                            title={t(uiLang, "playlistVisibilityHint")}
-                            onChange={(event) => changePlaylistPrivacy(event.target.value)}
-                          >
-                            <option value="public">{t(uiLang, "filterPublic")}</option>
-                            <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
-                            <option value="private">{t(uiLang, "filterPrivate")}</option>
-                          </select>
-                        ) : <strong>{statusLabel(uiLang, selectedPlaylist.privacy)}</strong>}
+                        <select
+                          value={selectedPlaylist.privacy || "private"}
+                          disabled={playlistSaving}
+                          title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistVisibilityHint")}
+                          onChange={(event) => changePlaylistPrivacy(event.target.value)}
+                        >
+                          <option value="public">{t(uiLang, "filterPublic")}</option>
+                          <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+                          <option value="private">{t(uiLang, "filterPrivate")}</option>
+                        </select>
                       </div>
                       <div className="playlist-setting playlist-youtube-setting">
                         <span>YouTube</span>
@@ -2056,8 +2054,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     </button>
                     {!selectedPlaylist?.localOnly ? (
                       <span className="playlist-order-buttons" aria-label={t(uiLang, "playlistOrderControls")}>
-                        <button type="button" disabled={!writeMode?.enabled || playlistSaving || Number(item.position) <= 0} title={t(uiLang, "playlistMoveUpHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
-                        <button type="button" disabled={!writeMode?.enabled || playlistSaving || (!currentPlaylistContents?.nextPageToken && Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1)} title={t(uiLang, "playlistMoveDownHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
+                        <button type="button" disabled={playlistSaving || Number(item.position) <= 0} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistMoveUpHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
+                        <button type="button" disabled={playlistSaving || (!currentPlaylistContents?.nextPageToken && Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1)} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistMoveDownHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
                       </span>
                     ) : null}
                   </li>
