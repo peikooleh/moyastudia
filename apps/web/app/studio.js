@@ -136,7 +136,7 @@ function MetadataLimitNotice({ uiLang, state, characters }) {
       className={`field-limit ${state.exceedsLimit || state.hasUnsupportedCharacters ? "exceeded" : state.nearLimit ? "near" : ""}`}
       aria-live="polite"
     >
-      <span>{t(uiLang, "youtubeLimitCharacters", { count: characters })}</span>
+      <span>{characters} / {state.limit}</span>
       {state.nearLimit ? <span>{t(uiLang, "youtubeLimitNear")}</span> : null}
       {state.exceedsLimit ? <span>{t(uiLang, "youtubeLimitExceeded")}</span> : null}
       {state.hasUnsupportedCharacters ? <span>{t(uiLang, "youtubeUnsupportedCharacters")}</span> : null}
