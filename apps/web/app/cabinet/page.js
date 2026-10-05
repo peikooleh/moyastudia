@@ -263,6 +263,7 @@ export default function CabinetPage() {
     );
     setAiTitlePrompt(saved?.title_prompt || "");
     setAiDescriptionPrompt(saved?.description_prompt || "");
+    setAiApiKey("");
     setAiError("");
     setAiNotice("");
     setAiSettingsOpen(false);
