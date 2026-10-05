@@ -1,5 +1,9 @@
 const dict = {
   en: {
+    calendarYoutubeLink: "YouTube link",
+    calendarCopyLink: "Copy link",
+    calendarLinkCopied: "Link copied.",
+    calendarLinkCopyFailed: "Could not copy the link.",
     calendarFutureOnly: "Scheduling is only available for a future date and time.",
     calendarTimeScheduledOnly: "Time can be changed after the video is scheduled.",
     calendarSelectEventHint: "Click a video for details, drag it to reschedule, or right-click for quick actions.",
@@ -539,6 +543,10 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    calendarYoutubeLink: "Ссылка YouTube",
+    calendarCopyLink: "Копировать ссылку",
+    calendarLinkCopied: "Ссылка скопирована.",
+    calendarLinkCopyFailed: "Не удалось скопировать ссылку.",
     calendarFutureOnly: "Планирование доступно только на будущую дату и время.",
     calendarTimeScheduledOnly: "Время можно изменить после того, как видео запланировано.",
     calendarSelectEventHint: "Нажмите на видео для деталей, перетащите его для переноса или используйте правый клик для быстрых действий.",
@@ -1078,6 +1086,10 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    calendarYoutubeLink: "Посилання YouTube",
+    calendarCopyLink: "Копіювати посилання",
+    calendarLinkCopied: "Посилання скопійовано.",
+    calendarLinkCopyFailed: "Не вдалося скопіювати посилання.",
     calendarFutureOnly: "Планування доступне лише на майбутню дату й час.",
     calendarTimeScheduledOnly: "Час можна змінити після того, як відео заплановано.",
     calendarSelectEventHint: "Натисніть на відео для деталей, перетягніть його для перенесення або використайте правий клік для швидких дій.",
