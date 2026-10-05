@@ -1,5 +1,8 @@
 const dict = {
   en: {
+    playlistShowMore: "Show full description",
+    playlistShowLess: "Collapse description",
+    playlistEditMetadataHint: "Edit playlist title and description.",
     playlistAddToOtherPlaylist: "Add to another playlist",
     playlistAddToOtherPlaylistHint: "Add the selected videos to one or more other playlists.",
     playlistAddVideos: "Add videos",
@@ -474,6 +477,9 @@ const dict = {
     daySun: "Sun",
   },
   ru: {
+    playlistShowMore: "Показать полностью",
+    playlistShowLess: "Свернуть",
+    playlistEditMetadataHint: "Редактировать название и описание плейлиста.",
     playlistAddToOtherPlaylist: "Добавить в другой плейлист",
     playlistAddToOtherPlaylistHint: "Добавить выбранные видео в один или несколько других плейлистов.",
     playlistAddVideos: "Добавить видео",
@@ -948,6 +954,9 @@ const dict = {
     daySun: "Вс",
   },
   uk: {
+    playlistShowMore: "Показати повністю",
+    playlistShowLess: "Згорнути",
+    playlistEditMetadataHint: "Редагувати назву й опис плейлиста.",
     playlistAddToOtherPlaylist: "Додати до іншого плейлиста",
     playlistAddToOtherPlaylistHint: "Додати вибрані відео до одного або кількох інших плейлистів.",
     playlistAddVideos: "Додати відео",
