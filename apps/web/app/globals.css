@@ -2485,7 +2485,7 @@ body {
 .calendar-save-status { margin: -4px 0 10px; color: var(--muted); font-size: 11px; }
 .calendar-panel .cal-cell { overflow: visible; position: relative; }
 .cal-event { position: relative; }
-.cal-event.status-public { border-left-color: var(--success); background: color-mix(in srgb, var(--success) 8%, var(--bg-hover)); }
+.cal-event.status-public { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 8%, var(--bg-hover)); }
 .cal-event.status-private { border-left-color: var(--muted); }
 .cal-event.status-scheduled { border-left-color: var(--info); background: color-mix(in srgb, var(--info) 9%, var(--bg-hover)); }
 .cal-event.status-unlisted, .cal-event.status-unavailable, .cal-event.status-remote_missing { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--bg-hover)); }
@@ -2505,7 +2505,7 @@ body {
 .calendar-detail-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .calendar-detail-title h2 { flex: 1 1 auto; }
 .calendar-status-pill { flex: 0 0 auto; margin-top: 12px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; }
-.calendar-status-pill.status-public { border-color: color-mix(in srgb, var(--success) 45%, var(--line)); color: var(--success); }
+.calendar-status-pill.status-public { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); color: var(--good); }
 .calendar-status-pill.status-scheduled { border-color: color-mix(in srgb, var(--info) 45%, var(--line)); color: var(--info); }
 .calendar-status-pill.status-unlisted, .calendar-status-pill.status-unavailable, .calendar-status-pill.status-remote_missing { border-color: color-mix(in srgb, var(--warning) 45%, var(--line)); color: var(--warning); }
 .calendar-manipulation-panel { display: grid; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
