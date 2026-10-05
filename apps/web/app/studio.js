@@ -912,20 +912,21 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       id: selectedPlaylist.id,
       title: current?.id === selectedPlaylist.id ? current.title : (selectedPlaylist.title || ""),
       description: current?.id === selectedPlaylist.id ? current.description : (selectedPlaylist.description || ""),
+      privacy: current?.id === selectedPlaylist.id ? current.privacy : (selectedPlaylist.privacy || "private"),
       [field]: value,
     }));
   }
 
   function resetPlaylistDraft() {
     if (!selectedPlaylist) return;
-    setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" });
+    setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" });
     setPlaylistEditing(false);
     setPlaylistIdCopyStatus("");
   }
 
   function beginPlaylistEditing() {
     if (!selectedPlaylist || selectedPlaylist.localOnly) return;
-    setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" });
+    setPlaylistDraft({ id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" });
     setPlaylistEditing(true);
     setPlaylistDescriptionExpanded(false);
     setPlaylistIdCopyStatus("");
@@ -948,12 +949,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: effectivePlaylistDraft.title.trim(), description: effectivePlaylistDraft.description }),
+        body: JSON.stringify({ title: effectivePlaylistDraft.title.trim(), description: effectivePlaylistDraft.description, privacy: effectivePlaylistDraft.privacy }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistSaveError"));
       setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...data } : playlist) }));
-      setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description });
+      setPlaylistDraft({ id: selectedPlaylist.id, title: data.title || effectivePlaylistDraft.title.trim(), description: data.description ?? effectivePlaylistDraft.description, privacy: data.privacy || effectivePlaylistDraft.privacy });
       setPlaylistEditing(false);
       setPlaylistIdCopyStatus(t(uiLang, "playlistSavedToYoutube"));
     } catch (error) {
@@ -1050,6 +1051,34 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     } catch (error) {
       setPlaylistVideoPicker((current) => current ? { ...current, loading: false } : current);
       setPlaylistIdCopyStatus(String(error.message || error));
+    }
+  }
+
+  async function movePlaylistItem(item, direction) {
+    if (!selectedPlaylist || selectedPlaylist.localOnly || playlistSaving) return;
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    const target = Number(item.position) + direction;
+    if (target < 0) return;
+    if (!window.confirm(t(uiLang, direction < 0 ? "playlistMoveUpConfirm" : "playlistMoveDownConfirm"))) return;
+    setPlaylistSaving(true);
+    setPlaylistIdCopyStatus("");
+    try {
+      const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/items/${encodeURIComponent(item.playlistItemId)}/position`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position: target }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+      setPlaylistContentsRetry((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistReorderSuccess"));
+    } catch (error) {
+      setPlaylistIdCopyStatus(String(error.message || error));
+    } finally {
+      setPlaylistSaving(false);
     }
   }
 
@@ -1425,11 +1454,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const effectivePlaylistDraft = playlistDraft?.id === selectedPlaylistId
     ? playlistDraft
     : selectedPlaylist
-      ? { id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "" }
+      ? { id: selectedPlaylist.id, title: selectedPlaylist.title || "", description: selectedPlaylist.description || "", privacy: selectedPlaylist.privacy || "private" }
       : null;
   const playlistMetadataDirty = Boolean(selectedPlaylist && effectivePlaylistDraft && (
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
+    || effectivePlaylistDraft.privacy !== (selectedPlaylist.privacy || "private")
   ));
   const visiblePlaylistItems = playlistPageItems(currentPlaylistContents?.items, playlistPage, playlistPageSize);
   const hasNextPlaylistPage = Boolean(currentPlaylistContents?.nextPageToken)
@@ -1931,6 +1961,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       </span>
                       {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
                     </button>
+                    {!selectedPlaylist?.localOnly ? (
+                      <span className="playlist-order-buttons" aria-label={t(uiLang, "playlistOrderControls")}>
+                        <button type="button" disabled={!writeMode?.enabled || playlistSaving || Number(item.position) <= 0} title={t(uiLang, "playlistMoveUpHint")} onClick={() => movePlaylistItem(item, -1)}>↑</button>
+                        <button type="button" disabled={!writeMode?.enabled || playlistSaving || (!currentPlaylistContents?.nextPageToken && Number(item.position) >= (currentPlaylistContents?.items?.length || 1) - 1)} title={t(uiLang, "playlistMoveDownHint")} onClick={() => movePlaylistItem(item, 1)}>↓</button>
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}
