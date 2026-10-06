@@ -1940,15 +1940,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       </section>
 
       {view === "videos" ? (
-        <header className="workspace-heading compact-workspace-heading">
-          <h1>{t(uiLang, "videos")}</h1>
-        </header>
-      ) : null}
-
-      {view === "videos" ? (
         <>
         <div className="studio">
           <aside ref={videoListRef} className="studio-list">
+            <header className="workspace-heading compact-workspace-heading">
+              <h1>{t(uiLang, "videos")}</h1>
+            </header>
             <div className="video-toolbar">
               <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
               <select value={filter} onChange={(event) => setFilter(event.target.value)} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
