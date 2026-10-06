@@ -46,6 +46,7 @@ def test_identity_oauth_scopes_accept_google_set_and_reject_mismatch():
     assert YOUTUBE_SCOPES == [
         "https://www.googleapis.com/auth/youtube.force-ssl",
         "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/yt-analytics.readonly",
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
     ]
