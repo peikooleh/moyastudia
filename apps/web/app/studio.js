@@ -156,6 +156,8 @@ function VideoInspector({
   workingError,
   workingStateKey,
   workingStateLabels,
+  statusDraft,
+  onStageStatus,
   updateWorkingField,
   confirmResetWorkingToSnapshot,
   resolveWorkingConflict,
@@ -230,6 +232,8 @@ function VideoInspector({
   const language = workingDraft?.language ?? selected.language ?? "";
   const category = workingDraft?.category ?? selected.category ?? "";
   const madeForKids = workingDraft?.madeForKids ?? selected.madeForKids ?? null;
+  const currentStatus = selected.status || selected.privacy || "unknown";
+  const effectiveStatus = statusDraft || currentStatus;
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
@@ -306,6 +310,7 @@ function VideoInspector({
       <section className="video-properties" aria-labelledby="video-properties-title">
         <h3 id="video-properties-title">{t(uiLang, "videoSettings")}</h3>
         <label>{t(uiLang, "videoLanguage")}<select title={t(uiLang, "videoLanguageHint")} value={language} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("language", event.target.value)}>{VIDEO_LANGUAGES.map(([code, label]) => <option key={code || "none"} value={code}>{label}{code ? ` (${code})` : ""}</option>)}</select></label>
+        <label>{t(uiLang, "videoStatus")}<select value={effectiveStatus} disabled={!workingVideo || workingLoading || workingSaving || selected.availability !== "available"} onChange={(event) => onStageStatus(event.target.value)}>{currentStatus === "scheduled" ? <option value="scheduled">{statusLabel(uiLang, "scheduled")}</option> : null}<option value="public">{statusLabel(uiLang, "public")}</option><option value="unlisted">{statusLabel(uiLang, "unlisted")}</option><option value="private">{statusLabel(uiLang, "private")}</option></select></label>
         <label>{t(uiLang, "videoCategory")}<select title={t(uiLang, "videoCategoryHint")} value={category} disabled={!workingVideo || workingLoading || workingSaving} onChange={(event) => updateWorkingField("category", event.target.value)}><option value="">—</option>{VIDEO_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <fieldset title={t(uiLang, "videoAudienceHint")} disabled={!workingVideo || workingLoading || workingSaving}><legend>{t(uiLang, "videoAudience")}</legend><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === true} onChange={() => updateWorkingField("madeForKids", true)} /> {t(uiLang, "audienceKids")}</label><label><input type="radio" name={`audience-${selected.id}`} checked={madeForKids === false} onChange={() => updateWorkingField("madeForKids", false)} /> {t(uiLang, "audienceNotKids")}</label></fieldset>
         <fieldset className="captions-settings">
@@ -537,6 +542,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingVideo, setWorkingVideo] = useState(null);
   const [workingDraft, setWorkingDraft] = useState(null);
   const [workingEdits, setWorkingEdits] = useState({});
+  const [videoStatusDraft, setVideoStatusDraft] = useState("");
   const [workingError, setWorkingError] = useState("");
   const [workingSaveState, setWorkingSaveState] = useState("");
   const [workingSaving, setWorkingSaving] = useState(false);
@@ -1452,6 +1458,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     onViewChange("videos");
   }
 
+  function stageVideoStatus(status) {
+    const currentStatus = selected?.status || selected?.privacy || "";
+    setVideoStatusDraft(status === currentStatus ? "" : status);
+  }
+
   function updateWorkingField(field, value) {
     if (!workingVideo) return;
     setWorkingDraft((current) => ({ ...current, [field]: value }));
@@ -2020,6 +2031,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             workingError={workingError}
             workingStateKey={workingStateKey}
             workingStateLabels={workingStateLabels}
+            statusDraft={videoStatusDraft}
+            onStageStatus={stageVideoStatus}
             updateWorkingField={updateWorkingField}
             confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
             resolveWorkingConflict={resolveWorkingConflict}
