@@ -923,3 +923,17 @@ Security:
 - Контрольная проверка 2026-10-05 после AI/Cabinet polish: backend `pytest` — **130 passed**; frontend `node --test tests/studio-catalog.test.mjs` — **31 passed, 0 failed**; `npm run lint` — без ошибок (только существующие warnings); `npm run build` — успешно, все 7 static pages сгенерированы. Неблокирующие warnings: FastAPI `on_event`/Starlette deprecations, Node module-type warning, существующие Next.js `<img>`/font warnings и autoprefixer `end` compatibility warning.
 - Финальный pre-merge audit обнаружил и исправил server-side whitespace validation gap: модель из одних пробелов и новый API key из одних пробелов теперь отклоняются с 422; добавлен regression test. Cabinet Cancel также очищает введённый, но не сохранённый API key из browser state. После этих последних правок полный validation suite требуется повторить перед merge.
 - `HOWTOSTART.md` должен считать `0011_ai_connections` текущим migration head после merge этой ветки.
+
+
+## Запись 2026-10-06 — финальная полировка интерфейса и pre-merge validation
+
+- Последовательно приняты и визуально проверены финальные состояния Video, Playlists, Calendar и Statistics на ветке `feature-statistics-v3`.
+- Video: одиночный статус добавлен как staged control в настройки видео; изменение участвует в общем индикаторе несохранённых изменений и Cancel, но фактическая отправка нового статуса на YouTube пока намеренно не подключена. Добавлены локализованные hover-подсказки EN/RU/UK для редактируемых metadata/status и conflict actions.
+- Cabinet: язык канала переведён из хрупкой browser-only preference в постоянное поле `Channel.working_language`. Migration `0012_channel_working_language` применена к локальной PostgreSQL; `/channels` возвращает значение, owner-scoped same-origin PUT сохраняет его. Старое localStorage-значение автоматически мигрируется один раз.
+- Statistics: раскрытый список каналов ограничен шириной первого control вместо растягивания на всю рабочую область.
+- Localization parity: `npm run check:i18n` — **630 keys in EN/RU/UK**, parity OK.
+- Backend validation после migration 0012: полный `pytest -q` — **134 passed** (по progress output: 112 + 22), 0 failed. Остались только существующие deprecation warnings Starlette/FastAPI (`BlockingPortal`, `on_event`/lifespan).
+- Frontend `npm run lint` — **0 errors**; остаются неблокирующие существующие Next.js warnings по `<img>`, custom font и deprecated `next lint`.
+- Frontend `npm run build` — **успешно**, lint/type check пройдены, static pages **7/7**, production build завершён.
+- Два build warnings Autoprefixer по `align-items: end` после этого прогона точечно исправлены на эквивалентный `flex-end`; визуальная геометрия не менялась. Из-за этой post-validation CSS cleanup правки production build формально следует повторить перед merge.
+- Реальные YouTube write операции в этом validation-прогоне не выполнялись.
