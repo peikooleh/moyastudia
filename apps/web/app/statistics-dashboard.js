@@ -10,11 +10,11 @@ function formatNumber(value, locale) {
   return Number(value || 0).toLocaleString(locale);
 }
 
-function formatDuration(seconds) {
+function formatDuration(seconds, uiLang) {
   const total = Math.max(0, Math.round(Number(seconds || 0)));
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
-  return minutes ? `${minutes}:${String(rest).padStart(2, "0")}` : `${rest} sec`;
+  return minutes ? `${minutes}:${String(rest).padStart(2, "0")}` : t(uiLang, "statisticsDurationSeconds", { count: rest });
 }
 
 export function StatisticsDashboard({
@@ -205,7 +205,7 @@ export function StatisticsDashboard({
       <section className="statistics-kpis">
         <article><span>{t(uiLang, "videoViews")}</span><strong>{analytics ? formatNumber(analytics.views, locale) : "—"}</strong><small>{periodLabel}</small></article>
         <article><span>{t(uiLang, "statisticsWatchTime")}</span><strong>{analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—"}</strong><small>{periodLabel}</small></article>
-        <article><span>{t(uiLang, "statisticsAverageViewDuration")}</span><strong>{analytics ? formatDuration(analytics.average_view_duration) : "—"}</strong><small>{analytics ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage || 0).toFixed(1) }) : periodLabel}</small></article>
+        <article><span>{t(uiLang, "statisticsAverageViewDuration")}</span><strong>{analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—"}</strong><small>{analytics ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage || 0).toFixed(1) }) : periodLabel}</small></article>
         <article><span>{t(uiLang, "statisticsSubscribersNet")}</span><strong>{analytics ? formatNumber(netSubscribers, locale) : "—"}</strong><small>{analytics ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained || 0, lost: analytics.subscribers_lost || 0 }) : periodLabel}</small></article>
       </section>
 
