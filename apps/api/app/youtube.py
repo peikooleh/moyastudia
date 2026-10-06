@@ -21,6 +21,7 @@ IDENTITY_SCOPES = [
 YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.force-ssl",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
 ]
@@ -96,17 +97,95 @@ def service_for(refresh_token: str):
     return build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
 
 
-def channel_analytics_summary(refresh_token: str, start_date: str, end_date: str) -> dict:
-    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
-    response = service.reports().query(
-        ids="channel==MINE",
-        startDate=start_date,
-        endDate=end_date,
-        metrics="estimatedMinutesWatched",
-    ).execute()
+ANALYTICS_METRICS = (
+    "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,"
+    "likes,comments,shares,subscribersGained,subscribersLost"
+)
+
+
+def _analytics_filter(video_id: str = "", playlist_id: str = "") -> str:
+    if video_id:
+        return f"video=={video_id}"
+    if playlist_id:
+        return f"playlist=={playlist_id}"
+    return ""
+
+
+def _analytics_row(response: dict) -> dict:
     rows = response.get("rows") or []
-    minutes = float(rows[0][0]) if rows and rows[0] else 0.0
-    return {"estimated_minutes_watched": minutes, "start_date": start_date, "end_date": end_date}
+    row = rows[0] if rows else []
+    values = list(row) + [0] * 9
+    return {
+        "views": int(values[0] or 0),
+        "estimated_minutes_watched": float(values[1] or 0),
+        "average_view_duration": float(values[2] or 0),
+        "average_view_percentage": float(values[3] or 0),
+        "likes": int(values[4] or 0),
+        "comments": int(values[5] or 0),
+        "shares": int(values[6] or 0),
+        "subscribers_gained": int(values[7] or 0),
+        "subscribers_lost": int(values[8] or 0),
+    }
+
+
+def channel_analytics_summary(
+    refresh_token: str,
+    start_date: str,
+    end_date: str,
+    video_id: str = "",
+    playlist_id: str = "",
+) -> dict:
+    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    kwargs = {
+        "ids": "channel==MINE",
+        "startDate": start_date,
+        "endDate": end_date,
+        "metrics": ANALYTICS_METRICS,
+    }
+    analytics_filter = _analytics_filter(video_id, playlist_id)
+    if analytics_filter:
+        kwargs["filters"] = analytics_filter
+    response = service.reports().query(**kwargs).execute()
+    return {
+        **_analytics_row(response),
+        "start_date": start_date,
+        "end_date": end_date,
+        "video_id": video_id or None,
+        "playlist_id": playlist_id or None,
+    }
+
+
+def channel_analytics_timeseries(
+    refresh_token: str,
+    start_date: str,
+    end_date: str,
+    video_id: str = "",
+    playlist_id: str = "",
+    dimension: str = "day",
+) -> list[dict]:
+    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    kwargs = {
+        "ids": "channel==MINE",
+        "startDate": start_date,
+        "endDate": end_date,
+        "metrics": "views,estimatedMinutesWatched",
+        "dimensions": dimension,
+        "sort": dimension,
+    }
+    analytics_filter = _analytics_filter(video_id, playlist_id)
+    if analytics_filter:
+        kwargs["filters"] = analytics_filter
+    response = service.reports().query(**kwargs).execute()
+    result = []
+    for row in response.get("rows") or []:
+        if len(row) < 3:
+            continue
+        result.append({
+            "date": str(row[0]),
+            "views": int(row[1] or 0),
+            "estimated_minutes_watched": float(row[2] or 0),
+        })
+    return result
 
 
 QuotaRecorder = Callable[[str, str], None]
