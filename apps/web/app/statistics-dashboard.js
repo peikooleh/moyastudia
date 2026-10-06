@@ -205,7 +205,7 @@ export function StatisticsDashboard({
       <section className="statistics-controls" aria-label={t(uiLang, "statisticsControls")}>
         <div className="statistics-control">
           <span>{t(uiLang, "statisticsChannel")}</span>
-          <button className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen}>
+          <button className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen} aria-haspopup="listbox" title={t(uiLang, "statisticsChannelHint")}>
             <ChannelAvatar channel={currentChannel} />
             <span><strong>{currentChannel?.title || "—"}</strong><small>{currentChannel?.youtube_channel_id || ""}</small></span>
 
@@ -224,7 +224,7 @@ export function StatisticsDashboard({
 
         <label className="statistics-control">
           <span>{t(uiLang, "statisticsScope")}</span>
-          <select value={scope} onChange={(event) => setScope(event.target.value)}>
+          <select value={scope} onChange={(event) => setScope(event.target.value)} title={t(uiLang, "statisticsScopeHint")}>
             <option value="channel">{t(uiLang, "statisticsScopeChannel")}</option>
             <option value="playlist">{t(uiLang, "statisticsScopePlaylist")}</option>
             <option value="video">{t(uiLang, "statisticsScopeVideo")}</option>
@@ -234,7 +234,7 @@ export function StatisticsDashboard({
         {scope === "playlist" ? (
           <label className="statistics-control statistics-scope-target">
             <span>{t(uiLang, "statisticsPlaylist")}</span>
-            <select value={playlistId} onChange={(event) => setPlaylistId(event.target.value)}>
+            <select value={playlistId} onChange={(event) => setPlaylistId(event.target.value)} title={t(uiLang, "statisticsPlaylistHint")}>
               <option value="">{t(uiLang, "statisticsChoosePlaylist")}</option>
               {remotePlaylists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.title}</option>)}
             </select>
@@ -244,14 +244,14 @@ export function StatisticsDashboard({
         {scope === "video" ? (
           <label className="statistics-control statistics-scope-target">
             <span>{t(uiLang, "statisticsVideo")}</span>
-            <select value={videoId} onChange={(event) => setVideoId(event.target.value)}>
+            <select value={videoId} onChange={(event) => setVideoId(event.target.value)} title={t(uiLang, "statisticsVideoHint")}>
               <option value="">{t(uiLang, "statisticsChooseVideo")}</option>
               {analyticsVideos.map((video) => <option key={video.id} value={video.id}>{video.title}</option>)}
             </select>
           </label>
         ) : null}
 
-        <div className="statistics-period-control">
+        <div className="statistics-period-control" title={t(uiLang, "statisticsPeriodHint")}>
           <span>{t(uiLang, "statisticsPeriod")}</span>
           <div>
             {PERIODS.map((value) => (
