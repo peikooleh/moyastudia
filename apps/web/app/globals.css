@@ -932,7 +932,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .calendar-event-details .calendar-youtube-link { grid-column: 1 / -1; }
 .calendar-youtube-link dd { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .calendar-youtube-link code { min-width: 0; overflow-wrap: anywhere; }
-.calendar-youtube-link a { flex-basis: 100%; }
+
 .calendar-event-details .readonly-note, .statistics-note, .statistics-coverage { color: var(--muted); font-size: 12px; }
 .calendar-conflict { color: var(--warning); font-size: 12px; }
 .calendar-more-events { display: block; width: 100%; margin-top: 4px; padding: 3px 2px; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 10px; text-align: left; }
