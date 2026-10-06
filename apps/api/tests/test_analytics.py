@@ -1,5 +1,5 @@
 from app import main
-from app.models import Channel, GoogleConnection
+from app.models import Channel, GoogleConnection, Video
 from app.settings import settings
 from app.tokens import encrypt_refresh_token
 
@@ -74,3 +74,91 @@ def test_channel_analytics_summary_is_owner_scoped(client, test_database, monkey
 
 def test_channel_analytics_summary_requires_authentication(client):
     assert client.get("/channels/1/analytics/summary").status_code == 401
+
+
+def test_channel_analytics_summary_supports_video_scope(client, test_database, monkeypatch):
+    owner_id, owner_token = create_account(test_database, subject="analytics-video-owner")
+    with test_database() as db:
+        connection = GoogleConnection(
+            user_id=owner_id,
+            google_subject="analytics-video-google",
+            encrypted_refresh_token=encrypt_refresh_token("analytics-video-token"),
+        )
+        db.add(connection)
+        db.flush()
+        channel = Channel(
+            google_connection_id=connection.id,
+            youtube_channel_id="analytics-video-channel",
+            title="Analytics video channel",
+            yt_published_at="2020-01-01",
+        )
+        db.add(channel)
+        db.flush()
+        video = Video(channel_id=channel.id, youtube_video_id="YT123", title="Scoped video")
+        db.add(video)
+        db.commit()
+        channel_id = channel.id
+        video_id = video.id
+
+    called = {}
+
+    def fake_summary(token, start_date, end_date, youtube_video_id="", playlist_id=""):
+        called.update(video_id=youtube_video_id, playlist_id=playlist_id)
+        return {"views": 7, "estimated_minutes_watched": 12.0}
+
+    def fake_timeseries(token, start_date, end_date, youtube_video_id="", playlist_id="", dimension="day"):
+        called.update(series_video_id=youtube_video_id, dimension=dimension)
+        return []
+
+    monkeypatch.setattr(main.yt, "channel_analytics_summary", fake_summary)
+    monkeypatch.setattr(main.yt, "channel_analytics_timeseries", fake_timeseries)
+    client.cookies.set(settings.session_cookie_name, owner_token)
+
+    response = client.get(f"/channels/{channel_id}/analytics/summary?days=28&video_id={video_id}")
+    assert response.status_code == 200
+    assert response.json()["scope"] == "video"
+    assert response.json()["local_video_id"] == video_id
+    assert called["video_id"] == "YT123"
+    assert called["series_video_id"] == "YT123"
+
+
+def test_channel_analytics_summary_supports_playlist_scope(client, test_database, monkeypatch):
+    owner_id, owner_token = create_account(test_database, subject="analytics-playlist-owner")
+    with test_database() as db:
+        connection = GoogleConnection(
+            user_id=owner_id,
+            google_subject="analytics-playlist-google",
+            encrypted_refresh_token=encrypt_refresh_token("analytics-playlist-token"),
+        )
+        db.add(connection)
+        db.flush()
+        channel = Channel(
+            google_connection_id=connection.id,
+            youtube_channel_id="analytics-playlist-channel",
+            title="Analytics playlist channel",
+            yt_published_at="2020-01-01",
+        )
+        db.add(channel)
+        db.commit()
+        channel_id = channel.id
+
+    called = {}
+
+    def fake_summary(token, start_date, end_date, video_id="", playlist_id=""):
+        called["playlist_id"] = playlist_id
+        return {"views": 9, "estimated_minutes_watched": 20.0}
+
+    def fake_timeseries(token, start_date, end_date, video_id="", playlist_id="", dimension="day"):
+        called["series_playlist_id"] = playlist_id
+        return []
+
+    monkeypatch.setattr(main.yt, "channel_analytics_summary", fake_summary)
+    monkeypatch.setattr(main.yt, "channel_analytics_timeseries", fake_timeseries)
+    client.cookies.set(settings.session_cookie_name, owner_token)
+
+    response = client.get(f"/channels/{channel_id}/analytics/summary?days=28&playlist_id=PL123")
+    assert response.status_code == 200
+    assert response.json()["scope"] == "playlist"
+    assert response.json()["playlist_id"] == "PL123"
+    assert called["playlist_id"] == "PL123"
+    assert called["series_playlist_id"] == "PL123"
