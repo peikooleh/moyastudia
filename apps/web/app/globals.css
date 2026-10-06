@@ -3434,16 +3434,17 @@ body {
 /* Statistics controls follow the same native-select language as accepted Studio pages. */
 .statistics-channel-trigger::after {
   content: "";
-  width: 0;
-  height: 0;
+  width: 14px;
+  height: 14px;
   margin-left: 4px;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 5px solid currentColor;
-  color: var(--muted);
+  background: currentColor;
+  color: var(--text);
+  clip-path: polygon(25% 38%, 50% 63%, 75% 38%, 84% 47%, 50% 81%, 16% 47%);
+  transform: scale(.72);
+  transform-origin: center;
 }
 .statistics-channel-trigger[aria-expanded="true"]::after {
-  transform: rotate(180deg);
+  transform: scale(.72) rotate(180deg);
 }
 .statistics-status-link {
   width: 100%;
