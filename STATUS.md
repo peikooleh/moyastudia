@@ -25,6 +25,12 @@
 - All four KPI cards now have equal visual treatment; the first Views card no longer carries a selection-like accent.
 - Deferred intentionally until later: duplicate Statistics CSS consolidation, shared radius normalization and Ukrainian Statistics locale parity work.
 
+## Videos top rhythm accepted — 2026-10-06
+
+- Manual browser review accepted the Videos page-order correction.
+- The shared catalog-state row now appears before the Videos page heading, matching the page rhythm used by the other Studio workspaces.
+- No Videos catalog, toolbar, list, Inspector, editor or write-flow visuals/logic were changed in this step.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
