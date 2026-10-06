@@ -2968,6 +2968,8 @@ body {
 }
 .statistics-control select,
 .statistics-channel-trigger {
+  width: 100%;
+  min-width: 0;
   min-height: 38px;
   border-radius: var(--radius-md);
   border-color: var(--line);
@@ -3308,8 +3310,6 @@ body {
   .statistics-scope-target,
   .statistics-period-control,
   .statistics-controls:not(:has(.statistics-scope-target)) .statistics-period-control { grid-column: auto; }
-  .statistics-period-control > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .statistics-period-control button:last-child { grid-column: 1 / -1; }
   .statistics-kpis { grid-template-columns: minmax(0, 1fr); gap: 9px; }
   .statistics-kpis article { min-height: 108px; padding: 15px; }
   .statistics-panel > header { align-items: flex-start; flex-direction: column; }
