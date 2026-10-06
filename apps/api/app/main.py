@@ -68,6 +68,12 @@ class ChannelSelection(BaseModel):
     youtube_channel_ids: list[str]
 
 
+class ChannelWorkingLanguageUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    language: Literal["", "en", "ru", "uk", "de", "pl", "fr", "es", "it", "pt", "tr", "ja", "ko", "zh"]
+
+
 class WriteModeUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -605,6 +611,7 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
             "banner_url": getattr(row, "banner_url", "") or "",
             "owner_email": row.google_connection.email or "",
             "description": getattr(row, "description", "") or "",
+            "working_language": getattr(row, "working_language", "") or "",
             "yt_published_at": getattr(row, "yt_published_at", "") or "",
             "subscriber_count": int(getattr(row, "subscriber_count", 0) or 0),
             "catalog_video_count": catalog_video_counts.get(row.id, 0),
@@ -612,6 +619,22 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
         }
         for row in rows
     ]
+
+
+@app.put(
+    "/channels/{channel_id}/working-language",
+    dependencies=[Depends(require_same_origin)],
+)
+def update_channel_working_language(
+    channel_id: int,
+    payload: ChannelWorkingLanguageUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = _channel_or_404(db, user, channel_id)
+    row.working_language = payload.language
+    db.commit()
+    return {"id": row.id, "working_language": row.working_language}
 
 
 @app.get("/google-connections")
