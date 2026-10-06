@@ -16,6 +16,15 @@
 - Status drill-down has localized EN/RU/UK tooltips and keyboard focus/hover treatment.
 - Statistics continues to load its own complete catalog independently and keeps channel / playlist / video Analytics scopes and 7 / 28 / 90 / 365 / lifetime periods.
 
+## Statistics visual review accepted — 2026-10-06
+
+- Manual browser review accepted the first post-audit Statistics pass.
+- Statistics now uses the same page-heading scale as the accepted Studio pages; the former overview eyebrow, dashboard intro and duplicate catalog-count badge were removed.
+- The Statistics outer workspace now follows the Studio page edge/padding rhythm while preserving the existing KPI/chart/lower-panel dashboard structure.
+- Statistics labels and supporting text were brought toward the shared Studio typography scale; primary controls were reduced to the shared ~38 px control height and the channel avatar was scaled with them.
+- All four KPI cards now have equal visual treatment; the first Views card no longer carries a selection-like accent.
+- Deferred intentionally until later: duplicate Statistics CSS consolidation, shared radius normalization and Ukrainian Statistics locale parity work.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
