@@ -845,6 +845,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   color: var(--text);
 }
 .inspector-edit textarea { min-height: 0; max-height: 26rem; overflow-y: auto; resize: vertical; line-height: 1.45; }
+.studio .inspector-edit textarea { scrollbar-width: auto; scrollbar-color: auto; }
+.studio .inspector-edit textarea::-webkit-scrollbar { width: auto; }
+.studio .inspector-edit textarea::-webkit-scrollbar-track { background: transparent; }
+.studio .inspector-edit textarea::-webkit-scrollbar-thumb { background: auto; border: 0; border-radius: 0; }
 .inspector-edit #video-working-title { min-height: 5.5rem; max-height: 11rem; }
 .inspector-edit #video-working-description { min-height: 15rem; }
 .inspector-edit #video-working-tags { min-height: 8rem; max-height: 16rem; }
