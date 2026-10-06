@@ -41,6 +41,7 @@ export function StatisticsDashboard({
   selectedChannelId,
   onChannelChange,
   playlists,
+  onOpenStatus,
 }) {
   const [channels, setChannels] = useState([]);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
@@ -207,7 +208,7 @@ export function StatisticsDashboard({
           <button className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen}>
             <ChannelAvatar channel={currentChannel} />
             <span><strong>{currentChannel?.title || "—"}</strong><small>{currentChannel?.youtube_channel_id || ""}</small></span>
-            <b aria-hidden="true">⌄</b>
+
           </button>
           {channelMenuOpen ? (
             <div className="statistics-channel-menu">
@@ -299,11 +300,17 @@ export function StatisticsDashboard({
         <section className="statistics-panel statistics-content">
           <header><div><small>{t(uiLang, "statisticsContent")}</small><h2>{t(uiLang, "statisticsContentMix")}</h2></div><strong>{catalogTotal || 0}</strong></header>
           {Object.entries(counts).map(([key, value]) => (
-            <div className="statistics-content-row" key={key}>
+            <button
+              type="button"
+              className="statistics-content-row statistics-status-link"
+              key={key}
+              onClick={() => onOpenStatus?.(key)}
+              title={t(uiLang, "statisticsOpenStatusVideos", { status: t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled") })}
+            >
               <span>{t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled")}</span>
               <b>{formatNumber(value, locale)}</b>
               <i><span style={{ width: `${Math.round((value / maxContent) * 100)}%` }} /></i>
-            </div>
+            </button>
           ))}
         </section>
       </div>
