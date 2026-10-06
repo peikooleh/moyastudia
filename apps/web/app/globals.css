@@ -2357,6 +2357,9 @@ body {
   width: 100%;
   min-height: 34px;
 }
+.playlist-youtube-setting a {
+  white-space: nowrap;
+}
 .playlist-setting small {
   color: var(--muted);
   font-size: 11px;
