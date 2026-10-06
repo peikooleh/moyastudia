@@ -63,6 +63,16 @@
 - Duplicate horizontal separators were removed at the Playlist summary/tools boundary and from the Video properties column below the preview, leaving one visual divider per section boundary.
 - The user completed browser review and accepted the resulting Video and Playlist geometry.
 
+## Final validation — Statistics v3 convergence — 2026-10-06
+
+- Final manual browser review is accepted for Statistics, Videos, Calendar, and Playlists, including the consolidated Statistics controls and long-video-title selector case.
+- Frontend i18n parity check passed for EN/RU/UK.
+- Frontend catalog unit test passed.
+- Frontend lint passed.
+- Next.js production build passed.
+- Full backend pytest suite passed.
+- The `feature-statistics-v3` implementation is green after the final visual and source-level cleanup.
+
 ## Statistics final controls and CSS consolidation accepted — 2026-10-06
 
 - Statistics v3 base CSS was consolidated to one active source by removing the older overridden v3 block; the unrelated legacy Statistics selectors were intentionally left untouched.
