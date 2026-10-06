@@ -2603,6 +2603,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           selectedChannelId={channelId}
           onChannelChange={(nextChannelId) => updatePrefs({ selectedChannelId: nextChannelId })}
           playlists={playlists}
+          onOpenStatus={(status) => {
+            setQuery("");
+            setFilter(status);
+            setSort("date");
+            setPlaylistSelectedVideo(null);
+            setSelectedId("");
+            onViewChange("videos");
+          }}
         />
       ) : null}
     </div>
