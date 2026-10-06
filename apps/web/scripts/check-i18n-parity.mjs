@@ -11,7 +11,7 @@ function localeBlock(locale, nextLocale) {
   if (start < 0) throw new Error(`Locale block not found: ${locale}`);
   const end = nextLocale
     ? source.indexOf(`  ${nextLocale}: {`, start)
-    : source.indexOf("\n  },\n};", start);
+    : source.indexOf("\n};", start);
   if (end < 0) throw new Error(`Locale block end not found: ${locale}`);
   return source.slice(start, end);
 }
