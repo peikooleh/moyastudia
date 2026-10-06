@@ -41,6 +41,8 @@ export default function CabinetPage() {
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [removingChannelId, setRemovingChannelId] = useState("");
   const [removeError, setRemoveError] = useState("");
+  const [channelLanguageSaving, setChannelLanguageSaving] = useState(false);
+  const [channelLanguageError, setChannelLanguageError] = useState("");
   const [aiConnections, setAiConnections] = useState([]);
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiModel, setAiModel] = useState("");
@@ -225,6 +227,33 @@ export default function CabinetPage() {
   }, [channels, channelsError, prefs, update]);
 
   useEffect(() => {
+    if (!channels?.length) return;
+    channels.forEach((channel) => {
+      if (channel.working_language) return;
+      const savedLanguage = prefs.channelLangs[channelPreferenceKey(channel)] || "";
+      if (!savedLanguage) return;
+      apiFetch(`/channels/${channel.id}/working-language`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: savedLanguage }),
+      })
+        .then((response) => {
+          if (!response.ok) return null;
+          return response.json();
+        })
+        .then((updated) => {
+          if (!updated?.working_language) return;
+          setChannels((current) => current?.map((item) => (
+            String(item.id) === String(channel.id)
+              ? { ...item, working_language: updated.working_language }
+              : item
+          )));
+        })
+        .catch(() => {});
+    });
+  }, [channels, prefs.channelLangs]);
+
+  useEffect(() => {
     if (!session?.authenticated) return undefined;
     let cancelled = false;
     apiFetch("/ai-connections")
@@ -371,6 +400,33 @@ export default function CabinetPage() {
     setSelectionConnectionId(String(connectionId));
     setTab("channels");
     setSelectionError("");
+  }
+
+  async function saveChannelWorkingLanguage(channel, language) {
+    const key = channelPreferenceKey(channel);
+    const previousLanguage = channel.working_language || prefs.channelLangs[key] || "";
+    setChannelLanguageSaving(true);
+    setChannelLanguageError("");
+    update({ channelLangs: { ...prefs.channelLangs, [key]: language } });
+    setChannels((current) => current?.map((item) => (
+      String(item.id) === String(channel.id) ? { ...item, working_language: language } : item
+    )));
+    try {
+      const response = await apiFetch(`/channels/${channel.id}/working-language`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language }),
+      });
+      if (!response.ok) throw new Error(t(uiLang, "channelLanguageSaveError"));
+    } catch (error) {
+      update({ channelLangs: { ...prefs.channelLangs, [key]: previousLanguage } });
+      setChannels((current) => current?.map((item) => (
+        String(item.id) === String(channel.id) ? { ...item, working_language: previousLanguage } : item
+      )));
+      setChannelLanguageError(error.message || t(uiLang, "channelLanguageSaveError"));
+    } finally {
+      setChannelLanguageSaving(false);
+    }
   }
 
   async function removeChannelFromMoya(channel) {
@@ -590,11 +646,12 @@ export default function CabinetPage() {
                         <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "activeStudioChannel")}</span></div>
                       </header>
                       <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
-                        <select value={prefs.channelLangs[channelPreferenceKey(ch)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [channelPreferenceKey(ch)]: event.target.value } })}>
+                        <select value={ch.working_language || prefs.channelLangs[channelPreferenceKey(ch)] || ""} disabled={channelLanguageSaving} onChange={(event) => saveChannelWorkingLanguage(ch, event.target.value)}>
                           <option value="">{t(uiLang, "notSet")}</option>
                           {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
                         </select>
                       </label>
+                      {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
                       <details className="channel-details">
                         <summary>{t(uiLang, "channelDetails")}</summary>
                         {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
