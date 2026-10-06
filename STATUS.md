@@ -39,6 +39,14 @@
 - Calendar YouTube-link metadata was corrected so the short video URL, Copy link action and Open video action read cleanly inline in one row.
 - No other Calendar layout or behavior was changed in this accepted pass.
 
+## Playlists visual review accepted — 2026-10-06
+
+- Manual browser review accepted the Playlists compact-control pass.
+- Existing compact control heights were preserved intentionally (bulk actions 32 px, compact selects/pagination around 34 px, reorder controls 25 px); stray compact-control radii were aligned with the shared control radius instead of enlarging the controls.
+- The Playlists YouTube action was verified in source to target the playlist URL (youtube.com/playlist?list=<playlist id>), not a video URL.
+- The visible YouTube action now explicitly says Open playlist on YouTube in EN/RU/UK, matching its existing playlist-specific tooltip.
+- The playlist YouTube action is kept on one line without widening the fixed settings column or taking space from the metadata editor.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
