@@ -101,6 +101,7 @@ ANALYTICS_METRICS = (
     "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,"
     "likes,comments,shares,subscribersGained,subscribersLost"
 )
+PLAYLIST_ANALYTICS_METRICS = "views,estimatedMinutesWatched,averageViewDuration"
 
 
 def _analytics_filter(video_id: str = "", playlist_id: str = "") -> str:
@@ -140,14 +141,31 @@ def channel_analytics_summary(
         "ids": "channel==MINE",
         "startDate": start_date,
         "endDate": end_date,
-        "metrics": ANALYTICS_METRICS,
+        "metrics": PLAYLIST_ANALYTICS_METRICS if playlist_id else ANALYTICS_METRICS,
     }
     analytics_filter = _analytics_filter(video_id, playlist_id)
     if analytics_filter:
         kwargs["filters"] = analytics_filter
     response = service.reports().query(**kwargs).execute()
+    if playlist_id:
+        rows = response.get("rows") or []
+        row = list(rows[0]) if rows else []
+        values = row + [0] * 3
+        summary = {
+            "views": int(values[0] or 0),
+            "estimated_minutes_watched": float(values[1] or 0),
+            "average_view_duration": float(values[2] or 0),
+            "average_view_percentage": None,
+            "likes": None,
+            "comments": None,
+            "shares": None,
+            "subscribers_gained": None,
+            "subscribers_lost": None,
+        }
+    else:
+        summary = _analytics_row(response)
     return {
-        **_analytics_row(response),
+        **summary,
         "start_date": start_date,
         "end_date": end_date,
         "video_id": video_id or None,
