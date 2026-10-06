@@ -2137,7 +2137,7 @@ body {
 .playlist-summary { grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); align-items: start; }
 .playlist-summary-media { display: grid; align-content: start; justify-items: center; gap: 8px; }
 .playlist-summary-media > img, .playlist-summary-media > .playlist-summary-placeholder { width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; }
-.playlist-thumbnail-action { width: auto; min-width: 136px; margin: 0; cursor: pointer; }
+.playlist-thumbnail-action { width: auto; min-width: 136px; margin: 0; padding: 6px 14px; font-size: 11px; white-space: nowrap; cursor: pointer; }
 .playlist-metadata-editor { display: grid; gap: 10px; }
 .playlist-metadata-editor > label { position: relative; display: grid; gap: 5px; }
 .playlist-metadata-editor > label > span { font-size: 13px; font-weight: 600; }
