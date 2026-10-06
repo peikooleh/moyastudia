@@ -31,6 +31,14 @@
 - The shared catalog-state row now appears before the Videos page heading, matching the page rhythm used by the other Studio workspaces.
 - No Videos catalog, toolbar, list, Inspector, editor or write-flow visuals/logic were changed in this step.
 
+## Calendar visual review accepted — 2026-10-06
+
+- Manual browser review accepted the Calendar spacing pass.
+- The Calendar detail panel was slightly tightened without changing its grid, calendar structure, event cards or scheduling/write logic.
+- The shared Studio catalog-state row no longer shifts horizontally when switching between Videos, Playlists, Calendar and Statistics; the root viewport now reserves stable scrollbar space.
+- Calendar YouTube-link metadata was corrected so the short video URL, Copy link action and Open video action read cleanly inline in one row.
+- No other Calendar layout or behavior was changed in this accepted pass.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
