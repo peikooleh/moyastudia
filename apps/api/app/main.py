@@ -1220,6 +1220,10 @@ def channel_videos(
             Video.availability_status == "available",
             Video.youtube_visibility == visibility,
         )
+        if visibility == "private":
+            # Scheduled videos are private on YouTube, but they are a separate
+            # Studio status and must not leak into the plain Private filter.
+            query = query.filter(Video.youtube_scheduled_at.is_(None))
 
     total = query.count()
     status_expression = case(
