@@ -785,7 +785,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .studio-list .list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .video-toolbar {
   display: grid;
-  grid-template-columns: 190px 120px;
+  grid-template-columns: minmax(0, 190px) minmax(0, 120px);
   gap: 7px;
   padding: 12px;
   border-bottom: 1px solid var(--line);
