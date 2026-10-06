@@ -75,12 +75,13 @@ export function channelPreferencesForAvailableChannels(prefs, channels) {
     ? currentSelected
     : String(channels[0]?.id || "");
   const currentLanguages = prefs.channelLangs || {};
-  const channelLangs = {};
+  const channelLangs = { ...currentLanguages };
   channels.forEach((channel) => {
     const stableKey = channelPreferenceKey(channel);
     const legacyKey = String(channel.id);
     const language = currentLanguages[stableKey] || currentLanguages[legacyKey];
     if (stableKey && language) channelLangs[stableKey] = language;
+    if (stableKey !== legacyKey && currentLanguages[legacyKey]) delete channelLangs[legacyKey];
   });
   const sameLanguages = Object.keys(channelLangs).length === Object.keys(currentLanguages).length
     && Object.entries(channelLangs).every(([channelId, language]) => currentLanguages[channelId] === language);
