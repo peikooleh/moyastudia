@@ -1635,19 +1635,70 @@ async def upload_channel_video_captions(
 @app.get("/channels/{channel_id}/analytics/summary")
 def channel_analytics_summary(
     channel_id: int,
+    days: int | None = Query(default=None, ge=1, le=3650),
+    video_id: int | None = Query(default=None, ge=1),
+    playlist_id: str | None = Query(default=None, min_length=1, max_length=128),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if video_id is not None and playlist_id is not None:
+        raise HTTPException(422, detail={"code": "analytics_scope_conflict"})
+
     channel = _channel_or_404(db, user, channel_id)
+    youtube_video_id = ""
+    if video_id is not None:
+        video = db.get(Video, video_id)
+        if video is None or video.channel_id != channel.id or not video.youtube_video_id:
+            raise HTTPException(404, detail={"code": "analytics_video_not_found"})
+        youtube_video_id = video.youtube_video_id
+
+    end = _utcnow().date()
+    if days is not None:
+        start = end - timedelta(days=days - 1)
+    elif video_id is not None and video.youtube_published_at is not None:
+        start = video.youtube_published_at.date()
+    else:
+        published = channel.yt_published_at
+        start = datetime.fromisoformat(published.replace("Z", "+00:00")).date() if published else datetime(2005, 2, 14).date()
+
+    start_date = start.isoformat()
+    end_date = end.isoformat()
+    dimension = "day" if (end - start).days <= 120 else "month"
+
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
-        start_date = (channel.yt_published_at or "2005-02-14")[:10]
-        end_date = _utcnow().date().isoformat()
-        return yt.channel_analytics_summary(token, start_date, end_date)
+        summary = yt.channel_analytics_summary(
+            token,
+            start_date,
+            end_date,
+            youtube_video_id,
+            playlist_id or "",
+        )
+        series = yt.channel_analytics_timeseries(
+            token,
+            start_date,
+            end_date,
+            youtube_video_id,
+            playlist_id or "",
+            dimension,
+        )
+        return {
+            **summary,
+            "scope": "video" if video_id is not None else "playlist" if playlist_id else "channel",
+            "local_video_id": video_id,
+            "playlist_id": playlist_id,
+            "dimension": dimension,
+            "series": series,
+        }
     except TokenEncryptionError as exc:
-        raise HTTPException(500, "Stored YouTube credentials are unavailable") from exc
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
-        raise HTTPException(502, "YouTube Analytics is unavailable") from exc
+        message = str(exc).lower()
+        if "accessnotconfigured" in message or "api has not been used" in message:
+            raise HTTPException(503, detail={"code": "youtube_analytics_api_disabled"}) from exc
+        if "insufficient" in message or "scope" in message or "permission" in message or "403" in message:
+            raise HTTPException(403, detail={"code": "youtube_analytics_permission_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_analytics_unavailable"}) from exc
 
 
 @app.get("/channels/{channel_id}/catalog/status")
