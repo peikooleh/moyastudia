@@ -63,6 +63,50 @@ def test_channel_endpoints_are_scoped_to_session_owner(
         assert db.get(Channel, channel_id) is None
 
 
+def test_channel_working_language_persists_and_is_owner_scoped(client, test_database):
+    owner_id, owner_token = create_account(test_database, subject="language-owner")
+    _, other_token = create_account(test_database, subject="language-other")
+    with test_database() as db:
+        connection = GoogleConnection(
+            user_id=owner_id,
+            google_subject="language-youtube-account",
+            encrypted_refresh_token=encrypt_refresh_token("token"),
+        )
+        db.add(connection)
+        db.flush()
+        channel = Channel(
+            google_connection_id=connection.id,
+            youtube_channel_id="language-channel",
+            title="Language channel",
+        )
+        db.add(channel)
+        db.commit()
+        channel_id = channel.id
+
+    client.cookies.set(settings.session_cookie_name, other_token)
+    assert client.put(
+        f"/channels/{channel_id}/working-language",
+        json={"language": "de"},
+        headers={"Origin": settings.frontend_origin},
+    ).status_code == 404
+
+    client.cookies.set(settings.session_cookie_name, owner_token)
+    response = client.put(
+        f"/channels/{channel_id}/working-language",
+        json={"language": "de"},
+        headers={"Origin": settings.frontend_origin},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"id": channel_id, "working_language": "de"}
+    assert client.get("/channels").json()[0]["working_language"] == "de"
+
+    assert client.put(
+        f"/channels/{channel_id}/working-language",
+        json={"language": "invalid"},
+        headers={"Origin": settings.frontend_origin},
+    ).status_code == 422
+
+
 def test_channel_routes_require_authentication(client):
     assert client.get("/channels").status_code == 401
     assert client.get("/channels/1/videos").status_code == 401
