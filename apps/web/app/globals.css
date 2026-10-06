@@ -3431,10 +3431,40 @@ body {
 }
 
 
-/* Statistics: hide dropdown chevrons for a uniform control surface. */
-.statistics-channel-trigger > b[aria-hidden="true"] { display: none; }
-.statistics-control select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: none;
+/* Statistics controls follow the same native-select language as accepted Studio pages. */
+.statistics-channel-trigger::after {
+  content: "";
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  color: var(--muted);
+}
+.statistics-channel-trigger[aria-expanded="true"]::after {
+  transform: rotate(180deg);
+}
+.statistics-status-link {
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.statistics-status-link:hover > span:first-child,
+.statistics-status-link:focus-visible > span:first-child {
+  color: var(--accent);
+}
+.statistics-status-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+.statistics-status-link:hover > i > span,
+.statistics-status-link:focus-visible > i > span {
+  filter: brightness(.92);
 }
