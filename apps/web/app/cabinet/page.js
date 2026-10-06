@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, apiUrl } from "../../lib/api";
 import { t } from "../../lib/i18n";
@@ -43,6 +43,7 @@ export default function CabinetPage() {
   const [removeError, setRemoveError] = useState("");
   const [channelLanguageSaving, setChannelLanguageSaving] = useState(false);
   const [channelLanguageError, setChannelLanguageError] = useState("");
+  const migratedChannelLanguages = useRef(new Set());
   const [aiConnections, setAiConnections] = useState([]);
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiModel, setAiModel] = useState("");
@@ -229,9 +230,10 @@ export default function CabinetPage() {
   useEffect(() => {
     if (!channels?.length) return;
     channels.forEach((channel) => {
-      if (channel.working_language) return;
+      if (channel.working_language || migratedChannelLanguages.current.has(String(channel.id))) return;
       const savedLanguage = prefs.channelLangs[channelPreferenceKey(channel)] || "";
       if (!savedLanguage) return;
+      migratedChannelLanguages.current.add(String(channel.id));
       apiFetch(`/channels/${channel.id}/working-language`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
