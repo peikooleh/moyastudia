@@ -251,7 +251,7 @@ function VideoInspector({
         <div className="video-summary-copy">
           <h2>{effectiveTitle || t(uiLang, "untitledVideo")}</h2>
           <dl className="video-summary-meta">
-            <div><dt>{t(uiLang, "videoStatus")}</dt><dd className={`status-label ${selected.availability === "unavailable" || selected.remoteMissing ? "warning" : ""}`}>{statusLabel(uiLang, selected.status)}</dd></div>
+            <div><dt>{t(uiLang, "videoStatus")}</dt><dd className={`status-label ${selected.availability === "unavailable" || selected.remoteMissing ? "warning" : ""}`}>{statusLabel(uiLang, effectiveStatus)}</dd></div>
             <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : "videoPublishedAt")}</dt><dd>{displayDate ? formatStudioDate(displayDate, uiLang) : "—"}</dd></div>
             <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
             <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
@@ -269,6 +269,7 @@ function VideoInspector({
           <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-title"
+            title={t(uiLang, "videoMetadataEditHint")}
             rows={2}
             value={effectiveTitle}
             readOnly={!workingVideo || workingLoading || workingSaving}
@@ -283,6 +284,7 @@ function VideoInspector({
           <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-description"
+            title={t(uiLang, "videoMetadataEditHint")}
             rows={10}
             value={description}
             readOnly={!workingVideo || workingLoading || workingSaving}
@@ -297,6 +299,7 @@ function VideoInspector({
           <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
           <textarea
             id="video-working-tags"
+            title={t(uiLang, "videoMetadataEditHint")}
             rows={4}
             value={tags}
             readOnly={!workingVideo || workingLoading || workingSaving}
@@ -321,7 +324,7 @@ function VideoInspector({
           </div>
           <button className="btn ghost captions-upload" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "captionsUploadHint")} onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadCaptions(file); }} />
         </fieldset>
-        <label>{t(uiLang, "videoStatus")}<select value={effectiveStatus} disabled={!workingVideo || workingLoading || workingSaving || selected.availability !== "available"} onChange={(event) => onStageStatus(event.target.value)}>{currentStatus === "scheduled" ? <option value="scheduled">{statusLabel(uiLang, "scheduled")}</option> : null}<option value="public">{statusLabel(uiLang, "public")}</option><option value="unlisted">{statusLabel(uiLang, "unlisted")}</option><option value="private">{statusLabel(uiLang, "private")}</option></select></label>
+        <label>{t(uiLang, "videoStatus")}<select title={t(uiLang, "videoStatusHint")} value={effectiveStatus} disabled={!workingVideo || workingLoading || workingSaving || selected.availability !== "available"} onChange={(event) => onStageStatus(event.target.value)}>{currentStatus === "scheduled" ? <option value="scheduled">{statusLabel(uiLang, "scheduled")}</option> : null}<option value="public">{statusLabel(uiLang, "public")}</option><option value="unlisted">{statusLabel(uiLang, "unlisted")}</option><option value="private">{statusLabel(uiLang, "private")}</option></select></label>
       </section>
 
       <div className="working-controls" aria-live="polite">
@@ -336,10 +339,10 @@ function VideoInspector({
         {workingVideo?.conflict ? (
           <div className="conflict-actions" role="alert">
             <p>{t(uiLang, "workingConflictHelp")}</p>
-            <button className="btn ghost" type="button" disabled={workingLoading || workingSaving} onClick={() => resolveWorkingConflict("use_snapshot")}>
+            <button className="btn ghost" type="button" disabled={workingLoading || workingSaving} title={t(uiLang, "workingUseSnapshotHint")} onClick={() => resolveWorkingConflict("use_snapshot")}>
               {t(uiLang, "workingUseSnapshot")}
             </button>
-            <button className="btn" type="button" disabled={workingLoading || workingSaving} onClick={() => resolveWorkingConflict("keep_local")}>
+            <button className="btn" type="button" disabled={workingLoading || workingSaving} title={t(uiLang, "workingKeepLocalHint")} onClick={() => resolveWorkingConflict("keep_local")}>
               {t(uiLang, "workingKeepLocal")}
             </button>
           </div>
