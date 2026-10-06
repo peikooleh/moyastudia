@@ -3025,7 +3025,7 @@ body {
 .statistics-channel-trigger strong,
 .statistics-channel-menu strong { color: var(--text); font-size: 13px; }
 .statistics-channel-trigger small,
-.statistics-channel-menu small { margin-top: 1px; color: var(--muted); font-size: 9px; font-weight: 400; }
+.statistics-channel-menu small { margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 400; }
 .statistics-channel-menu {
   position: absolute;
   z-index: 80;
