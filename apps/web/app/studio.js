@@ -161,6 +161,7 @@ function VideoInspector({
   resolveWorkingConflict,
   publishWorkingVideo,
   writeMode,
+  inspectorEditRef,
 }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [mediaBusy, setMediaBusy] = useState(false);
@@ -257,7 +258,7 @@ function VideoInspector({
         {selected.youtubeId ? <div className="video-preview"><iframe src={`https://www.youtube.com/embed/${encodeURIComponent(selected.youtubeId)}?rel=0`} title={t(uiLang, "videoPreview")} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
       </header>
 
-      <section className="inspector-edit" aria-labelledby="inspector-edit-title">
+      <section ref={inspectorEditRef} className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
           <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
@@ -541,6 +542,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingSaving, setWorkingSaving] = useState(false);
   const [workingLoading, setWorkingLoading] = useState(false);
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
+  const videoListRef = useRef(null);
+  const inspectorEditRef = useRef(null);
   const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
   const [calendarDrafts, setCalendarDrafts] = useState({});
@@ -591,6 +594,33 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       });
     return () => controller.abort();
   }, [channelId]);
+
+  useEffect(() => {
+    if (view !== "videos") return undefined;
+    const list = videoListRef.current;
+    const edit = inspectorEditRef.current;
+    if (!list || !edit) return undefined;
+
+    const alignVideoListHeight = () => {
+      if (window.innerWidth <= 900) {
+        list.style.height = "";
+        return;
+      }
+      const listTop = list.getBoundingClientRect().top;
+      const editBottom = edit.getBoundingClientRect().bottom;
+      list.style.height = `${Math.max(320, Math.round(editBottom - listTop))}px`;
+    };
+
+    alignVideoListHeight();
+    const observer = new ResizeObserver(alignVideoListHeight);
+    observer.observe(edit);
+    window.addEventListener("resize", alignVideoListHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", alignVideoListHeight);
+      list.style.height = "";
+    };
+  }, [view, selectedId, workingLoading]);
 
   useEffect(() => {
     const requestId = ++channelRequestId.current;
@@ -1972,7 +2002,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       {view === "videos" ? (
         <>
         <div className="studio">
-          <aside className="studio-list">
+          <aside ref={videoListRef} className="studio-list">
             <div className="video-toolbar">
               <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
               <select value={filter} onChange={(event) => setFilter(event.target.value)} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
@@ -2052,6 +2082,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             resolveWorkingConflict={resolveWorkingConflict}
             publishWorkingVideo={publishWorkingVideo}
             writeMode={writeMode}
+            inspectorEditRef={inspectorEditRef}
           />
         </div>
         </>
