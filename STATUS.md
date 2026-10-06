@@ -935,5 +935,6 @@ Security:
 - Backend validation после migration 0012: полный `pytest -q` — **134 passed** (по progress output: 112 + 22), 0 failed. Остались только существующие deprecation warnings Starlette/FastAPI (`BlockingPortal`, `on_event`/lifespan).
 - Frontend `npm run lint` — **0 errors**; остаются неблокирующие существующие Next.js warnings по `<img>`, custom font и deprecated `next lint`.
 - Frontend `npm run build` — **успешно**, lint/type check пройдены, static pages **7/7**, production build завершён.
-- Два build warnings Autoprefixer по `align-items: end` после этого прогона точечно исправлены на эквивалентный `flex-end`; визуальная геометрия не менялась. Из-за этой post-validation CSS cleanup правки production build формально следует повторить перед merge.
+- Два build warnings Autoprefixer по `align-items: end` после основного прогона точечно исправлены на эквивалентный `flex-end`; визуальная геометрия не менялась. Повторный frontend validation после этой правки: `npm run check:i18n` — 630 keys EN/RU/UK, `npm run lint` — 0 errors, `npm run build` — успешно, 7/7 static pages; Autoprefixer warnings исчезли. Остались только известные неблокирующие Next.js `<img>`/custom-font и deprecated `next lint` warnings.
 - Реальные YouTube write операции в этом validation-прогоне не выполнялись.
+- **Merge не выполнять:** следующий обязательный gate — ручная проверка интерфейса и основных пользовательских сценариев 2026-10-07. Merge разрешён только после её явного принятия пользователем.
