@@ -160,6 +160,7 @@ function VideoInspector({
   onStageStatus,
   updateWorkingField,
   confirmResetWorkingToSnapshot,
+  discardWorkingChanges,
   resolveWorkingConflict,
   publishWorkingVideo,
   writeMode,
@@ -344,13 +345,13 @@ function VideoInspector({
           </div>
         ) : null}
         {workingError ? <span role="alert">{workingError}</span> : null}
-        {workingVideo && !workingVideo.conflict && (Object.keys(workingEdits).length || workingVideo.dirty) ? (
+        {workingVideo && !workingVideo.conflict && (Object.keys(workingEdits).length || workingVideo.dirty || statusDraft) ? (
           <YoutubeStagedSave
             uiLang={uiLang}
-            count={Math.max(1, Object.keys(workingEdits).length)}
+            count={Math.max(1, Object.keys(workingEdits).length + (statusDraft ? 1 : 0))}
             saving={workingSaving}
             writeMode={writeMode}
-            onDiscard={confirmResetWorkingToSnapshot}
+            onDiscard={discardWorkingChanges}
             onSave={publishWorkingVideo}
             saveHint="publishVideoHint"
             className="video-staged-save"
@@ -1491,6 +1492,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     resetWorkingToSnapshot();
   }
 
+  function discardWorkingChanges() {
+    setVideoStatusDraft("");
+    confirmResetWorkingToSnapshot();
+  }
+
 
   async function publishWorkingVideo() {
     if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict) return;
@@ -2035,6 +2041,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             onStageStatus={stageVideoStatus}
             updateWorkingField={updateWorkingField}
             confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
+            discardWorkingChanges={discardWorkingChanges}
             resolveWorkingConflict={resolveWorkingConflict}
             publishWorkingVideo={publishWorkingVideo}
             writeMode={writeMode}
