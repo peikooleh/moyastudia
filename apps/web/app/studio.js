@@ -15,7 +15,6 @@ import {
   playlistItemsUrl,
   playlistPageItems,
   playlistPageSelection,
-  cachedVideoMetricSummary,
   playlistsForChannel,
   resetWorkingVideoPatch,
   shouldResumeCatalogSync,
