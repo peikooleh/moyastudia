@@ -2602,10 +2602,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           uiLang={uiLang}
           selectedChannelId={channelId}
           onChannelChange={(nextChannelId) => updatePrefs({ selectedChannelId: nextChannelId })}
-          videos={videos}
           playlists={playlists}
-          statusCounts={statusCounts}
-          catalogTotal={catalogTotal}
         />
       ) : null}
     </div>
