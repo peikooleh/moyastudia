@@ -121,7 +121,7 @@ export function StatisticsDashboard({
     [playlists],
   );
   const analyticsVideos = useMemo(
-    () => catalogVideos.filter((video) => video.youtubeId),
+    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public"),
     [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
