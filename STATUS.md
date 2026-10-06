@@ -1,3 +1,37 @@
+# Statistics v3 UI convergence — 2026-10-06
+
+## Scope and reference baseline
+
+- Performed a source-level UI consistency pass across Videos, Playlists, Calendar, Statistics and Cabinet on `feature-statistics-v3`.
+- Videos, Playlists and Calendar remain the accepted visual/reference baseline. Their page layouts were audited rather than redesigned in this pass.
+- Restored the pre-rollback Statistics dashboard geometry from the old polished implementation while keeping the isolated `statistics-dashboard.js` architecture and current Analytics/data-loading implementation.
+- Statistics CSS remains scoped under `.statistics-*`; the restoration does not reintroduce the old Statistics-to-Video layout coupling that caused the previous regression.
+
+## Statistics polish completed
+
+- Restored the accepted dashboard rhythm: heading/coverage badge, channel/scope/period controls, four KPI cards, views trend, engagement/content panels and responsive breakpoints.
+- Channel picker and native scope/target selects now use a consistent dropdown language. Native selects retain the browser control used by the accepted Studio pages; the custom channel picker uses a matching CSS caret rather than a text glyph.
+- Added localized EN/RU/UK hints for channel, scope, playlist/video target and reporting-period controls.
+- Restored status drill-down from Statistics content composition to Videos: selecting Public / Private / Unlisted / Scheduled clears search, applies the corresponding Videos filter, resets date sorting/selection and opens the Videos workspace.
+- Status drill-down has localized EN/RU/UK tooltips and keyboard focus/hover treatment.
+- Statistics continues to load its own complete catalog independently and keeps channel / playlist / video Analytics scopes and 7 / 28 / 90 / 365 / lifetime periods.
+
+## Cross-page consistency audit
+
+- Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
+- Playlists: retained accepted two-pane/detail/bulk-action layout and existing localized action/search/sort hints.
+- Calendar: retained accepted calendar/queue/detail layout and existing localized navigation/manipulation hints.
+- Cabinet: retained current hierarchy/layout; added localized EN/RU/UK hints to AI provider/model/API-key controls and retained the existing channel-language hint.
+- Shared form controls continue to use the common theme/focus/disabled rules in `globals.css`; Statistics now follows that control language rather than overriding native select appearance.
+
+## Validation state
+
+- This pass intentionally did **not** run the final test/lint/build suite yet. Per current workflow, visual review comes first.
+- Next: user visual review of Statistics/Cabinet and any final UI corrections, then run targeted tests, full tests, frontend lint and production build before merge.
+- Browser visual smoke remains required for desktop and responsive widths after the final UI corrections.
+
+---
+
 # Current Handoff — Functional Architecture, 2026-10-04
 
 ## UI baseline closed
