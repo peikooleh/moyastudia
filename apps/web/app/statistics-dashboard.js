@@ -194,12 +194,7 @@ export function StatisticsDashboard({
   return (
     <main className="statistics-workspace">
       <header className="statistics-heading">
-        <div>
-          <small>{t(uiLang, "statisticsOverview")}</small>
-          <h1>{t(uiLang, "statisticsTab")}</h1>
-          <p>{t(uiLang, "statisticsDashboardIntro")}</p>
-        </div>
-        <span className="statistics-catalog-badge">{t(uiLang, "statisticsCatalogCount", { count: catalogTotal || 0 })}</span>
+        <h1>{t(uiLang, "statisticsTab")}</h1>
       </header>
 
       <section className="statistics-controls" aria-label={t(uiLang, "statisticsControls")}>
