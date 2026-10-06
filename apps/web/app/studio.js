@@ -1526,24 +1526,28 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (saved.conflict) throw new Error(t(uiLang, "workingRevisionError"));
       }
 
-      const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ revision: draft.revision }),
-      });
-      const data = await response.json();
-      if (response.status === 409 && data.detail?.current) {
-        setWorkingVideo(data.detail.current);
-        setWorkingDraft(data.detail.current.effective);
-        setWorkingSaveState("conflict");
-        throw new Error(t(uiLang, "workingRevisionError"));
+      let data = draft;
+      if (draft.dirty) {
+        const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: draft.revision }),
+        });
+        data = await response.json();
+        if (response.status === 409 && data.detail?.current) {
+          setWorkingVideo(data.detail.current);
+          setWorkingDraft(data.detail.current.effective);
+          setWorkingSaveState("conflict");
+          throw new Error(t(uiLang, "workingRevisionError"));
+        }
+        if (!response.ok) {
+          const code = data.detail?.code;
+          if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
+          throw new Error(t(uiLang, "youtubePublishError"));
+        }
       }
-      if (!response.ok) {
-        const code = data.detail?.code;
-        if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
-        if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
-        throw new Error(t(uiLang, "youtubePublishError"));
-      }
+
       if (workingStatusDraft) {
         const statusResponse = await apiFetch(`/channels/${channelId}/videos/${draft.id}/calendar-status`, {
           method: "PUT",
