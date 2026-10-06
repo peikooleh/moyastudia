@@ -55,6 +55,14 @@
 - Local validation on Windows/Node 24.13.0 completed successfully: `i18n parity OK: 625 keys in EN/RU/UK`.
 - A pre-existing `comingLater` duplicate exists equally in all three locale blocks; it is outside this Statistics parity fix and was intentionally left untouched in this pass.
 
+## Shared radius and separator review accepted — 2026-10-06
+
+- Manual browser review accepted the shared semantic-radius pass. The existing radius system remains authoritative: 6 px small/internal controls, 8 px primary controls, 12 px large cards/panels, and pill radii where semantically appropriate.
+- Statistics channel-menu and period controls were normalized to the existing small-control radius token; intentional shapes such as avatars, progress bars, chart marks, thumbnails, Calendar event strips, and pills were left unchanged.
+- Videos left-column structure now follows the accepted Playlists pattern: the page heading lives inside the list column, toolbar sizing stays within the column, and heading/toolbar separators no longer double.
+- Duplicate horizontal separators were removed at the Playlist summary/tools boundary and from the Video properties column below the preview, leaving one visual divider per section boundary.
+- The user completed browser review and accepted the resulting Video and Playlist geometry.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
