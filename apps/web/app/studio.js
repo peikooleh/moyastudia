@@ -1854,12 +1854,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }
   return (
     <div className="studio-wrap">
-      {view === "videos" ? (
-        <header className="workspace-heading compact-workspace-heading">
-          <h1>{t(uiLang, "videos")}</h1>
-        </header>
-      ) : null}
-
       <section className="catalog-state" aria-live="polite">
           <div>
             <strong>
@@ -1944,6 +1938,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           ) : null}
           {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
       </section>
+
+      {view === "videos" ? (
+        <header className="workspace-heading compact-workspace-heading">
+          <h1>{t(uiLang, "videos")}</h1>
+        </header>
+      ) : null}
 
       {view === "videos" ? (
         <>
