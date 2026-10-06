@@ -608,7 +608,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       }
       const listTop = list.getBoundingClientRect().top;
       const editBottom = edit.getBoundingClientRect().bottom;
-      list.style.height = `${Math.max(320, Math.round(editBottom - listTop))}px`;
+      list.style.height = `${Math.max(320, Math.round(editBottom - listTop - 18))}px`;
     };
 
     alignVideoListHeight();
