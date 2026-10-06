@@ -3429,3 +3429,12 @@ body {
   .statistics-period-control button:last-child { grid-column: auto; }
   .statistics-channel-avatar { width: 28px; height: 28px; flex-basis: 28px; }
 }
+
+
+/* Statistics: hide dropdown chevrons for a uniform control surface. */
+.statistics-channel-trigger > b[aria-hidden="true"] { display: none; }
+.statistics-control select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+}
