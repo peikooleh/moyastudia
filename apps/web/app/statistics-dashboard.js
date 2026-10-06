@@ -11,6 +11,24 @@ function formatNumber(value, locale) {
   return Number(value || 0).toLocaleString(locale);
 }
 
+function formatNullableNumber(value, locale) {
+  return value == null ? "—" : Number(value).toLocaleString(locale);
+}
+
+function ChannelAvatar({ channel }) {
+  const [failed, setFailed] = useState(false);
+  const source = channel?.thumbnail_url || "";
+
+  useEffect(() => setFailed(false), [source]);
+
+  return (
+    <span className="statistics-channel-avatar" aria-hidden="true">
+      <span>{(channel?.title || "?").trim().slice(0, 1).toUpperCase()}</span>
+      {source && !failed ? <img src={source} alt="" onError={() => setFailed(true)} /> : null}
+    </span>
+  );
+}
+
 function formatDuration(seconds, uiLang) {
   const total = Math.max(0, Math.round(Number(seconds || 0)));
   const minutes = Math.floor(total / 60);
@@ -160,7 +178,10 @@ export function StatisticsDashboard({
       ? remotePlaylists.find((playlist) => String(playlist.id) === String(playlistId))?.title || t(uiLang, "statisticsChoosePlaylist")
       : t(uiLang, "statisticsScopeChannel");
   const maxViews = Math.max(1, ...(analytics?.series || []).map((point) => Number(point.views || 0)));
-  const netSubscribers = Number(analytics?.subscribers_gained || 0) - Number(analytics?.subscribers_lost || 0);
+  const subscriberMetricsAvailable = analytics?.subscribers_gained != null && analytics?.subscribers_lost != null;
+  const netSubscribers = subscriberMetricsAvailable
+    ? Number(analytics.subscribers_gained) - Number(analytics.subscribers_lost)
+    : null;
   const counts = {
     public: Number(statusCounts?.public || 0),
     private: Number(statusCounts?.private || 0),
@@ -184,7 +205,7 @@ export function StatisticsDashboard({
         <div className="statistics-control">
           <span>{t(uiLang, "statisticsChannel")}</span>
           <button className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen}>
-            {currentChannel?.thumbnail_url ? <img src={currentChannel.thumbnail_url} alt="" /> : <span className="statistics-channel-placeholder" />}
+            <ChannelAvatar channel={currentChannel} />
             <span><strong>{currentChannel?.title || "—"}</strong><small>{currentChannel?.youtube_channel_id || ""}</small></span>
             <b aria-hidden="true">⌄</b>
           </button>
@@ -192,7 +213,7 @@ export function StatisticsDashboard({
             <div className="statistics-channel-menu">
               {channels.map((channel) => (
                 <button key={channel.id} type="button" className={String(channel.id) === String(selectedChannelId) ? "active" : ""} onClick={() => { setChannelMenuOpen(false); onChannelChange(String(channel.id)); }}>
-                  {channel.thumbnail_url ? <img src={channel.thumbnail_url} alt="" /> : <span className="statistics-channel-placeholder" />}
+                  <ChannelAvatar channel={channel} />
                   <span><strong>{channel.title}</strong><small>{channel.youtube_channel_id}</small></span>
                 </button>
               ))}
@@ -250,8 +271,8 @@ export function StatisticsDashboard({
       <section className="statistics-kpis">
         <article><span>{t(uiLang, "videoViews")}</span><strong>{analytics ? formatNumber(analytics.views, locale) : "—"}</strong><small>{periodLabel}</small></article>
         <article><span>{t(uiLang, "statisticsWatchTime")}</span><strong>{analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—"}</strong><small>{periodLabel}</small></article>
-        <article><span>{t(uiLang, "statisticsAverageViewDuration")}</span><strong>{analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—"}</strong><small>{analytics ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage || 0).toFixed(1) }) : periodLabel}</small></article>
-        <article><span>{t(uiLang, "statisticsSubscribersNet")}</span><strong>{analytics ? formatNumber(netSubscribers, locale) : "—"}</strong><small>{analytics ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained || 0, lost: analytics.subscribers_lost || 0 }) : periodLabel}</small></article>
+        <article><span>{t(uiLang, "statisticsAverageViewDuration")}</span><strong>{analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—"}</strong><small>{analytics?.average_view_percentage != null ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage).toFixed(1) }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel}</small></article>
+        <article><span>{t(uiLang, "statisticsSubscribersNet")}</span><strong>{analytics ? formatNullableNumber(netSubscribers, locale) : "—"}</strong><small>{analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel}</small></article>
       </section>
 
       <section className="statistics-panel statistics-trend">
@@ -270,9 +291,9 @@ export function StatisticsDashboard({
         <section className="statistics-panel">
           <header><div><small>{t(uiLang, "statisticsEngagement")}</small><h2>{t(uiLang, "statisticsEngagementTitle")}</h2></div></header>
           <div className="statistics-engagement-grid">
-            <div><span>{t(uiLang, "videoLikes")}</span><strong>{analytics ? formatNumber(analytics.likes, locale) : "—"}</strong></div>
-            <div><span>{t(uiLang, "videoComments")}</span><strong>{analytics ? formatNumber(analytics.comments, locale) : "—"}</strong></div>
-            <div><span>{t(uiLang, "statisticsShares")}</span><strong>{analytics ? formatNumber(analytics.shares, locale) : "—"}</strong></div>
+            <div><span>{t(uiLang, "videoLikes")}</span><strong>{analytics ? formatNullableNumber(analytics.likes, locale) : "—"}</strong></div>
+            <div><span>{t(uiLang, "videoComments")}</span><strong>{analytics ? formatNullableNumber(analytics.comments, locale) : "—"}</strong></div>
+            <div><span>{t(uiLang, "statisticsShares")}</span><strong>{analytics ? formatNullableNumber(analytics.shares, locale) : "—"}</strong></div>
           </div>
         </section>
         <section className="statistics-panel statistics-content">
