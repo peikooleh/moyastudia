@@ -784,12 +784,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .studio-list .list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .video-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 136px 112px;
+  grid-template-columns: minmax(0, 1fr) minmax(188px, 1.25fr) minmax(112px, .75fr);
   gap: 7px;
   padding: 12px;
   border-bottom: 1px solid var(--line);
 }
 .video-toolbar .search { grid-column: 1 / -1; min-height: 40px; }
+.video-toolbar select:first-of-type { min-width: 188px; }
 .video-toolbar select, .calendar-tools select {
   min-width: 0;
   min-height: 36px;
