@@ -1493,8 +1493,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }
 
   function discardWorkingChanges() {
+    if (!window.confirm(t(uiLang, "discardChangesConfirm"))) return;
     setVideoStatusDraft("");
-    confirmResetWorkingToSnapshot();
+    resetWorkingToSnapshot();
   }
 
 
