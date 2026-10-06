@@ -924,7 +924,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mode-switch:disabled { opacity: .65; cursor: wait; }
 .mode-coming-later { color: var(--warning); font-weight: 600; }
 .calendar-workspace { grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr); }
-.calendar-event-details { min-width: 0; padding: 20px 24px; background: var(--bg); }
+.calendar-event-details { min-width: 0; padding: 18px 20px; background: var(--bg); }
 .calendar-event-details h2 { overflow-wrap: anywhere; margin: 12px 0; font-size: 19px; }
 .calendar-event-thumb { display: block; width: min(100%, 300px); aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; }
 .calendar-event-details .inspector-data { grid-template-columns: repeat(2, minmax(0, 1fr)); }
