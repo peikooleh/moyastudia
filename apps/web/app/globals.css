@@ -2423,7 +2423,6 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 0 8px;
-  border-top: 1px solid var(--line);
 }
 .playlist-video-tools .search {
   width: min(360px, 100%);
