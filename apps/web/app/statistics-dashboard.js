@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { catalogVideosUrl } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 
 const PERIODS = ["7", "28", "90", "365", "lifetime"];
@@ -21,10 +22,7 @@ export function StatisticsDashboard({
   uiLang,
   selectedChannelId,
   onChannelChange,
-  videos,
   playlists,
-  statusCounts,
-  catalogTotal,
 }) {
   const [channels, setChannels] = useState([]);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
@@ -35,6 +33,9 @@ export function StatisticsDashboard({
   const [analytics, setAnalytics] = useState(null);
   const [analyticsError, setAnalyticsError] = useState("");
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [catalogVideos, setCatalogVideos] = useState([]);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({});
   const requestId = useRef(0);
   const locale = t(uiLang, "calendarLocale");
 
@@ -52,13 +53,57 @@ export function StatisticsDashboard({
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (!selectedChannelId) {
+      setCatalogVideos([]);
+      setCatalogTotal(0);
+      setStatusCounts({});
+      return undefined;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+
+    async function loadCompleteCatalog() {
+      const items = [];
+      let cursor = "";
+      let firstPage = true;
+      do {
+        const response = await apiFetch(catalogVideosUrl(selectedChannelId, { sort: "date", cursor }), { signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.detail || "catalog unavailable");
+        if (cancelled) return;
+        items.push(...(data.items || []));
+        if (firstPage) {
+          setCatalogTotal(Number(data.total || 0));
+          setStatusCounts(data.status_counts || {});
+          firstPage = false;
+        }
+        cursor = data.next_cursor || "";
+      } while (cursor && items.length < 10000);
+      if (!cancelled) setCatalogVideos(items);
+    }
+
+    setCatalogVideos([]);
+    setCatalogTotal(0);
+    setStatusCounts({});
+    loadCompleteCatalog().catch((error) => {
+      if (error.name !== "AbortError" && !cancelled) {
+        setCatalogVideos([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [selectedChannelId]);
+
   const remotePlaylists = useMemo(
     () => (playlists || []).filter((playlist) => !playlist.localOnly),
     [playlists],
   );
   const analyticsVideos = useMemo(
-    () => (videos || []).filter((video) => video.youtubeId),
-    [videos],
+    () => catalogVideos.filter((video) => video.youtubeId),
+    [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
   const currentChannel = channels.find((channel) => String(channel.id) === String(selectedChannelId)) || null;
