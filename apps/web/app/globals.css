@@ -2885,7 +2885,8 @@ body {
 .statistics-control, .statistics-period-control { position: relative; display: grid; align-content: start; gap: 5px; min-width: 0; color: var(--muted); font-size: 10px; font-weight: 600; }
 .statistics-control select { width: 100%; min-width: 0; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .statistics-channel-trigger { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; min-height: 44px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
-.statistics-channel-trigger img, .statistics-channel-menu img, .statistics-channel-placeholder { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--bg-hover); }
+.statistics-channel-avatar { position: relative; display: grid; width: 32px; height: 32px; place-items: center; overflow: hidden; border-radius: 50%; background: var(--bg-hover); color: var(--muted); font-size: 11px; font-weight: 700; }
+.statistics-channel-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .statistics-channel-trigger > span, .statistics-channel-menu button > span { min-width: 0; }
 .statistics-channel-trigger strong, .statistics-channel-trigger small, .statistics-channel-menu strong, .statistics-channel-menu small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statistics-channel-trigger strong, .statistics-channel-menu strong { font-size: 12px; }
