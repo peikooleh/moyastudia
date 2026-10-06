@@ -784,7 +784,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .studio-list .list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .video-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px 96px;
+  grid-template-columns: 190px 120px;
   gap: 7px;
   padding: 12px;
   border-bottom: 1px solid var(--line);
@@ -897,7 +897,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .calendar-heading h1 { margin: 0; font-size: 22px; }
 .calendar-heading .cal-nav { margin: 0; }
 .calendar-heading .cal-nav strong { min-width: 150px; }
-.calendar-tools { display: grid; grid-template-columns: minmax(0, 1fr) 145px; gap: 8px; margin-bottom: 12px; }
+.calendar-tools { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 8px; margin-bottom: 12px; }
 .calendar-tools .search { min-width: 0; min-height: 38px; }
 .calendar-status { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px; min-height: 36px; margin-bottom: 10px; color: var(--muted); font-size: 11px; }
 .calendar-status strong { color: var(--text); font-size: 12px; }
