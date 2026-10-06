@@ -1462,9 +1462,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     overflow: visible;
     align-items: start;
   }
-  .studio-list {
-    max-height: calc(100vh - 210px);
-  }
   .video-inspector {
     max-height: none;
     overflow: visible;
