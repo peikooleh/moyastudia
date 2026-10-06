@@ -63,6 +63,16 @@
 - Duplicate horizontal separators were removed at the Playlist summary/tools boundary and from the Video properties column below the preview, leaving one visual divider per section boundary.
 - The user completed browser review and accepted the resulting Video and Playlist geometry.
 
+## Statistics final controls and CSS consolidation accepted — 2026-10-06
+
+- Statistics v3 base CSS was consolidated to one active source by removing the older overridden v3 block; the unrelated legacy Statistics selectors were intentionally left untouched.
+- The channel picker menu is positioned out of normal flow, so opening it no longer changes the controls-panel height. Channel secondary text was aligned to the shared compact-control typography.
+- Statistics video scope now offers only catalog videos whose normalized status is `public`; scheduled, private, unlisted, unavailable, and deleted videos are excluded from the video selector.
+- Period selection was converted from five persistent buttons to the same native select pattern used by the other Statistics controls, preserving 7 / 28 / 90 / 365 days and lifetime options.
+- The four desktop controls are now Channel / Scope / target Playlist-or-Video / Period. Native selects are constrained with `width: 100%` and `min-width: 0`, preventing long selected video titles from overflowing into the Period column.
+- During the period refactor, an accidentally removed shared Statistics control block was identified by source comparison and restored in place; obsolete period-button mobile rules were then removed explicitly.
+- Manual browser review accepted the final controls layout, including the long-video-title case.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
