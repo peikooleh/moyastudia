@@ -47,6 +47,14 @@
 - The visible YouTube action now explicitly says Open playlist on YouTube in EN/RU/UK, matching its existing playlist-specific tooltip.
 - The playlist YouTube action is kept on one line without widening the fixed settings column or taking space from the metadata editor.
 
+## EN/RU/UK locale parity restored — 2026-10-06
+
+- The missing Ukrainian Statistics / YouTube Analytics package was traced to 38 Ukrainian entries accidentally living inside the Russian locale block ahead of Russian duplicates.
+- Those existing Ukrainian translations were moved into the proper `uk` locale block and removed from `ru`; no fallback-to-English is now required for those Statistics/Analytics keys.
+- Added `apps/web/scripts/check-i18n-parity.mjs` and the `npm run check:i18n` command to fail when RU or UK key sets diverge from EN.
+- Local validation on Windows/Node 24.13.0 completed successfully: `i18n parity OK: 625 keys in EN/RU/UK`.
+- A pre-existing `comingLater` duplicate exists equally in all three locale blocks; it is outside this Statistics parity fix and was intentionally left untouched in this pass.
+
 ## Cross-page consistency audit
 
 - Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
