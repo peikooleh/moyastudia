@@ -1546,6 +1546,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
           throw new Error(t(uiLang, "youtubePublishError"));
         }
+        setWorkingVideo(data);
+        setWorkingDraft(data.effective);
+        setWorkingEdits({});
       }
 
       if (workingStatusDraft) {
