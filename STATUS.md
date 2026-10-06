@@ -24,11 +24,17 @@
 - Cabinet: retained current hierarchy/layout; added localized EN/RU/UK hints to AI provider/model/API-key controls and retained the existing channel-language hint.
 - Shared form controls continue to use the common theme/focus/disabled rules in `globals.css`; Statistics now follows that control language rather than overriding native select appearance.
 
-## Validation state
+## Final UI corrections and validation
 
-- This pass intentionally did **not** run the final test/lint/build suite yet. Per current workflow, visual review comes first.
-- Next: user visual review of Statistics/Cabinet and any final UI corrections, then run targeted tests, full tests, frontend lint and production build before merge.
-- Browser visual smoke remains required for desktop and responsive widths after the final UI corrections.
+- Videos catalog filtering now keeps scheduled uploads out of the generic Private filter; Scheduled remains a separate catalog status. Regression coverage was added in `tests/test_catalog.py`.
+- Updated the OAuth scope regression expectation for the Statistics Analytics permission `yt-analytics.readonly`; the production scope itself was already intentional and correct.
+- Videos and Calendar status-filter controls were corrected at their existing grid definitions so the longest localized status labels remain readable without adding CSS override selectors.
+- Playlist `Change thumbnail` now matches the accepted Videos button sizing/typography while leaving the Videos reference control unchanged.
+- Backend suite: **133 passed**, with 3 non-blocking dependency/FastAPI deprecation warnings.
+- Frontend lint: **0 errors**. Existing non-blocking Next.js warnings remain for raw `<img>` usage/custom font handling; `next lint` itself is deprecated ahead of Next.js 16.
+- Production build: **successful** on Next.js 15.5.27. Lint/type validation, page-data collection, static generation (7/7), build traces and page optimization all completed.
+- Build warnings are non-blocking: existing image/font lint warnings plus Autoprefixer compatibility notices for `start`/`end` alignment values in `globals.css`.
+- Browser visual smoke remains the final manual gate for accepted desktop/responsive UI before merge.
 
 ---
 
