@@ -29,6 +29,7 @@ import {
 } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
+import { StatisticsDashboard } from "./statistics-dashboard";
 
 const FILTERS = [
   { id: "all", key: "filterAll" },
@@ -478,7 +479,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
 }
 
 export function Studio({ view = "videos", onViewChange = () => {}, writeMode = { enabled: false } }) {
-  const { prefs, uiLang } = usePrefs();
+  const { prefs, uiLang, update: updatePrefs } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
   const [videos, setVideos] = useState([]);
   const [calendarVideos, setCalendarVideos] = useState([]);
@@ -552,10 +553,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [calendarContext, setCalendarContext] = useState(null);
   const [calendarQueueOpen, setCalendarQueueOpen] = useState(false);
   const [calendarQueueQuery, setCalendarQueueQuery] = useState("");
-  const [statisticsQuery, setStatisticsQuery] = useState("");
-  const [statisticsStatus, setStatisticsStatus] = useState("all");
-  const [statisticsSort, setStatisticsSort] = useState("views");
-  const [channelAnalytics, setChannelAnalytics] = useState(null);
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -575,26 +572,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     playlistContents.channelId === channelId
     && playlistContents.playlistId === selectedPlaylistId
   ) ? playlistContents : null;
-  useEffect(() => {
-    if (!channelId) {
-      setChannelAnalytics(null);
-      return undefined;
-    }
-    const controller = new AbortController();
-    apiFetch(`/channels/${channelId}/analytics/summary`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("analytics unavailable");
-        return response.json();
-      })
-      .then((data) => {
-        if (!controller.signal.aborted) setChannelAnalytics(data);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setChannelAnalytics(null);
-      });
-    return () => controller.abort();
-  }, [channelId]);
-
   useEffect(() => {
     if (view !== "videos") return undefined;
     const list = videoListRef.current;
@@ -746,7 +723,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }, [channelId, playlistSelectedVideo, selectedId, workingDetailReload]);
 
   useEffect(() => {
-    if (!["videos", "playlists"].includes(view) || !channelId) {
+    if (!["videos", "playlists", "statistics"].includes(view) || !channelId) {
       setPlaylistState({ channelId, items: [], loading: false, error: "" });
       return undefined;
     }
@@ -1753,36 +1730,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     return unscheduledPrivate && matchesQuery;
   });
   const calendarQueueCount = effectiveCalendarVideos.filter((video) => video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing).length;
-  const statistics = cachedVideoMetricSummary(videos);
-  const statisticsRows = [...videos]
-    .filter((video) => {
-      const needle = statisticsQuery.trim().toLocaleLowerCase();
-      const matchesQuery = !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
-      const effectiveStatus = video.remoteMissing
-        ? "remote_missing"
-        : video.availability === "unavailable"
-          ? "unavailable"
-          : video.status;
-      return matchesQuery && (statisticsStatus === "all" || effectiveStatus === statisticsStatus);
-    })
-    .sort((a, b) => {
-      if (statisticsSort === "title") return (catalogVideoDisplayTitle(a) || "").localeCompare(catalogVideoDisplayTitle(b) || "", t(uiLang, "calendarLocale"));
-      if (statisticsSort === "publishedAt") {
-        const av = Date.parse(a.publishedAt || a.slot || "");
-        const bv = Date.parse(b.publishedAt || b.slot || "");
-        if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
-        if (!Number.isFinite(av)) return 1;
-        if (!Number.isFinite(bv)) return -1;
-        return bv - av;
-      }
-      const metric = statisticsSort === "likes" ? "likes" : statisticsSort === "comments" ? "comments" : "views";
-      const av = Number(a[metric]);
-      const bv = Number(b[metric]);
-      if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
-      if (!Number.isFinite(av)) return 1;
-      if (!Number.isFinite(bv)) return -1;
-      return bv - av;
-    });
   const workingStateKey = workingVideoStatusKey(
     workingVideo,
     workingEdits,
@@ -2652,48 +2599,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       ) : null}
 
       {view === "statistics" ? (
-        <main className="statistics-workspace">
-          <header className="workspace-heading">
-            <h1>{t(uiLang, "statisticsTab")}</h1>
-            <span>{t(uiLang, "statisticsLoadedVideos", { loaded: statistics.loadedVideoCount, total: catalogTotal })}</span>
-          </header>
-          <div className="statistics-cards">
-            {[["videoViews", statistics.views, statistics.viewsCount], ["videoLikes", statistics.likes, statistics.likesCount], ["videoComments", statistics.comments, statistics.commentsCount], ["statisticsWatchTime", channelAnalytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(channelAnalytics.estimated_minutes_watched / 60) }) : "—", null]].map(([key, value, count]) => (
-              <article key={key}>
-                <h2>{t(uiLang, key)}</h2>
-                <strong>{value == null ? "—" : value.toLocaleString(t(uiLang, "calendarLocale"))}</strong>
-                {count != null ? <small>{t(uiLang, "statisticsMetricCount", { count })}</small> : null}
-              </article>
-            ))}
-          </div>
-          <div className="statistics-toolbar">
-            <input className="search" type="search" value={statisticsQuery} onChange={(event) => setStatisticsQuery(event.target.value)} placeholder={t(uiLang, "statisticsSearch")} aria-label={t(uiLang, "statisticsSearch")} />
-            <label><span>{t(uiLang, "statisticsStatus")}</span><select value={statisticsStatus} onChange={(event) => setStatisticsStatus(event.target.value)}>{FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}</select></label>
-            <label><span>{t(uiLang, "statisticsSortBy")}</span><select value={statisticsSort} onChange={(event) => setStatisticsSort(event.target.value)}><option value="views">{t(uiLang, "videoViews")}</option><option value="likes">{t(uiLang, "videoLikes")}</option><option value="comments">{t(uiLang, "videoComments")}</option><option value="publishedAt">{t(uiLang, "videoPublishedAt")}</option><option value="title">{t(uiLang, "videoTitle")}</option></select></label>
-          </div>
-          {err ? <p className="calendar-error" role="alert">{err}</p> : null}
-          {!loadingVideos && videos.length === 0 ? <p className="empty">{t(uiLang, catalogStatus.state === "NOT_IMPORTED" ? "statisticsCatalogNotImported" : "statisticsEmpty")}</p> : null}
-          <div className="statistics-table-wrap">
-            <table className="statistics-table">
-              <thead><tr><th>{t(uiLang, "videoTitle")}</th><th>{t(uiLang, "videoViews")}</th><th>{t(uiLang, "videoLikes")}</th><th>{t(uiLang, "videoComments")}</th></tr></thead>
-              <tbody>
-                {statisticsRows.map((video) => (
-                  <tr key={video.id}>
-                    <th scope="row">
-                      <button type="button" className="statistics-video-link" onClick={() => { setSelectedId(video.id); onViewChange("videos"); }}>
-                        {video.thumb ? <img className="statistics-video-thumb" src={video.thumb} alt="" loading="lazy" /> : <span className="statistics-video-thumb empty-thumb" />}
-                        <span>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
-                      </button>
-                    </th>
-                    <td>{video.views ?? "—"}</td><td>{video.likes ?? "—"}</td><td>{video.comments ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!loadingVideos && videos.length > 0 && statisticsRows.length === 0 ? <p className="empty statistics-empty">{t(uiLang, "statisticsNoResults")}</p> : null}
-          {nextCursor ? <button className="btn ghost statistics-load-more" type="button" disabled={loadingMore} onClick={loadMoreCatalog}>{loadingMore ? t(uiLang, "catalogLoadingMore") : t(uiLang, "catalogLoadMore", { count: Math.max(catalogTotal - videos.length, 0) })}</button> : null}
-        </main>
+        <StatisticsDashboard
+          uiLang={uiLang}
+          selectedChannelId={channelId}
+          onChannelChange={(nextChannelId) => updatePrefs({ selectedChannelId: nextChannelId })}
+          videos={videos}
+          playlists={playlists}
+          statusCounts={statusCounts}
+          catalogTotal={catalogTotal}
+        />
       ) : null}
     </div>
   );
