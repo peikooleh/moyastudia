@@ -246,16 +246,16 @@ export function StatisticsDashboard({
           </label>
         ) : null}
 
-        <div className="statistics-period-control" title={t(uiLang, "statisticsPeriodHint")}>
+        <label className="statistics-control statistics-period-control">
           <span>{t(uiLang, "statisticsPeriod")}</span>
-          <div>
+          <select value={period} onChange={(event) => setPeriod(event.target.value)} title={t(uiLang, "statisticsPeriodHint")}>
             {PERIODS.map((value) => (
-              <button key={value} type="button" className={period === value ? "active" : ""} onClick={() => setPeriod(value)}>
+              <option key={value} value={value}>
                 {value === "lifetime" ? t(uiLang, "statisticsPeriodLifetime") : t(uiLang, "statisticsPeriodShort", { count: value })}
-              </button>
+              </option>
             ))}
-          </div>
-        </div>
+          </select>
+        </label>
       </section>
 
       <div className="statistics-status-slot" aria-live="polite">
