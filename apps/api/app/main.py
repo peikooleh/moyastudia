@@ -56,6 +56,17 @@ app = FastAPI(title="MoyaStudia API")
 app.add_middleware(AbuseRateLimitMiddleware, session_cookie_name=settings.session_cookie_name)
 
 
+def _youtube_error_facts(exc: Exception) -> tuple[int | None, set[str]]:
+    response = getattr(exc, "resp", None)
+    status = getattr(response, "status", None)
+    reasons = {
+        detail.get("reason")
+        for detail in (getattr(exc, "error_details", None) or [])
+        if isinstance(detail, dict) and detail.get("reason")
+    }
+    return status, reasons
+
+
 class AIConnectionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -736,8 +747,8 @@ def update_channel_metadata(
     except TokenEncryptionError as exc:
         raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
-        message = str(exc).lower()
-        if "insufficient" in message or "permission" in message or "scope" in message:
+        status, reasons = _youtube_error_facts(exc)
+        if status == 401 or reasons.intersection({"insufficientPermissions", "authError"}):
             raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
         raise HTTPException(502, detail={"code": "youtube_update_failed"}) from exc
     channel.description = result.get("description", payload.description)
@@ -1890,10 +1901,10 @@ def channel_analytics_summary(
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
-        message = str(exc).lower()
-        if "accessnotconfigured" in message or "api has not been used" in message:
+        status, reasons = _youtube_error_facts(exc)
+        if reasons.intersection({"accessNotConfigured", "serviceDisabled"}):
             raise HTTPException(503, detail={"code": "youtube_analytics_api_disabled"}) from exc
-        if "insufficient" in message or "scope" in message or "permission" in message or "403" in message:
+        if status in {401, 403} or reasons.intersection({"insufficientPermissions", "forbidden"}):
             raise HTTPException(403, detail={"code": "youtube_analytics_permission_required"}) from exc
         raise HTTPException(502, detail={"code": "youtube_analytics_unavailable"}) from exc
 
