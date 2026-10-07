@@ -706,7 +706,7 @@ export default function CabinetPage() {
                     <article className={`chan-card ${channelEditing ? "editing" : ""}`}>
                       <div className="channel-card-actions">
                         <button className="text-button channel-share-action" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "channelShare")}</button>
-                        {!channelEditing ? <button className="playlist-edit-metadata channel-edit-metadata" type="button" title={t(uiLang, "channelEditDescriptionHint")} aria-label={t(uiLang, "channelEditDescriptionHint")} onClick={() => beginChannelEditing(ch)}>✎</button> : null}
+                        {!channelEditing ? <button className="channel-edit-metadata" type="button" title={t(uiLang, "channelEditDescriptionHint")} aria-label={t(uiLang, "channelEditDescriptionHint")} onClick={() => beginChannelEditing(ch)}>✎</button> : null}
                       </div>
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
