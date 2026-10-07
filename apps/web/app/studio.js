@@ -266,7 +266,6 @@ function VideoInspector({
           <dl className="video-summary-meta">
             <div><dt>{t(uiLang, "videoStatus")}</dt><dd className={`status-label ${selected.availability === "unavailable" || selected.remoteMissing ? "warning" : ""}`}>{statusLabel(uiLang, effectiveStatus)}</dd></div>
             <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : selected.privacy === "private" ? "videoYoutubeDate" : "videoPublishedAt")}</dt><dd>{displayDate ? formatStudioDate(displayDate, uiLang) : "—"}</dd></div>
-            <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
             <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
             <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} title={t(uiLang, "copyVideoIdHint")} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button></dd></div>
           </dl>
@@ -2112,7 +2111,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <strong className="item-title">{catalogVideoDisplayTitle(v) || t(uiLang, "untitledVideo")}</strong>
                     <span className="item-meta">
                       <span>{statusLabel(uiLang, v.status)}</span>
-                      {v.availability === "available" ? <span>{t(uiLang, "availabilityAvailable")}</span> : null}
                       <time dateTime={v.slot || v.publishedAt || undefined}>{t(uiLang, v.slot ? "videoScheduledAtShort" : v.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: {formatStudioDate(v.slot || v.publishedAt || "", uiLang)}</time>
                     </span>
                     {v.dirty ? (
@@ -2480,7 +2478,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
                       <span className="playlist-video-copy">
                         <strong>{title || t(uiLang, "untitledVideo")}</strong>
-                        {playlistItemDate(item) ? <small><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time>{cached?.slot ? ` · ${statusLabel(uiLang, "scheduled")}` : ""}</small> : <small>—</small>}
+                        {playlistItemDate(item) ? <small><span>{t(uiLang, cached?.slot ? "videoScheduledAtShort" : cached?.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: </span><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time></small> : <small>—</small>
                         {!cached ? <small>{t(uiLang, selectable ? "playlistReadOnlyVideo" : "playlistVideoNotCached")}</small> : null}
                       </span>
                       {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
