@@ -109,6 +109,15 @@ export default function CabinetPage() {
   }, [router, sessionRetry]);
 
   useEffect(() => {
+    setChannelEditing(false);
+    setChannelDescriptionDraft("");
+    setChannelKeywordsDraft("");
+    setChannelDescriptionError("");
+    setChannelLanguageError("");
+    setChannelShareNotice("");
+  }, [prefs.selectedChannelId]);
+
+  useEffect(() => {
     if (!session?.authenticated) return undefined;
     let cancelled = false;
     const syncWriteMode = (event) => {
