@@ -2269,7 +2269,21 @@ def add_channel_playlist_videos(
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
-            return {"items": yt.add_videos_to_playlist(token, channel.youtube_channel_id, playlist_id, payload.video_ids)}
+            return yt.add_videos_to_playlist(
+                token,
+                channel.youtube_channel_id,
+                playlist_id,
+                payload.video_ids,
+            )
+    except yt.PartialMutationError as exc:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "youtube_partial_write",
+                "operation": exc.code,
+                "result": exc.result,
+            },
+        ) from exc
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
     except TokenEncryptionError as exc:
@@ -2295,6 +2309,15 @@ def reorder_channel_playlist(
             return yt.reorder_playlist_items(
                 token, channel.youtube_channel_id, playlist_id, payload.playlist_item_ids
             )
+    except yt.PartialMutationError as exc:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "youtube_partial_write",
+                "operation": exc.code,
+                "result": exc.result,
+            },
+        ) from exc
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
     except ValueError as exc:
