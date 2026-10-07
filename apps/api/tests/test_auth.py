@@ -15,7 +15,22 @@ from app.youtube import IDENTITY_SCOPES, YOUTUBE_SCOPES
 from conftest import create_account
 
 
-def test_health_does_not_expose_configuration_state(client):
+def test_health_does_not_expose_configuration_state(client, monkeypatch):
+    class HealthyConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, statement):
+            return None
+
+    class HealthyEngine:
+        def connect(self):
+            return HealthyConnection()
+
+    monkeypatch.setattr(main.database, "engine", HealthyEngine())
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"ok": True}
