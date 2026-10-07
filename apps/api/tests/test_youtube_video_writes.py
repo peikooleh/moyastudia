@@ -176,3 +176,18 @@ def test_non_transient_read_failure_is_not_retried(monkeypatch):
         raise AssertionError("non-transient failure must propagate")
 
     assert request.calls == 1
+
+
+def test_provider_auth_request_forces_configured_timeout(monkeypatch):
+    monkeypatch.setattr(yt.settings, "provider_timeout_seconds", 7.5)
+    captured = {}
+
+    def fake_call(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        captured["timeout"] = timeout
+        return object()
+
+    monkeypatch.setattr(yt.Request, "__call__", fake_call)
+    request = yt._provider_auth_request()
+    request("https://example.invalid", timeout=99)
+
+    assert captured["timeout"] == 7.5
