@@ -770,12 +770,9 @@ export default function CabinetPage() {
                           </select>
                         </label>
                         {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
-                        <div className="channel-link-setting">
-                          <span>{t(uiLang, "channelLink")}</span>
-                          <div className="channel-link-actions">
-                            <a href={`https://www.youtube.com/channel/${ch.youtube_channel_id}`} target="_blank" rel="noreferrer" title={t(uiLang, "channelOpenHint")}>{t(uiLang, "channelOpen")}</a>
-                            <button className="text-button" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "channelShare")}</button>
-                          </div>
+                        <div className="channel-link-actions">
+                          <a className="btn ghost" href={`https://www.youtube.com/channel/${ch.youtube_channel_id}`} target="_blank" rel="noreferrer" title={t(uiLang, "channelOpenHint")}>{t(uiLang, "channelOpen")}</a>
+                          <button className="btn ghost" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "channelShare")}</button>
                         </div>
                         <div className="channel-remove-actions"><button className="btn ghost channel-remove-button" type="button" title={t(uiLang, "removeChannelHint")} disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                       </section>
