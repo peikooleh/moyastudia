@@ -521,6 +521,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
 export function Studio({ view = "videos", onViewChange = () => {}, writeMode = { enabled: false } }) {
   const { prefs, uiLang, update: updatePrefs } = usePrefs();
   const channelId = String(prefs.selectedChannelId || "");
+  const [statisticsChannelId, setStatisticsChannelId] = useState(channelId);
   const [videos, setVideos] = useState([]);
   const [calendarVideos, setCalendarVideos] = useState([]);
   const [playlistState, setPlaylistState] = useState({
@@ -603,7 +604,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const uiLangRef = useRef(uiLang);
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
-  const playlists = playlistsForChannel(playlistState, channelId);
+  const playlistDataChannelId = view === "statistics" ? statisticsChannelId : channelId;
+  const playlists = playlistsForChannel(playlistState, playlistDataChannelId);
   const visiblePlaylists = playlists.filter((playlist) => {
     const needle = playlistQuery.trim().toLocaleLowerCase();
     return !needle || (playlist.title || "").toLocaleLowerCase().includes(needle);
@@ -613,6 +615,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     playlistContents.channelId === channelId
     && playlistContents.playlistId === selectedPlaylistId
   ) ? playlistContents : null;
+  useEffect(() => {
+    setStatisticsChannelId(channelId);
+  }, [channelId]);
+
   useEffect(() => {
     if (view !== "videos") return undefined;
     const list = videoListRef.current;
@@ -784,15 +790,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }, [channelId, playlistSelectedVideo, selectedId, workingDetailReload]);
 
   useEffect(() => {
-    if (!["videos", "playlists", "statistics"].includes(view) || !channelId) {
-      setPlaylistState({ channelId, items: [], loading: false, error: "" });
+    if (!["videos", "playlists", "statistics"].includes(view) || !playlistDataChannelId) {
+      setPlaylistState({ channelId: playlistDataChannelId, items: [], loading: false, error: "" });
       return undefined;
     }
     const controller = new AbortController();
-    setPlaylistState({ channelId, items: [], loading: true, error: "" });
+    setPlaylistState({ channelId: playlistDataChannelId, items: [], loading: true, error: "" });
     Promise.all([
-      apiFetch(`/channels/${channelId}/playlists`, { signal: controller.signal }),
-      apiFetch(`/channels/${channelId}/local-playlists`, { signal: controller.signal }),
+      apiFetch(`/channels/${playlistDataChannelId}/playlists`, { signal: controller.signal }),
+      apiFetch(`/channels/${playlistDataChannelId}/local-playlists`, { signal: controller.signal }),
     ])
       .then(async ([remoteResponse, localResponse]) => {
         const [remoteRows, localRows] = await Promise.all([remoteResponse.json(), localResponse.json()]);
@@ -812,12 +818,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         const memberships = {};
         localRows.forEach((row) => { memberships[row.id] = row.videoIds || []; });
         setLocalPlaylistMemberships(memberships);
-        setPlaylistState({ channelId, items: [...localItems, ...remoteItems], loading: false, error: "" });
+        setPlaylistState({ channelId: playlistDataChannelId, items: [...localItems, ...remoteItems], loading: false, error: "" });
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
           setPlaylistState({
-            channelId,
+            channelId: playlistDataChannelId,
             items: [],
             loading: false,
             error: error.message || t(uiLangRef.current, "playlistsLoadError"),
@@ -825,7 +831,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         }
       });
     return () => controller.abort();
-  }, [channelId, view, playlistRetry]);
+  }, [playlistDataChannelId, view, playlistRetry]);
 
   useEffect(() => {
     if (view !== "playlists") return;
@@ -2736,8 +2742,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       {view === "statistics" ? (
         <StatisticsDashboard
           uiLang={uiLang}
-          selectedChannelId={channelId}
-          onChannelChange={(nextChannelId) => updatePrefs({ selectedChannelId: nextChannelId })}
+          selectedChannelId={statisticsChannelId}
+          onChannelChange={setStatisticsChannelId}
           playlists={playlists}
           onOpenStatus={(status) => {
             setQuery("");
