@@ -32,6 +32,24 @@ def create_channel(session_factory, user_id, suffix="one", active=True):
         return channel.id, channel.youtube_channel_id, connection.id
 
 
+
+
+def test_channel_working_language_persists_without_active_google_connection(client, test_database):
+    user_id, token = create_account(test_database, subject="language-offline-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "language-offline", active=False)
+    authorized_client(client, token)
+
+    response = client.put(
+        f"/channels/{channel_id}/working-language",
+        headers=post_headers(),
+        json={"language": "de"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["working_language"] == "de"
+    with test_database() as db:
+        assert db.get(Channel, channel_id).working_language == "de"
+
 def remote_video(video_id, channel_id, title=None):
     return {
         "youtube_video_id": video_id,
