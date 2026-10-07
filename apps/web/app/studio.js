@@ -2227,12 +2227,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         )}
                       </div>
                       {playlistEditing ? (
-                        <div className="playlist-metadata-actions">
+                        <>
+                          <YoutubeChangePreview uiLang={uiLang} changes={[
+                            effectivePlaylistDraft?.title !== (selectedPlaylist.title || "") ? { label: t(uiLang, "videoTitle"), before: selectedPlaylist.title || "—", after: effectivePlaylistDraft?.title || "—" } : null,
+                            effectivePlaylistDraft?.description !== (selectedPlaylist.description || "") ? { label: t(uiLang, "videoDescription"), before: selectedPlaylist.description || "—", after: effectivePlaylistDraft?.description || "—" } : null,
+                          ].filter(Boolean)} />
+                          <div className="playlist-metadata-actions">
                           <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
                           <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
                             <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
                           </span>
-                        </div>
+                          </div>
+                        </>
                       ) : null}
                     </div>
                   )}
