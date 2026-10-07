@@ -98,6 +98,22 @@ def verify_identity_token(token: str) -> dict:
     )
 
 
+class _TimeoutRequest(Request):
+    def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        return super().__call__(
+            url,
+            method=method,
+            body=body,
+            headers=headers,
+            timeout=settings.provider_timeout_seconds,
+            **kwargs,
+        )
+
+
+def _provider_auth_request() -> Request:
+    return _TimeoutRequest()
+
+
 def creds_from_refresh(refresh_token: str) -> Credentials:
     creds = Credentials(
         token=None,
@@ -106,7 +122,7 @@ def creds_from_refresh(refresh_token: str) -> Credentials:
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
     )
-    creds.refresh(Request())
+    creds.refresh(_provider_auth_request())
     return creds
 
 
@@ -232,7 +248,7 @@ def channel_analytics_timeseries(
     analytics_filter = _analytics_filter(video_id, playlist_id)
     if analytics_filter:
         kwargs["filters"] = analytics_filter
-    response = service.reports().query(**kwargs).execute()
+    response = _execute(service.reports().query(**kwargs), "reports.query")
     result = []
     for row in response.get("rows") or []:
         if len(row) < 3:
