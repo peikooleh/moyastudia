@@ -585,6 +585,7 @@ export default function CabinetPage() {
                       <section className="channel-group" key={connection.id}>
                         <header>
                           <div className="channel-group-account">
+                            <span className="channel-group-type">{t(uiLang, "googleAccountLabel")}</span>
                             <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
                             {connection.status === "reauthorization_required" ? (
                               <span className={`connection-status ${connection.status}`}>
@@ -599,9 +600,10 @@ export default function CabinetPage() {
                                 {t(uiLang, "reauthorizeConnection")}
                               </a>
                             ) : null}
-                            <button className="channel-add-button" type="button" title={t(uiLang, "selectConnectionChannels")} aria-label={t(uiLang, "selectConnectionChannels")} onClick={() => selectConnectionChannels(connection.id)}>+</button>
+                            <button className="channel-add-button" type="button" title={t(uiLang, "addYoutubeChannelsHint")} aria-label={t(uiLang, "addYoutubeChannelsHint")} onClick={() => selectConnectionChannels(connection.id)}>+</button>
                           </div>
                         </header>
+                        <div className="channel-group-list-label">{t(uiLang, "youtubeChannelsLabel")}</div>
                         {connection.channels.map((item) => {
                           const selected = String(item.id) === String(prefs.selectedChannelId);
                           const profile = channels?.find((channel) => String(channel.id) === String(item.id)) || item;
