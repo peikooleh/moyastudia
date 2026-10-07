@@ -826,6 +826,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   min-height: 68px;
   margin: 0;
   padding: 7px;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+.studio-list .item:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 .item-thumb { display: block; width: 84px; aspect-ratio: 16 / 9; border-radius: 4px; object-fit: cover; background: var(--bg-hover); }
 .item-content { display: grid; min-width: 0; gap: 7px; }
