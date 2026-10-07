@@ -2478,7 +2478,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
                       <span className="playlist-video-copy">
                         <strong>{title || t(uiLang, "untitledVideo")}</strong>
-                        {playlistItemDate(item) ? <small><span>{t(uiLang, cached?.slot ? "videoScheduledAtShort" : cached?.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: </span><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time></small> : <small>—</small>
+                        {playlistItemDate(item) ? <small><span>{t(uiLang, cached?.slot ? "videoScheduledAtShort" : cached?.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: </span><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time></small> : <small>—</small>}
                         {!cached ? <small>{t(uiLang, selectable ? "playlistReadOnlyVideo" : "playlistVideoNotCached")}</small> : null}
                       </span>
                       {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
