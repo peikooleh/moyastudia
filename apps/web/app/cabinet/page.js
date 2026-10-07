@@ -593,11 +593,14 @@ export default function CabinetPage() {
                             ) : null}
                             
                           </div>
-                          {connection.status === "reauthorization_required" ? (
-                            <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
-                              {t(uiLang, "reauthorizeConnection")}
-                            </a>
-                          ) : null}
+                          <div className="channel-group-actions">
+                            {connection.status === "reauthorization_required" ? (
+                              <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
+                                {t(uiLang, "reauthorizeConnection")}
+                              </a>
+                            ) : null}
+                            <button className="channel-add-button" type="button" title={t(uiLang, "selectConnectionChannels")} aria-label={t(uiLang, "selectConnectionChannels")} onClick={() => selectConnectionChannels(connection.id)}>+</button>
+                          </div>
                         </header>
                         {connection.channels.map((item) => {
                           const selected = String(item.id) === String(prefs.selectedChannelId);
