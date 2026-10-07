@@ -3462,80 +3462,78 @@ body {
 .cabinet-link.active { background: var(--bg-hover); color: var(--text); box-shadow: inset 0 -2px var(--accent); font-weight: 700; }
 
 
-/* Cabinet Account: use the same workspace hierarchy as the polished Cabinet page. */
+/* Cabinet Account: polished three-column workspace with responsive collapse. */
 .cabinet-account-panel { padding-top: 0; }
 .cabinet-account-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 0.62fr) minmax(0, 2.38fr);
+  grid-template-columns: minmax(220px, .62fr) minmax(430px, 1.72fr) minmax(300px, 1fr);
   min-height: 360px;
   border-top: 1px solid var(--line);
 }
-.cabinet-account-summary {
-  min-width: 0;
-  padding: 18px 20px;
-  border-right: 1px solid var(--line);
+.cabinet-account-summary { min-width: 0; padding: 20px 20px 18px; border-right: 1px solid var(--line); }
+.cabinet-account-summary h1,
+.cabinet-account-layout > .ai-connections-panel h2,
+.ai-model-settings-column > h2 {
+  margin-top: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
 }
-.cabinet-account-summary h1 { margin: 0 0 16px; font-size: 18px; line-height: 1.25; letter-spacing: -0.01em; }
-.cabinet-account-summary .profile-fields { margin: 0; }
-.cabinet-account-summary .profile-fields label { margin-bottom: 6px; font-size: 11px; color: var(--muted); }
+.cabinet-account-summary h1 { margin-bottom: 6px; }
+.cabinet-account-summary .profile-fields { display: block; margin: 0; }
+.cabinet-account-summary .profile-fields label { display: none; }
 .cabinet-account-summary .readonly-value {
   width: 100%;
-  padding: 8px 0;
+  padding: 2px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+  color: var(--text);
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.4;
 }
+.account-session-hint { margin: 10px 0 0; max-width: 210px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .cabinet-account-layout > .ai-connections-panel {
   min-width: 0;
   margin: 0;
   padding: 18px 20px 24px;
   border-top: 0;
+  border-right: 1px solid var(--line);
 }
-.cabinet-account-layout > .ai-connections-panel h2 { margin: 0 0 6px; font-size: 14px; line-height: 1.3; }
-.cabinet-account-layout > .ai-connections-panel > .panel-lead { max-width: 760px; margin: 0 0 18px; font-size: 12px; line-height: 1.45; }
+.cabinet-account-layout > .ai-connections-panel h2 { margin-bottom: 6px; }
+.cabinet-account-layout > .ai-connections-panel > .panel-lead {
+  max-width: 760px;
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 .cabinet-account-layout .ai-connection-grid {
-  grid-template-columns: minmax(180px, .8fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(170px, .8fr) minmax(210px, 1fr);
   gap: 14px;
   align-items: end;
-  max-width: 900px;
+  max-width: none;
 }
 .cabinet-account-layout .ai-connection-grid > label:nth-child(3) { grid-column: 1 / -1; }
-.cabinet-account-layout .ai-settings-button { grid-column: 2; justify-self: end; min-width: 140px; min-height: var(--control-h); }
 .cabinet-account-layout .ai-connection-grid label,
-.cabinet-account-layout .ai-model-settings label { gap: 6px; font-size: 11px; }
+.cabinet-account-layout .ai-model-settings-column .ai-model-settings label {
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
 .cabinet-account-layout .ai-connection-grid input,
 .cabinet-account-layout .ai-connection-grid select,
-.cabinet-account-layout .ai-model-settings textarea {
+.cabinet-account-layout .ai-model-settings-column .ai-model-settings textarea {
   border-radius: var(--radius-md);
   background: var(--bg);
-  font-size: 12px;
+  color: var(--text);
+  font-size: 13px;
 }
-.cabinet-account-layout .ai-model-settings { max-width: 900px; margin-top: 16px; border-radius: var(--radius-md); }
-.cabinet-account-layout .ai-connection-actions { max-width: 900px; margin-top: 14px; }
-.cabinet-account-layout .ai-connection-actions .btn { min-height: var(--control-h); border-radius: var(--radius-md); font-size: 12px; }
-@media (max-width: 900px) {
-  .cabinet-account-layout { grid-template-columns: 1fr; }
-  .cabinet-account-summary { border-right: 0; border-bottom: 1px solid var(--line); }
-}
-@media (max-width: 720px) {
-  .cabinet-account-layout .ai-connection-grid { grid-template-columns: 1fr; }
-  .cabinet-account-layout .ai-connection-grid > label:nth-child(3),
-  .cabinet-account-layout .ai-settings-button { grid-column: auto; }
-  .cabinet-account-layout .ai-settings-button { justify-self: stretch; }
-}
-
-
-/* Cabinet Account: permanent third column for selected AI model settings. */
-.cabinet-account-layout {
-  grid-template-columns: minmax(220px, .62fr) minmax(430px, 1.72fr) minmax(300px, 1fr);
-}
-.cabinet-account-layout > .ai-connections-panel { border-right: 1px solid var(--line); }
-.cabinet-account-layout .ai-connection-grid { grid-template-columns: minmax(170px, .8fr) minmax(210px, 1fr); max-width: none; }
-.cabinet-account-layout .ai-connection-actions { max-width: none; }
 .ai-model-settings-column { min-width: 0; padding: 18px 20px 24px; }
-.ai-model-settings-column > h2 { margin: 0 0 16px; font-size: 14px; line-height: 1.3; }
+.ai-model-settings-column > h2 { margin-bottom: 16px; }
 .cabinet-account-layout .ai-model-settings-column .ai-model-settings {
   display: grid;
   grid-template-columns: 1fr;
@@ -3547,30 +3545,15 @@ body {
   border-radius: 0;
   background: transparent;
 }
-.cabinet-account-layout .ai-model-settings-column .ai-model-settings label { gap: 6px; color: var(--muted); font-size: 11px; }
+.ai-model-settings-column .ai-model-settings label { position: relative; }
 .cabinet-account-layout .ai-model-settings-column .ai-model-settings textarea {
   min-height: 150px;
   padding: 9px 12px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 12px;
   line-height: 1.45;
   resize: vertical;
 }
-@media (max-width: 1180px) {
-  .cabinet-account-layout { grid-template-columns: minmax(210px, .7fr) minmax(0, 1.6fr); }
-  .cabinet-account-layout > .ai-connections-panel { border-right: 0; }
-  .ai-model-settings-column { grid-column: 2; border-top: 1px solid var(--line); }
-}
-@media (max-width: 900px) {
-  .cabinet-account-layout { grid-template-columns: 1fr; }
-  .ai-model-settings-column { grid-column: auto; border-top: 1px solid var(--line); }
-}
-
-
-/* Cabinet Account: actions appear only for unsaved AI changes and span the editable workspace. */
+.ai-prompt-counter { display: block; margin-top: 3px; text-align: right; color: var(--muted); font-size: 11px; line-height: 1.2; }
 .ai-dirty-actions {
   grid-column: 2 / -1;
   display: flex;
@@ -3584,68 +3567,20 @@ body {
 .ai-dirty-actions > span { color: var(--muted); font-size: 11px; }
 .ai-dirty-actions > div { display: flex; align-items: center; gap: 8px; }
 .ai-dirty-actions .btn { min-height: var(--control-h); border-radius: var(--radius-md); font-size: 12px; }
+
+@media (max-width: 1180px) {
+  .cabinet-account-layout { grid-template-columns: minmax(210px, .7fr) minmax(0, 1.6fr); }
+  .cabinet-account-layout > .ai-connections-panel { border-right: 0; }
+  .ai-model-settings-column { grid-column: 2; border-top: 1px solid var(--line); }
+}
 @media (max-width: 900px) {
+  .cabinet-account-layout { grid-template-columns: 1fr; }
+  .cabinet-account-summary { border-right: 0; border-bottom: 1px solid var(--line); }
+  .ai-model-settings-column { grid-column: auto; border-top: 1px solid var(--line); }
   .ai-dirty-actions { grid-column: 1; }
 }
+@media (max-width: 720px) {
+  .cabinet-account-layout .ai-connection-grid { grid-template-columns: 1fr; }
+  .cabinet-account-layout .ai-connection-grid > label:nth-child(3) { grid-column: auto; }
+}
 
-
-/* Cabinet Account: simplify identity summary and match editor counters. */
-.cabinet-account-summary { padding-top: 20px; }
-.cabinet-account-summary h1 { margin: 0 0 4px; font-size: 14px; }
-.cabinet-account-summary .profile-fields { display: block; }
-.cabinet-account-summary .profile-fields label { display: none; }
-.cabinet-account-summary .readonly-value { padding: 2px 0; color: var(--muted); font-size: 12px; }
-.ai-model-settings-column .ai-model-settings label { position: relative; }
-.ai-prompt-counter { display: block; margin-top: -2px; text-align: right; color: var(--muted); font-size: 10px; line-height: 1.2; }
-
-.account-session-hint { margin: 8px 0 0; max-width: 190px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-
-
-/* Cabinet Account: clearer text hierarchy at desktop density. */
-.cabinet-account-summary h1,
-.cabinet-account-layout > .ai-connections-panel h2,
-.ai-model-settings-column > h2 {
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-.cabinet-account-summary h1 { margin-bottom: 6px; }
-.cabinet-account-summary .readonly-value {
-  padding: 2px 0;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
-}
-.account-session-hint {
-  margin-top: 10px;
-  max-width: 210px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.cabinet-account-layout > .ai-connections-panel > .panel-lead {
-  margin-bottom: 20px;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-.cabinet-account-layout .ai-connection-grid label,
-.cabinet-account-layout .ai-model-settings-column .ai-model-settings label {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-}
-.cabinet-account-layout .ai-connection-grid input,
-.cabinet-account-layout .ai-connection-grid select,
-.cabinet-account-layout .ai-model-settings-column .ai-model-settings textarea {
-  color: var(--text);
-  font-size: 13px;
-}
-.ai-prompt-counter {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.2;
-}
