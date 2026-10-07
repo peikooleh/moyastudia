@@ -3587,3 +3587,13 @@ body {
 @media (max-width: 900px) {
   .ai-dirty-actions { grid-column: 1; }
 }
+
+
+/* Cabinet Account: simplify identity summary and match editor counters. */
+.cabinet-account-summary { padding-top: 20px; }
+.cabinet-account-summary h1 { margin: 0 0 4px; font-size: 14px; }
+.cabinet-account-summary .profile-fields { display: block; }
+.cabinet-account-summary .profile-fields label { display: none; }
+.cabinet-account-summary .readonly-value { padding: 2px 0; color: var(--muted); font-size: 12px; }
+.ai-model-settings-column .ai-model-settings label { position: relative; }
+.ai-prompt-counter { display: block; margin-top: -2px; text-align: right; color: var(--muted); font-size: 10px; line-height: 1.2; }
