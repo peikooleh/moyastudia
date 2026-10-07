@@ -627,6 +627,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedPlaylistId("");
     setPlaylistSelectedVideo(null);
     setSelectedPlaylistVideoIds(new Set());
+    setPlaylistMembershipEditor(null);
+    setPlaylistVideoPicker(null);
+    setLocalPlaylistMemberships({});
+    setLocalPlaylistVideoCache({});
     if (!channelId) return undefined;
 
     apiFetch(`/channels/${channelId}/catalog/status`)
