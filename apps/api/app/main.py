@@ -74,6 +74,12 @@ class ChannelWorkingLanguageUpdate(BaseModel):
     language: Literal["", "en", "ru", "uk", "de", "pl", "fr", "es", "it", "pt", "tr", "ja", "ko", "zh"]
 
 
+class ChannelDescriptionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(default="", max_length=1000)
+
+
 class WriteModeUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -649,6 +655,41 @@ def update_channel_working_language(
     row.working_language = payload.language
     db.commit()
     return {"id": row.id, "working_language": row.working_language}
+
+
+@app.put(
+    "/channels/{channel_id}/description",
+    dependencies=[Depends(require_same_origin)],
+)
+def update_channel_description(
+    channel_id: int,
+    payload: ChannelDescriptionUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            result = yt.update_channel_description(
+                token,
+                channel.youtube_channel_id,
+                description=payload.description,
+            )
+    except LookupError as exc:
+        raise HTTPException(404, detail={"code": "channel_not_found_on_youtube"}) from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        message = str(exc).lower()
+        if "insufficient" in message or "permission" in message or "scope" in message:
+            raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_update_failed"}) from exc
+    channel.description = result.get("description", payload.description)
+    db.commit()
+    return {"id": channel.id, "description": channel.description}
 
 
 @app.get("/google-connections")
