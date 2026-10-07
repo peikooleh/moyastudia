@@ -158,19 +158,6 @@ export default function CabinetPage() {
       .then((rows) => {
         if (cancelled) return;
         setChannels(rows);
-        rows.forEach((channel) => {
-          if (!channel.has_token) return;
-          apiFetch(`/channels/${channel.id}/refresh-profile`, { method: "POST" })
-            .then((response) => (response.ok ? response.json() : null))
-            .then((fresh) => {
-              if (fresh && !cancelled) {
-                setChannels((current) => current.map((item) => (
-                  item.id === fresh.id ? { ...item, ...fresh } : item
-                )));
-              }
-            })
-            .catch(() => {});
-        });
       })
       .catch((error) => {
         if (!cancelled && error.status === 401) {
