@@ -74,10 +74,11 @@ class ChannelWorkingLanguageUpdate(BaseModel):
     language: Literal["", "en", "ru", "uk", "de", "pl", "fr", "es", "it", "pt", "tr", "ja", "ko", "zh"]
 
 
-class ChannelDescriptionUpdate(BaseModel):
+class ChannelMetadataUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     description: str = Field(default="", max_length=1000)
+    keywords: str = Field(default="", max_length=500)
 
 
 class WriteModeUpdate(BaseModel):
@@ -658,12 +659,12 @@ def update_channel_working_language(
 
 
 @app.put(
-    "/channels/{channel_id}/description",
+    "/channels/{channel_id}/metadata",
     dependencies=[Depends(require_same_origin)],
 )
-def update_channel_description(
+def update_channel_metadata(
     channel_id: int,
-    payload: ChannelDescriptionUpdate,
+    payload: ChannelMetadataUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -673,10 +674,11 @@ def update_channel_description(
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
-            result = yt.update_channel_description(
+            result = yt.update_channel_metadata(
                 token,
                 channel.youtube_channel_id,
                 description=payload.description,
+                keywords=payload.keywords,
             )
     except LookupError as exc:
         raise HTTPException(404, detail={"code": "channel_not_found_on_youtube"}) from exc
@@ -689,7 +691,7 @@ def update_channel_description(
         raise HTTPException(502, detail={"code": "youtube_update_failed"}) from exc
     channel.description = result.get("description", payload.description)
     db.commit()
-    return {"id": channel.id, "description": channel.description}
+    return {"id": channel.id, "description": channel.description, "keywords": result.get("keywords", payload.keywords)}
 
 
 @app.get("/google-connections")
@@ -2353,6 +2355,7 @@ def refresh_profile(
         "youtube_channel_id": row.youtube_channel_id,
         "has_token": True,
         "description": info.get("description") or "",
+        "keywords": info.get("keywords") or "",
         "yt_published_at": info.get("yt_published_at") or "",
         "subscriber_count": int(info.get("subscriber_count") or 0),
         "video_count": int(info.get("video_count") or 0),
