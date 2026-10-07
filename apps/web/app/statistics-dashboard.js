@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { catalogVideosUrl } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
+import { loadPrefs, savePrefs } from "../lib/prefs";
 
 const PERIODS = ["7", "28", "90", "365", "lifetime"];
 
@@ -48,7 +49,10 @@ export function StatisticsDashboard({
   const [scope, setScope] = useState("channel");
   const [videoId, setVideoId] = useState("");
   const [playlistId, setPlaylistId] = useState("");
-  const [period, setPeriod] = useState("28");
+  const [period, setPeriod] = useState(() => {
+    const saved = loadPrefs().statisticsPeriod;
+    return PERIODS.includes(String(saved)) ? String(saved) : "28";
+  });
   const [analytics, setAnalytics] = useState(null);
   const [analyticsError, setAnalyticsError] = useState("");
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -249,7 +253,7 @@ export function StatisticsDashboard({
 
         <label className="statistics-control statistics-period-control">
           <span>{t(uiLang, "statisticsPeriod")}</span>
-          <select value={period} onChange={(event) => setPeriod(event.target.value)} title={t(uiLang, "statisticsPeriodHint")}>
+          <select value={period} onChange={(event) => { const next = event.target.value; setPeriod(next); savePrefs({ statisticsPeriod: next }); }} title={t(uiLang, "statisticsPeriodHint")}>
             {PERIODS.map((value) => (
               <option key={value} value={value}>
                 {value === "lifetime" ? t(uiLang, "statisticsPeriodLifetime") : t(uiLang, "statisticsPeriodShort", { count: value })}
