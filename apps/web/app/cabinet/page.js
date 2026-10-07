@@ -586,7 +586,7 @@ export default function CabinetPage() {
                         <header>
                           <div className="channel-group-account">
                             <span className="channel-group-type">{t(uiLang, "googleAccountLabel")}</span>
-                            <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
+                            <strong className="channel-group-email" title={connection.email || t(uiLang, "connectionAccountUnknown")}>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
                             {connection.status === "reauthorization_required" ? (
                               <span className={`connection-status ${connection.status}`}>
                                 {t(uiLang, "connectionStatusReauthorization")}
