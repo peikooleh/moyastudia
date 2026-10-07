@@ -42,6 +42,7 @@ from .security import (
     set_oauth_state_cookie,
 )
 from .settings import settings
+from .rate_limit import AbuseRateLimitMiddleware
 from .tokens import (
     TokenEncryptionError,
     decrypt_refresh_token,
@@ -52,6 +53,7 @@ from . import quota as quota_service
 from . import youtube as yt
 
 app = FastAPI(title="MoyaStudia API")
+app.add_middleware(AbuseRateLimitMiddleware, session_cookie_name=settings.session_cookie_name)
 
 
 class AIConnectionUpdate(BaseModel):
