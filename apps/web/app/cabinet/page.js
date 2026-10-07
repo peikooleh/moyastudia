@@ -577,14 +577,16 @@ export default function CabinetPage() {
           </nav>
           <section className="main">
             {tab === "profile" ? (
-              <div className="panel">
-                <p className="section-kicker">{t(uiLang, "profileSection")}</p>
-                <h1>{t(uiLang, "account")}</h1>
-                <div className="profile-fields field">
-                  <label>{t(uiLang, "email")}</label>
-                  <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
-                </div>
-                <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
+              <div className="panel cabinet-account-panel">
+                <div className="cabinet-account-layout">
+                  <aside className="cabinet-account-summary">
+                    <h1>{t(uiLang, "account")}</h1>
+                    <div className="profile-fields field">
+                      <label>{t(uiLang, "email")}</label>
+                      <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
+                    </div>
+                  </aside>
+                  <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
                   <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
                   <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                   <div className="ai-connection-grid">
@@ -603,7 +605,8 @@ export default function CabinetPage() {
                   {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                   {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
                   <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
-                </section>
+                  </section>
+                </div>
               </div>
             ) : null}
 
