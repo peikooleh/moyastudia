@@ -199,6 +199,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    settings.validate_runtime_security()
     database.init_engine()
 
 
@@ -212,11 +213,9 @@ def health():
             db_ok = True
         except Exception:
             db_ok = False
-    return {
-        "ok": True,
-        "db": db_ok,
-        "google_configured": bool(settings.google_client_id),
-    }
+    if not db_ok:
+        raise HTTPException(503, detail={"code": "unhealthy"})
+    return {"ok": True}
 
 
 def _require_google_configuration() -> None:
