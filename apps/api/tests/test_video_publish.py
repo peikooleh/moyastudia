@@ -159,7 +159,7 @@ def test_video_thumbnail_write_requires_write_mode(client, test_database, monkey
     response = client.put(
         f"/channels/{channel_id}/videos/{video_id}/thumbnail",
         headers={"Origin": settings.frontend_origin, "Content-Type": "image/png"},
-        content=b"png-bytes",
+        content=b"\x89PNG\r\n\x1a\npng-bytes",
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "write_mode_off"
@@ -189,12 +189,37 @@ def test_video_thumbnail_write_forwards_bytes_and_updates_snapshot(client, test_
     assert captured == {
         "refresh_token": "w4-refresh",
         "youtube_video_id": "youtube-video",
-        "data": b"png-bytes",
+        "data": b"\x89PNG\r\n\x1a\npng-bytes",
         "content_type": "image/png",
     }
     assert response.json()["thumbnail_url"] == "https://img.example/new-thumbnail.jpg"
     with test_database() as db:
         assert db.get(Video, video_id).youtube_thumbnail_url == "https://img.example/new-thumbnail.jpg"
+
+
+def test_video_thumbnail_rejects_spoofed_type_and_oversized_content_length(client, test_database, monkeypatch):
+    token, channel_id, video_id = _video_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    monkeypatch.setattr(main.yt, "set_video_thumbnail", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")))
+
+    spoofed = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/thumbnail",
+        headers={"Origin": settings.frontend_origin, "Content-Type": "image/png"},
+        content=b"not-a-png",
+    )
+    oversized = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/thumbnail",
+        headers={
+            "Origin": settings.frontend_origin,
+            "Content-Type": "image/png",
+            "Content-Length": str(main.THUMBNAIL_MAX_BYTES + 1),
+        },
+        content=b"\x89PNG\r\n\x1a\n",
+    )
+
+    assert spoofed.status_code == 415
+    assert spoofed.json()["detail"]["code"] == "invalid_thumbnail_content"
+    assert oversized.status_code == 413
 
 
 def test_video_captions_write_requires_write_mode(client, test_database, monkeypatch):
@@ -208,6 +233,32 @@ def test_video_captions_write_requires_write_mode(client, test_database, monkeyp
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "write_mode_off"
+
+
+def test_video_captions_reject_unsupported_type_and_oversized_content_length(client, test_database, monkeypatch):
+    token, channel_id, video_id = _video_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    monkeypatch.setattr(main.yt, "insert_video_caption", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")))
+    endpoint = f"/channels/{channel_id}/videos/{video_id}/captions?language=de&name=test.srt"
+
+    unsupported = client.post(
+        endpoint,
+        headers={"Origin": settings.frontend_origin, "Content-Type": "application/octet-stream"},
+        content=b"caption",
+    )
+    oversized = client.post(
+        endpoint,
+        headers={
+            "Origin": settings.frontend_origin,
+            "Content-Type": "application/x-subrip",
+            "Content-Length": str(main.CAPTION_MAX_BYTES + 1),
+        },
+        content=b"caption",
+    )
+
+    assert unsupported.status_code == 415
+    assert unsupported.json()["detail"]["code"] == "invalid_caption_type"
+    assert oversized.status_code == 413
 
 
 def test_video_captions_write_forwards_payload_and_marks_available(client, test_database, monkeypatch):
