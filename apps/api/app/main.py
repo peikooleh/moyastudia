@@ -1837,11 +1837,13 @@ def channel_analytics_summary(
             youtube_video_id,
             playlist_id or "",
         )
-        current_statistics = (
-            yt.video_current_statistics(token, youtube_video_id)
-            if youtube_video_id
-            else None
-        )
+        current_statistics = None
+        if youtube_video_id:
+            try:
+                current_statistics = yt.video_current_statistics(token, youtube_video_id)
+            except Exception:
+                # Current counters are supplementary; delayed Analytics must remain available.
+                current_statistics = None
         series = yt.channel_analytics_timeseries(
             token,
             start_date,
