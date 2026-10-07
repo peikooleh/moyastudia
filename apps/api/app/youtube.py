@@ -129,6 +129,23 @@ def _analytics_row(response: dict) -> dict:
     }
 
 
+
+def video_current_statistics(refresh_token: str, youtube_video_id: str) -> dict:
+    service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
+    response = _execute(
+        service.videos().list(part="statistics", id=youtube_video_id),
+        "videos.list",
+    )
+    items = response.get("items") or []
+    if not items:
+        raise LookupError("YouTube video statistics are unavailable")
+    statistics = items[0].get("statistics") or {}
+    return {
+        "views": _optional_int(statistics.get("viewCount")),
+        "likes": _optional_int(statistics.get("likeCount")),
+        "comments": _optional_int(statistics.get("commentCount")),
+    }
+
 def channel_analytics_summary(
     refresh_token: str,
     start_date: str,
