@@ -392,7 +392,8 @@ export function StatisticsDashboard({
             </div>
           ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
         </div>
-        {chartPoints.length ? <ul className="visually-hidden" aria-label={activeMetric.chartTitle}>{chartPoints.map(({ point }) => <li key={point.date}>{activeMetric.seriesTitle(point)}</li>)}</ul> : null}\n        <p>{t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
+        {chartPoints.length ? <ul className="visually-hidden" aria-label={activeMetric.chartTitle}>{chartPoints.map(({ point }) => <li key={point.date}>{activeMetric.seriesTitle(point)}</li>)}</ul> : null}
+        <p>{t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
       </section>
 
       <div className="statistics-lower-grid">
