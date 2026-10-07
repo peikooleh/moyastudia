@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { catalogVideosUrl, continueCatalogSyncPage } from "../lib/catalog-state.mjs";
+import { catalogVideosUrl, continueCatalogSyncPage, statisticsCatalogSyncAction } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
 
@@ -97,27 +97,19 @@ export function StatisticsDashboard({
         let status = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(status?.detail || "catalog status unavailable");
 
-        if (status.state === "NOT_IMPORTED") {
+        const syncAction = statisticsCatalogSyncAction(status);
+        if (syncAction === "initial" || syncAction === "incremental") {
           const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "initial" }),
-            signal: controller.signal,
-          });
-          status = await startResponse.json();
-          if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
-        } else {
-          const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "incremental" }),
+            body: JSON.stringify({ mode: syncAction }),
             signal: controller.signal,
           });
           status = await startResponse.json();
           if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
         }
 
-        while (["LOADING", "PARTIAL", "STALE", "ERROR"].includes(status.state)) {
+        while (["LOADING", "PARTIAL"].includes(status.state)) {
           if (cancelled) return;
           status = await continueCatalogSyncPage(
             selectedChannelId,
