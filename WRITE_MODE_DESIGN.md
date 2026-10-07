@@ -6,6 +6,12 @@ Applies after the merged UI baseline in `main`.
 
 This document defines the next implementation phase. It intentionally does **not** enable YouTube writes, AI calls, uploads, or secret entry by itself.
 
+## Implementation status — 2026-10-07
+
+The core Write Mode safety model described here is now implemented for the supported YouTube mutation surfaces. The current remediation audit found no bypass of the server-side Write Mode boundary, but it did identify reliability work around partial/unknown outcomes for multi-request playlist/caption operations, provider execution policy and release gates. Treat the W1–W7 ordering below as design history rather than an up-to-date implementation checklist.
+
+Current audit and remediation plan: [AUDIT_2026-10-07.md](AUDIT_2026-10-07.md). Current product state: [STATUS.md](STATUS.md).
+
 ## 1. Goals
 
 The next phase turns the current read-only/local-working UI into controlled server-backed functionality without weakening the existing ownership/OAuth model.
