@@ -607,16 +607,7 @@ export default function CabinetPage() {
                         {connection.channels.map((item) => {
                           const selected = String(item.id) === String(prefs.selectedChannelId);
                           const profile = channels?.find((channel) => String(channel.id) === String(item.id)) || item;
-                          const subscriberCount = profile.hidden_subscribers
-                            ? t(uiLang, "channelSubscribersHidden")
-                            : profile.subscriber_count != null
-                              ? t(uiLang, "channelSubscribersCount", { count: profile.subscriber_count })
-                              : "";
-                          const videoCount = profile.video_count != null
-                            ? t(uiLang, "channelVideoCount", { count: profile.video_count })
-                            : profile.catalog_video_count != null
-                              ? t(uiLang, "catalogVideoCount", { count: profile.catalog_video_count })
-                              : "";
+                          const createdAt = profile.yt_published_at || "";
                           return (
                             <button
                               key={item.id}
@@ -633,8 +624,7 @@ export default function CabinetPage() {
                               <span className="channel-option-copy">
                                 <strong>{item.title}</strong>
                                 <small>{channelDisplayContext(item)}</small>
-                                {subscriberCount ? <small>{subscriberCount}</small> : null}
-                                {videoCount ? <small>{videoCount}</small> : null}
+                                {createdAt ? <small>{t(uiLang, "channelCreated")}: {String(createdAt).slice(0, 10)}</small> : null}
                               </span>
                             </button>
                           );
@@ -655,9 +645,10 @@ export default function CabinetPage() {
                         <div><div className="channel-current-badge">{t(uiLang, "activeStudioChannel")}</div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small></div>
                       </header>
                       {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
-                      <dl className="inspector-data channel-summary-data">
-                        <div><dt>{t(uiLang, "channelCreated")}</dt><dd>{ch.yt_published_at || "—"}</dd></div>
+                      <dl className="channel-metrics">
+                        <div><dt>{t(uiLang, "channelVideos")}</dt><dd>{ch.catalog_video_count ?? "—"}</dd></div>
                         <div><dt>{t(uiLang, "channelSubscribers")}</dt><dd>{ch.hidden_subscribers ? t(uiLang, "channelSubscribersHidden") : (ch.subscriber_count ?? "—")}</dd></div>
+                        <div><dt>{t(uiLang, "channelLikes")}</dt><dd>{ch.catalog_like_count ?? "—"}</dd></div>
                       </dl>
                       <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
                     </article>
