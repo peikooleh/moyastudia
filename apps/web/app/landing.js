@@ -19,13 +19,13 @@ export function Landing({ authError = "" }) {
       </header>
       <main className="land-main">
         <section className="land-hero">
-          <span className="land-eyebrow">{t(uiLang, "secureReadOnly")}</span>
+          <span className="land-eyebrow">{t(uiLang, "landSafeWrite")}</span>
           <h1>{t(uiLang, "landTitle")}</h1>
           <p>{t(uiLang, "landLead")}</p>
           {authError ? <p className="selection-error" role="alert">{t(uiLang, authError)}</p> : null}
           <div className="land-security">
-            <span className="land-security-mark" aria-hidden="true">RO</span>
-            <span>{t(uiLang, "secureReadOnlyHint")}</span>
+            <span className="land-security-mark" aria-hidden="true">✓</span>
+            <span>{t(uiLang, "landSafeWriteHint")}</span>
           </div>
         </section>
         <section className="land-preview" aria-label={t(uiLang, "workspacePreview")}>
