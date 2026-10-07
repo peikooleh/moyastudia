@@ -153,6 +153,60 @@ def test_google_login_validates_one_time_state_and_issues_secure_cookie(
     assert "auth_error=invalid_state" in replay.headers["location"]
 
 
+def test_identity_login_rotates_existing_sessions_for_same_user(
+    client, test_database, monkeypatch
+):
+    user_id, old_token = create_account(test_database, subject="rotation-subject")
+    state = "identity-session-rotation"
+    monkeypatch.setattr(
+        main.yt,
+        "identity_authorization_url",
+        lambda: ("https://accounts.test", state),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "exchange_identity_code",
+        lambda code, callback_state: SimpleNamespace(id_token="verified-token"),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "verify_identity_token",
+        lambda token: {
+            "sub": "rotation-subject",
+            "email": "rotation@example.test",
+            "email_verified": True,
+        },
+    )
+
+    assert client.get("/auth/google/login").status_code == 307
+    callback = client.get(
+        "/auth/google/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+    assert callback.status_code == 303
+
+    with test_database() as db:
+        sessions = db.query(UserSession).filter(UserSession.user_id == user_id).all()
+        assert len(sessions) == 1
+        assert all(session.token_hash != main.hash_secret(old_token) for session in sessions)
+
+
+def test_mutation_rejects_missing_or_foreign_origin(client, test_database):
+    _, token = create_account(test_database, subject="csrf-origin")
+    client.cookies.set(settings.session_cookie_name, token)
+
+    missing = client.put("/write-mode", json={"enabled": False})
+    foreign = client.put(
+        "/write-mode",
+        json={"enabled": False},
+        headers={"Origin": "https://attacker.example"},
+    )
+
+    assert missing.status_code == 403
+    assert foreign.status_code == 403
+    assert missing.json() == foreign.json() == {"detail": "same-origin request required"}
+
+
 def test_authenticated_user_without_google_connection_has_separate_connection_state(
     client, test_database
 ):
