@@ -293,7 +293,7 @@ export function Shell({ children }) {
             </div>
           ) : null}
         </div>
-        <Link href="/cabinet" className="btn ghost cabinet-link">
+        <Link href="/cabinet" className={`btn ghost cabinet-link ${inCabinet ? "active" : ""}`}>
           {t(uiLang, "cabinet")}
         </Link>
         <LogoutControl />
