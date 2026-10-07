@@ -664,8 +664,8 @@ export default function CabinetPage() {
                         {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
                         <dl className="inspector-data"><div><dt>{t(uiLang, "channelCreated")}</dt><dd>{ch.yt_published_at || "—"}</dd></div></dl>
                         <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
+                        <div className="channel-remove-actions"><button className="text-button" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                       </details>
-                      <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                     </article>
                   ) : null}
                   </div>
