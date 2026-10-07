@@ -3525,3 +3525,46 @@ body {
   .cabinet-account-layout .ai-settings-button { grid-column: auto; }
   .cabinet-account-layout .ai-settings-button { justify-self: stretch; }
 }
+
+
+/* Cabinet Account: permanent third column for selected AI model settings. */
+.cabinet-account-layout {
+  grid-template-columns: minmax(220px, .62fr) minmax(430px, 1.72fr) minmax(300px, 1fr);
+}
+.cabinet-account-layout > .ai-connections-panel { border-right: 1px solid var(--line); }
+.cabinet-account-layout .ai-connection-grid { grid-template-columns: minmax(170px, .8fr) minmax(210px, 1fr); max-width: none; }
+.cabinet-account-layout .ai-connection-actions { max-width: none; }
+.ai-model-settings-column { min-width: 0; padding: 18px 20px 24px; }
+.ai-model-settings-column > h2 { margin: 0 0 16px; font-size: 14px; line-height: 1.3; }
+.cabinet-account-layout .ai-model-settings-column .ai-model-settings {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.cabinet-account-layout .ai-model-settings-column .ai-model-settings label { gap: 6px; color: var(--muted); font-size: 11px; }
+.cabinet-account-layout .ai-model-settings-column .ai-model-settings textarea {
+  min-height: 150px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+@media (max-width: 1180px) {
+  .cabinet-account-layout { grid-template-columns: minmax(210px, .7fr) minmax(0, 1.6fr); }
+  .cabinet-account-layout > .ai-connections-panel { border-right: 0; }
+  .ai-model-settings-column { grid-column: 2; border-top: 1px solid var(--line); }
+}
+@media (max-width: 900px) {
+  .cabinet-account-layout { grid-template-columns: 1fr; }
+  .ai-model-settings-column { grid-column: auto; border-top: 1px solid var(--line); }
+}
