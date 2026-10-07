@@ -272,6 +272,7 @@ def test_refresh_profile_returns_youtube_video_count_and_hidden_subscribers(
         main.yt,
         "fetch_channel",
         lambda credentials, youtube_channel_id: {
+            "youtube_channel_id": youtube_channel_id,
             "title": "Channel profile",
             "thumbnail_url": "",
             "banner_url": "",
@@ -307,6 +308,7 @@ def test_refresh_profile_persists_cleared_channel_description(client, test_datab
         main.yt,
         "fetch_channel",
         lambda credentials, youtube_channel_id: {
+            "youtube_channel_id": youtube_channel_id,
             "title": "Channel refresh-cleared-description",
             "description": "",
             "keywords": "",
@@ -325,6 +327,33 @@ def test_refresh_profile_persists_cleared_channel_description(client, test_datab
     assert response.json()["description"] == ""
     with test_database() as db:
         assert db.get(Channel, channel_id).description == ""
+
+
+def test_refresh_profile_rejects_channel_missing_on_youtube(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="refresh-missing-channel")
+    channel_id, _, _ = create_channel(test_database, user_id, "refresh-missing-channel")
+    authorized_client(client, token)
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(
+        main.yt,
+        "fetch_channel",
+        lambda credentials, youtube_channel_id: {
+            "youtube_channel_id": "",
+            "title": "",
+            "description": "",
+            "subscriber_count": 0,
+            "video_count": 0,
+            "hidden_subscribers": False,
+        },
+    )
+
+    response = client.post(
+        f"/channels/{channel_id}/refresh-profile",
+        headers=post_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "channel_not_found_on_youtube"
 
 
 def test_catalog_search_sort_and_cursor_use_effective_title(client, test_database):
