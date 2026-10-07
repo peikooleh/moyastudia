@@ -511,10 +511,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   });
   const [playlistContentsRetry, setPlaylistContentsRetry] = useState(0);
   const [playlistSelectedVideo, setPlaylistSelectedVideo] = useState(null);
-  const [playlistPageSize, setPlaylistPageSize] = useState(10);
+  const [playlistPageSize, setPlaylistPageSize] = useState(() => [10, 30, 50, 100].includes(Number(prefs.playlistPageSize)) ? Number(prefs.playlistPageSize) : 10);
   const [playlistPage, setPlaylistPage] = useState(0);
   const [playlistVideoQuery, setPlaylistVideoQuery] = useState("");
-  const [playlistVideoSort, setPlaylistVideoSort] = useState("position");
+  const [playlistVideoSort, setPlaylistVideoSort] = useState(() => ["position", "date", "title"].includes(prefs.playlistVideoSort) ? prefs.playlistVideoSort : "position");
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
@@ -527,8 +527,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
   const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
-  const [filter, setFilter] = useState("all");
-  const [sort, setSort] = useState("date");
+  const [filter, setFilter] = useState(() => FILTERS.some((item) => item.id === prefs.catalogFilter) ? prefs.catalogFilter : "all");
+  const [sort, setSort] = useState(() => SORTS.some((item) => item.id === prefs.catalogSort) ? prefs.catalogSort : "date");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [err, setErr] = useState("");
@@ -2000,12 +2000,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             </header>
             <div className="video-toolbar">
               <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <select value={filter} onChange={(event) => setFilter(event.target.value)} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
+              <select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); updatePrefs({ catalogFilter: next }); }} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
                 {FILTERS.map((item) => (
                   <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>
                 ))}
               </select>
-              <select value={sort} onChange={(event) => setSort(event.target.value)} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
+              <select value={sort} onChange={(event) => { const next = event.target.value; setSort(next); updatePrefs({ catalogSort: next }); }} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
                 {SORTS.map((s) => (
                   <option key={s.id} value={s.id}>{t(uiLang, s.key)}</option>
                 ))}
@@ -2283,7 +2283,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               />
               <label title={t(uiLang, "playlistSortVideosHint")}>
                 <span>{t(uiLang, "sortLabel")}</span>
-                <select value={playlistVideoSort} onChange={(event) => { setPlaylistVideoSort(event.target.value); setPlaylistPage(0); }}>
+                <select value={playlistVideoSort} onChange={(event) => { const next = event.target.value; setPlaylistVideoSort(next); updatePrefs({ playlistVideoSort: next }); setPlaylistPage(0); }}>
                   <option value="position">{t(uiLang, "playlistSortPosition")}</option>
                   <option value="date">{t(uiLang, "sortDate")}</option>
                   <option value="title">{t(uiLang, "sortTitle")}</option>
@@ -2314,6 +2314,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <select value={playlistPageSize} onChange={(event) => {
                   const size = Number(event.target.value);
                   setPlaylistPageSize(size);
+                  updatePrefs({ playlistPageSize: size });
                   setPlaylistPage(0);
                 }}>
                   {[10, 30, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
@@ -2475,7 +2476,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             </header>
             <div className="calendar-tools">
               <input className="search" aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label={t(uiLang, "tipFilterCatalog")}>
+              <select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); updatePrefs({ catalogFilter: next }); }} aria-label={t(uiLang, "tipFilterCatalog")}>
                 {FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}
               </select>
             </div>
@@ -2659,6 +2660,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             setQuery("");
             setFilter(status);
             setSort("date");
+            updatePrefs({ catalogFilter: status, catalogSort: "date" });
             setPlaylistSelectedVideo(null);
             setSelectedId("");
             onViewChange("videos");
