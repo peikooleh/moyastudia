@@ -15,6 +15,33 @@ from app.youtube import IDENTITY_SCOPES, YOUTUBE_SCOPES
 from conftest import create_account
 
 
+def test_production_configuration_fails_closed(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "http://localhost:3000")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "http://localhost:8000/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "http://localhost:8000/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "")
+    monkeypatch.setattr(settings, "google_client_id", "")
+    monkeypatch.setattr(settings, "google_client_secret", "")
+    monkeypatch.setattr(settings, "token_encryption_key", "")
+
+    with pytest.raises(RuntimeError, match="Unsafe production configuration"):
+        settings.validate_runtime_security()
+
+
+def test_production_configuration_accepts_https_and_required_secrets(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "https://app.example.test")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "postgresql://user:password@db.example.test/app")
+    monkeypatch.setattr(settings, "google_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "token_encryption_key", "encryption-key")
+
+    settings.validate_runtime_security()
+
+
 def test_verify_identity_token_uses_one_second_clock_skew(monkeypatch):
     captured = {}
 
