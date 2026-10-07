@@ -1837,6 +1837,11 @@ def channel_analytics_summary(
             youtube_video_id,
             playlist_id or "",
         )
+        current_statistics = (
+            yt.video_current_statistics(token, youtube_video_id)
+            if youtube_video_id
+            else None
+        )
         series = yt.channel_analytics_timeseries(
             token,
             start_date,
@@ -1852,6 +1857,7 @@ def channel_analytics_summary(
             "playlist_id": playlist_id,
             "dimension": dimension,
             "series": series,
+            "current_statistics": current_statistics,
         }
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
