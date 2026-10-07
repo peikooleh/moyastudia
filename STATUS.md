@@ -1,3 +1,40 @@
+# Current Status — 2026-10-07
+
+> **Источник истины для текущего состояния проекта.** Разделы ниже сохранены как исторический журнал разработки и могут описывать более ранние ограничения, ветки и незавершённые этапы. При расхождении с ними ориентироваться на этот раздел и текущий код в `main`.
+
+## Текущая база
+
+- Финальный постраничный визуальный аудит завершён для Videos, Playlists, Calendar, Statistics и Cabinet. Принятые страницы не требуют дополнительной массовой UI-полировки; дальнейшие изменения должны быть локальными и не создавать новые override-блоки в `globals.css`.
+- Рабочая ветка после принятых merge — `main`. Ранее использованные feature/polish ветки и запреты на merge в исторических записях ниже больше не являются текущими gate.
+- Текущий Alembic head — `0012_channel_working_language`. Язык канала хранится server-side в `Channel.working_language`; старое browser-local значение мигрируется интерфейсом один раз.
+- Последняя завершённая validation-база: backend `pytest` — **134 passed**; i18n parity — **651 keys EN/RU/UK**; frontend lint — **0 errors**; Next.js production build — **успешно**. Известные Next.js/FastAPI/Starlette deprecation/warning сообщения остаются неблокирующими.
+
+## Реально доступные функции
+
+- Google identity и отдельное Google/YouTube connection OAuth, server-side sessions, owner scoping и зашифрованные refresh tokens.
+- Локальный каталог YouTube-видео с initial/full sync, continuation, snapshot/working state, revision/conflict handling, search/filter/sort и локальными drafts.
+- Server-authoritative Write Mode: включение само по себе ничего не отправляет, но обязательно проверяется backend перед поддерживаемыми YouTube mutations.
+- Видео: публикация working metadata в YouTube включает title, description, tags, language, category и made-for-kids; отдельно реализованы privacy/scheduling через Calendar, thumbnail upload и captions upload.
+- Playlists: чтение remote playlists/items, persistent local playlist drafts, изменение metadata/privacy, thumbnail, добавление видео, изменение порядка/позиции и удаление playlist item. Эти remote mutations требуют Write Mode.
+- Channels/Cabinet: выбор и подключение каналов, refresh profile, постоянный язык канала, изменение description/keywords через YouTube при включённом Write Mode, копирование/открытие ссылки и удаление выбранного канала из MoyaStudia через `DELETE /channels/{id}`. Последнее удаляет локальную managed-channel запись, а не YouTube-канал.
+- Statistics: channel/playlist/public-video scopes, YouTube Analytics summary, views/watch-time/engagement data и переходы по status counters в отфильтрованный Videos.
+- Quota: server-side MoyaStudia ledger для YouTube Data API и `GET /quota/today`; это отслеживаемая оценка MoyaStudia, а не authoritative Google project balance.
+- AI connections: provider/model/API key/prompts сохраняются server-side; API key шифруется и не возвращается plaintext. **Реальных вызовов OpenAI/Gemini/Anthropic и AI Improve execution пока нет.**
+
+## Текущие ограничения и долг
+
+- MoyaStudia не хранит и не загружает большие исходные видеофайлы; полноценного video upload pipeline нет.
+- Нет destructive удаления YouTube video/channel. `DELETE /channels/{id}` означает только убрать канал из MoyaStudia.
+- Google connection lifecycle всё ещё не равен полноценному revoke/disconnect flow на стороне Google; reauthorization поддерживается отдельно.
+- Legal pages остаются launch placeholders и требуют отдельной legal/localization проверки перед публичным запуском.
+- `studio.js`, `globals.css` и `i18n.js` остаются крупными; делить их следует только по реальным feature boundaries, без широкого рефакторинга ради рефакторинга.
+- Endpoint-level regression coverage для основных metadata/calendar/playlist/AI/security flows есть. Для video thumbnail/captions write paths требуется отдельная проверка полноты regression coverage.
+- CI выполняет backend pytest и frontend tests/lint/build. `npm run check:i18n` является обязательной локальной/final validation проверкой, но пока не включён отдельным шагом в CI.
+
+---
+
+# Historical development log
+
 # Statistics v3 UI convergence — 2026-10-06
 
 ## Scope and reference baseline
