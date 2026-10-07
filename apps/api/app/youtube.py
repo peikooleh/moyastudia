@@ -282,6 +282,7 @@ def fetch_channel(creds: Credentials, youtube_channel_id: str = "", recorder: Qu
             "thumbnail_url": "",
             "banner_url": "",
             "description": "",
+            "keywords": "",
             "yt_published_at": "",
             "subscriber_count": 0,
             "video_count": 0,
@@ -302,6 +303,7 @@ def fetch_channel(creds: Credentials, youtube_channel_id: str = "", recorder: Qu
         "thumbnail_url": _pick_thumb(snippet.get("thumbnails") or {}),
         "banner_url": _pick_banner((item.get("brandingSettings") or {}).get("image") or {}),
         "description": snippet.get("description") or "",
+        "keywords": ((item.get("brandingSettings") or {}).get("channel") or {}).get("keywords") or "",
         "yt_published_at": (snippet.get("publishedAt") or "")[:10],
         "subscriber_count": int(stats.get("subscriberCount") or 0),
         "video_count": int(stats.get("videoCount") or 0),
@@ -648,11 +650,12 @@ def _owned_playlist(service, youtube_channel_id: str, playlist_id: str, recorder
 
 
 
-def update_channel_description(
+def update_channel_metadata(
     refresh_token: str,
     youtube_channel_id: str,
     *,
     description: str,
+    keywords: str,
     recorder: QuotaRecorder | None = None,
 ) -> dict:
     service = service_for(refresh_token)
@@ -666,6 +669,7 @@ def update_channel_description(
     branding = listed[0].get("brandingSettings") or {}
     channel_branding = dict(branding.get("channel") or {})
     channel_branding["description"] = description
+    channel_branding["keywords"] = keywords
     response = _execute(
         service.channels().update(
             part="brandingSettings",
@@ -678,7 +682,10 @@ def update_channel_description(
         recorder,
     )
     returned = ((response.get("brandingSettings") or {}).get("channel") or {})
-    return {"description": returned.get("description", description)}
+    return {
+        "description": returned.get("description", description),
+        "keywords": returned.get("keywords", keywords),
+    }
 
 
 def update_playlist_metadata(
