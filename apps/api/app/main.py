@@ -1203,6 +1203,11 @@ def _video_catalog_item(video: Video) -> dict:
         "dirtyFields": dirty_fields,
         "thumb": video.youtube_thumbnail_url or "",
         "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
+        "previouslyPublished": bool(
+            video.youtube_visibility == "private"
+            and scheduled_at is None
+            and published_at is not None
+        ),
         "duration": video.youtube_duration or "",
         "views": video.youtube_view_count,
         "likes": video.youtube_like_count,
