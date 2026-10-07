@@ -154,3 +154,27 @@ def test_calendar_write_classifies_provider_403_without_leaking_text(client, tes
     assert response.status_code == 403
     assert response.json() == {"detail": {"code": "youtube_status_change_rejected"}}
     assert "private provider detail" not in response.text
+
+
+def test_calendar_unchanged_schedule_short_circuits_before_youtube(client, test_database, monkeypatch):
+    token, channel_id, video_id = _calendar_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    with test_database() as db:
+        video = db.get(Video, video_id)
+        video.youtube_scheduled_at = main._parse_youtube_datetime("2099-01-02T15:30:00Z")
+        db.commit()
+
+    monkeypatch.setattr(
+        main.yt,
+        "update_video_calendar_status",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unchanged schedule must not call YouTube")),
+    )
+    response = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/calendar-status",
+        headers={"Origin": settings.frontend_origin},
+        json={"privacy": "private", "publishAt": "2099-01-02T15:30:00+00:00"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "scheduled"
+    assert response.json()["slot"].startswith("2099-01-02T15:30")
