@@ -1504,7 +1504,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
 
   async function publishWorkingVideo() {
     if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict) return;
-    if (!workingVideo.dirty && !Object.keys(workingEdits).length) return;
+    const hasMetadataChanges = workingVideo.dirty || Boolean(Object.keys(workingEdits).length);
+    const hasStatusChange = Boolean(videoStatusDraft);
+    if (!hasMetadataChanges && !hasStatusChange) return;
     if (!window.confirm(t(uiLang, "publishMetadataConfirm"))) return;
     setWorkingSaving(true);
     setWorkingError("");
@@ -1532,27 +1534,46 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (saved.conflict) throw new Error(t(uiLang, "workingRevisionError"));
       }
 
-      const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ revision: draft.revision }),
-      });
-      const data = await response.json();
-      if (response.status === 409 && data.detail?.current) {
-        setWorkingVideo(data.detail.current);
-        setWorkingDraft(data.detail.current.effective);
-        setWorkingSaveState("conflict");
-        throw new Error(t(uiLang, "workingRevisionError"));
+      if (hasMetadataChanges) {
+        const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: draft.revision }),
+        });
+        const data = await response.json();
+        if (response.status === 409 && data.detail?.current) {
+          setWorkingVideo(data.detail.current);
+          setWorkingDraft(data.detail.current.effective);
+          setWorkingSaveState("conflict");
+          throw new Error(t(uiLang, "workingRevisionError"));
+        }
+        if (!response.ok) {
+          const code = data.detail?.code;
+          if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
+          throw new Error(t(uiLang, "youtubePublishError"));
+        }
+        draft = data;
+        setWorkingVideo(data);
+        setWorkingDraft(data.effective);
+        setWorkingEdits({});
       }
-      if (!response.ok) {
-        const code = data.detail?.code;
-        if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
-        if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
-        throw new Error(t(uiLang, "youtubePublishError"));
+
+      if (hasStatusChange) {
+        const statusResponse = await apiFetch(`/channels/${channelId}/videos/${workingVideo.id}/calendar-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ privacy: videoStatusDraft, publishAt: null }),
+        });
+        const statusData = await statusResponse.json().catch(() => ({}));
+        if (!statusResponse.ok) {
+          const code = statusData?.detail?.code;
+          if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          throw new Error(code || statusData?.detail || t(uiLang, "youtubePublishError"));
+        }
+        setVideoStatusDraft("");
       }
-      setWorkingVideo(data);
-      setWorkingDraft(data.effective);
-      setWorkingEdits({});
+
       setWorkingSaveState("");
       setWorkingDetailReload((current) => current + 1);
       setCatalogReload((current) => current + 1);
