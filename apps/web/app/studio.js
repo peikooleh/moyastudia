@@ -238,6 +238,19 @@ function VideoInspector({
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
+  const youtubeChanges = [
+    ["videoTitle", workingVideo?.snapshot?.title, effectiveTitle],
+    ["videoDescription", workingVideo?.snapshot?.description, description],
+    ["videoTags", workingVideo?.snapshot?.tags, tags],
+    ["videoLanguage", workingVideo?.snapshot?.language, language],
+    ["videoCategory", workingVideo?.snapshot?.category, category],
+    ["videoAudience", workingVideo?.snapshot?.madeForKids, madeForKids],
+  ]
+    .filter(([, before, after]) => workingVideo && before !== undefined && String(before ?? "") !== String(after ?? ""))
+    .map(([key, before, after]) => ({ label: t(uiLang, key), before, after }));
+  if (statusDraft && statusDraft !== currentStatus) {
+    youtubeChanges.push({ label: t(uiLang, "videoStatus"), before: statusLabel(uiLang, currentStatus), after: statusLabel(uiLang, statusDraft) });
+  }
 
   return (
     <section className="video-inspector" aria-label={t(uiLang, "selectedVideo")}>
@@ -358,6 +371,7 @@ function VideoInspector({
             onSave={publishWorkingVideo}
             saveHint="publishVideoHint"
             className="video-staged-save"
+            changes={youtubeChanges}
           />
         ) : null}
       </div>
@@ -379,10 +393,28 @@ function VideoInspector({
   );
 }
 
-function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", writeMode, onDiscard, onSave, saveHint = "calendarSaveHint", className = "" }) {
+function YoutubeChangePreview({ uiLang, changes = [] }) {
+  if (!changes.length) return null;
+  return (
+    <div className="youtube-change-preview">
+      <strong>{t(uiLang, "youtubeChangesPreview")}</strong>
+      {changes.map((change, index) => (
+        <div className="youtube-change-row" key={`${change.label}-${index}`}>
+          <span>{change.label}</span>
+          <div><small>{t(uiLang, "youtubeValueBefore")}</small><code>{String(change.before ?? "—") || "—"}</code></div>
+          <b aria-hidden="true">→</b>
+          <div><small>{t(uiLang, "youtubeValueAfter")}</small><code>{String(change.after ?? "—") || "—"}</code></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", writeMode, onDiscard, onSave, saveHint = "calendarSaveHint", className = "", changes = [] }) {
   return (
     <div className={`youtube-staged-save ${className}`.trim()} role="status">
       <span className="youtube-staged-note">{t(uiLang, "calendarStaged")}</span>
+      <YoutubeChangePreview uiLang={uiLang} changes={changes} />
       <div className="youtube-staged-actions">
         <span>{t(uiLang, "calendarPendingChanges", { count })}</span>
         <div>
@@ -1066,7 +1098,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setPlaylistIdCopyStatus(t(uiLang, "playlistTitleRequired"));
       return;
     }
-    if (!window.confirm(t(uiLang, "playlistSaveConfirm"))) return;
     setPlaylistSaving(true);
     setPlaylistIdCopyStatus("");
     try {
@@ -1229,7 +1260,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    if (!window.confirm(t(uiLang, "playlistQuickSaveConfirm"))) return;
     setPlaylistSaving(true);
     setPlaylistIdCopyStatus("");
     let completed = 0;
@@ -1517,7 +1547,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     const hasMetadataChanges = workingVideo.dirty || Boolean(Object.keys(workingEdits).length);
     const hasStatusChange = Boolean(videoStatusDraft);
     if (!hasMetadataChanges && !hasStatusChange) return;
-    if (!window.confirm(t(uiLang, "publishMetadataConfirm"))) return;
     setWorkingSaving(true);
     setWorkingError("");
     let draft = workingVideo;
@@ -1858,7 +1887,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setCalendarSaveStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    if (!window.confirm(t(uiLang, "calendarSaveConfirm", { count: entries.length }))) return;
     setCalendarSaving(true);
     setCalendarSaveStatus("");
     let completed = 0;
@@ -2242,6 +2270,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           onSave={savePlaylistQuickChanges}
                           saveHint="playlistQuickSaveHint"
                           className="playlist-quick-save"
+                          changes={playlistQuickDraft.privacy ? [{
+                            label: t(uiLang, "videoVisibility"),
+                            before: statusLabel(uiLang, selectedPlaylist.privacy || "private"),
+                            after: statusLabel(uiLang, playlistQuickDraft.privacy),
+                          }] : Object.keys(playlistQuickDraft.positions || {}).length ? [{
+                            label: t(uiLang, "playlistCompositionOrder"),
+                            before: t(uiLang, "youtubeOrderCurrent"),
+                            after: t(uiLang, "youtubeOrderChanged"),
+                          }] : []}
                         />
                       ) : null}
                     </aside>
