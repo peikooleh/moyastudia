@@ -747,7 +747,15 @@ export default function CabinetPage() {
                             </span>
                           </div>
                         </div>
-                      ) : <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>}
+                      ) : (
+                        <>
+                          <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
+                          <div className="channel-keywords-view">
+                            <span>{t(uiLang, "channelKeywords")}</span>
+                            <p>{ch.keywords || t(uiLang, "notSet")}</p>
+                          </div>
+                        </>
+                      )}
                     </article>
                   ) : null}
                   </div>
@@ -764,8 +772,10 @@ export default function CabinetPage() {
                         {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
                         <div className="channel-link-setting">
                           <span>{t(uiLang, "channelLink")}</span>
-                          <a href={`https://www.youtube.com/channel/${ch.youtube_channel_id}`} target="_blank" rel="noreferrer" title={t(uiLang, "channelOpenHint")}>{t(uiLang, "channelOpen")}</a>
-                          <button className="text-button" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "copyLink")}</button>
+                          <div className="channel-link-actions">
+                            <a href={`https://www.youtube.com/channel/${ch.youtube_channel_id}`} target="_blank" rel="noreferrer" title={t(uiLang, "channelOpenHint")}>{t(uiLang, "channelOpen")}</a>
+                            <button className="text-button" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "channelShare")}</button>
+                          </div>
                         </div>
                         <div className="channel-remove-actions"><button className="btn ghost channel-remove-button" type="button" title={t(uiLang, "removeChannelHint")} disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                       </section>
