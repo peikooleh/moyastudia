@@ -7,6 +7,8 @@ import {
   channelDisplayContext,
   channelDisplayLabel,
   prefsAfterChannelRemoval,
+  loadPrefs,
+  savePrefs,
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import { t } from "../lib/i18n.js";
@@ -163,6 +165,33 @@ test("channel preferences retain only channels returned for the authenticated us
     ),
     { selectedChannelId: "", channelLangs: {} },
   );
+});
+
+test("Studio sorting preferences survive a preferences reload", () => {
+  const previousLocalStorage = globalThis.localStorage;
+  let stored = null;
+  globalThis.localStorage = {
+    getItem: () => stored,
+    setItem: (_key, value) => { stored = value; },
+  };
+  try {
+    savePrefs({
+      statisticsPeriod: "90",
+      catalogFilter: "private",
+      catalogSort: "title",
+      playlistVideoSort: "date",
+      playlistPageSize: 50,
+    });
+    const reloaded = loadPrefs();
+    assert.equal(reloaded.statisticsPeriod, "90");
+    assert.equal(reloaded.catalogFilter, "private");
+    assert.equal(reloaded.catalogSort, "title");
+    assert.equal(reloaded.playlistVideoSort, "date");
+    assert.equal(reloaded.playlistPageSize, 50);
+  } finally {
+    if (previousLocalStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousLocalStorage;
+  }
 });
 
 test("working video routes stay under the selected channel", () => {
