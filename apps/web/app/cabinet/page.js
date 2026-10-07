@@ -61,6 +61,7 @@ export default function CabinetPage() {
   const [aiSaving, setAiSaving] = useState(false);
   const [aiNotice, setAiNotice] = useState("");
   const [aiError, setAiError] = useState("");
+  const [aiBaseline, setAiBaseline] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -295,6 +296,14 @@ export default function CabinetPage() {
           setAiModel(rows[0].model);
           setAiTitlePrompt(rows[0].title_prompt || "");
           setAiDescriptionPrompt(rows[0].description_prompt || "");
+          setAiBaseline({
+            provider: rows[0].provider,
+            model: rows[0].model,
+            titlePrompt: rows[0].title_prompt || "",
+            descriptionPrompt: rows[0].description_prompt || "",
+          });
+        } else {
+          setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "" });
         }
       })
       .catch((error) => { if (!cancelled) setAiError(error.message); });
@@ -313,16 +322,23 @@ export default function CabinetPage() {
   }
 
   function cancelAiSettings() {
-    const saved = aiConnections.find(
-      (item) => item.provider === aiProvider && item.model === aiModel.trim(),
-    );
-    setAiTitlePrompt(saved?.title_prompt || "");
-    setAiDescriptionPrompt(saved?.description_prompt || "");
+    if (!aiBaseline) return;
+    setAiProvider(aiBaseline.provider);
+    setAiModel(aiBaseline.model);
+    setAiTitlePrompt(aiBaseline.titlePrompt);
+    setAiDescriptionPrompt(aiBaseline.descriptionPrompt);
     setAiApiKey("");
     setAiError("");
     setAiNotice("");
-    setAiSettingsOpen(false);
   }
+
+  const aiDirty = Boolean(aiBaseline) && (
+    aiProvider !== aiBaseline.provider
+    || aiModel !== aiBaseline.model
+    || aiTitlePrompt !== aiBaseline.titlePrompt
+    || aiDescriptionPrompt !== aiBaseline.descriptionPrompt
+    || Boolean(aiApiKey.trim())
+  );
 
   async function saveAiConnection() {
     if (!aiModel.trim()) {
@@ -353,6 +369,12 @@ export default function CabinetPage() {
       const row = await response.json();
       setAiConnections((current) => [...current.filter((item) => item.id !== row.id), row]);
       setAiApiKey("");
+      setAiBaseline({
+        provider: row.provider,
+        model: row.model,
+        titlePrompt: row.title_prompt || "",
+        descriptionPrompt: row.description_prompt || "",
+      });
       setAiNotice(t(uiLang, "aiSaved"));
     } catch (error) {
       setAiError(error.message || t(uiLang, "aiSaveError"));
@@ -596,7 +618,6 @@ export default function CabinetPage() {
                     </div>
                     {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                     {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
-                    <div className="ai-connection-actions"><button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
                   </section>
                   <aside className="ai-model-settings-column" aria-labelledby="ai-model-settings-title">
                     <h2 id="ai-model-settings-title">{t(uiLang, "aiModelSettings")}</h2>
@@ -605,6 +626,15 @@ export default function CabinetPage() {
                       <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /></label>
                     </div>
                   </aside>
+                  {aiDirty ? (
+                    <div className="ai-dirty-actions" role="status">
+                      <span>{t(uiLang, "unsavedChanges")}</span>
+                      <div>
+                        <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button>
+                        <button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
