@@ -1666,6 +1666,20 @@ def update_channel_video_calendar_status(
         if payload.privacy != "private":
             raise HTTPException(422, detail={"code": "scheduled_video_must_be_private"})
 
+    current_publish_at = video.youtube_scheduled_at
+    if current_publish_at is not None and current_publish_at.tzinfo is None:
+        current_publish_at = current_publish_at.replace(tzinfo=timezone.utc)
+    same_publish_at = (
+        (publish_at is None and current_publish_at is None)
+        or (
+            publish_at is not None
+            and current_publish_at is not None
+            and publish_at == current_publish_at.astimezone(timezone.utc)
+        )
+    )
+    if payload.privacy == (video.youtube_visibility or "") and same_publish_at:
+        return _video_catalog_item(video)
+
     channel = _channel_or_404(db, user, channel_id)
     try:
         refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
