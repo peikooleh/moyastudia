@@ -15,6 +15,13 @@ from app.youtube import IDENTITY_SCOPES, YOUTUBE_SCOPES
 from conftest import create_account
 
 
+def test_health_does_not_expose_configuration_state(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert "google_configured" not in response.text
+
+
 def test_production_configuration_fails_closed(monkeypatch):
     monkeypatch.setattr(settings, "app_environment", "production")
     monkeypatch.setattr(settings, "frontend_origin", "http://localhost:3000")
