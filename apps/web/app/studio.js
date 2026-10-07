@@ -1312,11 +1312,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     });
   }
 
-  function applyLocalPlaylistMemberships() {
-    if (!playlistMembershipEditor) return;
+  async function applyLocalPlaylistMemberships() {
+    if (!playlistMembershipEditor || playlistMembershipEditor.loading) return;
     const videoIds = [...selectedPlaylistVideoIds];
     const targets = playlistMembershipEditor.targets;
     const knownItems = currentPlaylistContents?.items || [];
+    const localTargets = playlists.filter((playlist) => playlist.localOnly);
+    setPlaylistMembershipEditor((current) => current ? { ...current, loading: true } : current);
+    setPlaylistIdCopyStatus("");
     setLocalPlaylistVideoCache((current) => {
       const next = { ...current };
       knownItems.forEach((item) => {
@@ -1332,33 +1335,32 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       });
       return next;
     });
-    setLocalPlaylistMemberships((current) => {
-      const next = { ...current };
-      playlists.forEach((playlist) => {
-        const membership = new Set(next[playlist.id] || []);
+    try {
+      for (const playlist of localTargets) {
+        const currentMembership = new Set(localPlaylistMemberships[playlist.id] || []);
         videoIds.forEach((videoId) => {
-          if (targets.has(playlist.id)) membership.add(videoId);
-          else membership.delete(videoId);
+          if (targets.has(playlist.id)) currentMembership.add(videoId);
+          else currentMembership.delete(videoId);
         });
-        next[playlist.id] = [...membership];
-      });
-      return next;
-    });
-    const localTargets = playlists.filter((playlist) => playlist.localOnly);
-    localTargets.forEach((playlist) => {
-      const currentMembership = new Set(localPlaylistMemberships[playlist.id] || []);
-      videoIds.forEach((videoId) => {
-        if (targets.has(playlist.id)) currentMembership.add(videoId);
-        else currentMembership.delete(videoId);
-      });
-      apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(playlist.id)}/membership`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video_ids: [...currentMembership] }),
-      }).catch(() => {});
-    });
-    setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
-    setPlaylistMembershipEditor(null);
+        const nextVideoIds = [...currentMembership];
+        const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(playlist.id)}/membership`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_ids: nextVideoIds }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipSaveError"));
+        setLocalPlaylistMemberships((current) => ({
+          ...current,
+          [playlist.id]: data.videoIds || nextVideoIds,
+        }));
+      }
+      setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
+      setPlaylistMembershipEditor(null);
+    } catch (error) {
+      setPlaylistMembershipEditor((current) => current ? { ...current, loading: false } : current);
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
   }
 
   async function removeSelectedFromCurrentPlaylist() {
