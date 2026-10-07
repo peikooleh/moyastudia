@@ -6,7 +6,8 @@
     "lint": "next lint",
     "build": "next build",
     "start": "next start",
-    "check:i18n": "node scripts/check-i18n-parity.mjs"
+    "check:i18n": "node scripts/check-i18n-parity.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "15.5.27",
@@ -16,7 +17,8 @@
   },
   "devDependencies": {
     "eslint": "8.57.1",
-    "eslint-config-next": "15.5.27"
+    "eslint-config-next": "15.5.27",
+    "@playwright/test": "^1.55.0"
   },
   "overrides": {
     "next": {
