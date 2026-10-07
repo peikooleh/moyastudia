@@ -1059,9 +1059,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-option > img, .channel-option > .avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 .channel-option-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; overflow: hidden; }
 .channel-option-copy strong, .channel-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.channel-option-copy small, .channel-option-status { color: var(--muted); font-size: 11px; }
-.channel-option-status { flex: 0 1 92px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
-.channel-option.on .channel-option-status { color: var(--good); font-weight: 600; }
+.channel-option-copy small { color: var(--muted); font-size: 11px; }
 .channel-list-footer { padding: 12px 8px 0; }
 .channel-connect-account { display: inline-flex; align-items: center; color: var(--muted); font-size: 12px; }
 .channel-connect-account:hover { color: var(--text); }
