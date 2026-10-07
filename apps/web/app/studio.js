@@ -642,6 +642,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }, [view, selectedId, workingLoading]);
 
   useEffect(() => {
+    if (!playlistVideoPicker && !playlistMembershipEditor && !calendarContext) return undefined;
+    const closeTransientUi = (event) => {
+      if (event.key !== "Escape") return;
+      if (calendarContext) setCalendarContext(null);
+      else if (playlistVideoPicker) setPlaylistVideoPicker(null);
+      else if (playlistMembershipEditor) setPlaylistMembershipEditor(null);
+    };
+    document.addEventListener("keydown", closeTransientUi);
+    return () => document.removeEventListener("keydown", closeTransientUi);
+  }, [playlistVideoPicker, playlistMembershipEditor, calendarContext]);
+
+  useEffect(() => {
     const requestId = ++channelRequestId.current;
     syncRunId.current += 1;
     finishCatalogSync(syncBusyRef);
@@ -2397,7 +2409,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-video-picker" role="dialog" aria-label={t(uiLang, "playlistAddVideos")}>
                   <div className="playlist-video-picker-head">
                     <strong>{t(uiLang, "playlistChooseVideos")}</strong>
-                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} title={t(uiLang, "playlistVideoPickerSearchHint")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
+                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} aria-label={t(uiLang, "playlistVideoPickerSearchHint")} title={t(uiLang, "playlistVideoPickerSearchHint")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
                   </div>
                   <div className="playlist-video-picker-list">
                     {videos.filter((video) => {
@@ -2627,7 +2639,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               const date = new Date(video.slot || Date.now());
               const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
               return (
-                <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu">
+                <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu" aria-label={t(uiLang, "calendarChangeVisibility")}>
                   {video.slot ? (
                     <label className="calendar-context-time">
                       <span className="calendar-context-icon" aria-hidden="true">◷</span>
