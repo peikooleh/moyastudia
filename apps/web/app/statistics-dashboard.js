@@ -147,6 +147,7 @@ export function StatisticsDashboard({
     if (scope === "video") params.set("video_id", videoId);
     if (scope === "playlist") params.set("playlist_id", playlistId);
 
+    setAnalytics(null);
     setAnalyticsLoading(true);
     setAnalyticsError("");
     apiFetch(`/channels/${selectedChannelId}/analytics/summary?${params.toString()}`, { signal: controller.signal })
