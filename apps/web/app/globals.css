@@ -408,10 +408,16 @@ html, body, .onb-card, .top, .shell, .card, .btn, .choice {
 .channel-discovery-option small { color: var(--muted); font-size: 11px; }
 .selection-error { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: #c53929; }
 .selection-notice { color: var(--good); }
-.chan-card { border: 1px solid var(--line); border-radius: 20px; padding: 20px 22px 24px; background: var(--bg-raise); min-height: calc(100vh - 160px); display: flex; flex-direction: column; box-shadow: 0 10px 32px color-mix(in srgb, #000 8%, transparent); }
+.chan-card { position: relative; border: 1px solid var(--line); border-radius: 20px; padding: 20px 22px 24px; background: var(--bg-raise); min-height: calc(100vh - 160px); display: flex; flex-direction: column; box-shadow: 0 10px 32px color-mix(in srgb, #000 8%, transparent); }
 .chan-card-banner { width: 100%; aspect-ratio: 2560 / 423; object-fit: cover; border-radius: 10px; }
 .chan-card-body { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-top: 4px; }
 .chan-desc { color: var(--text); font-size: 16px; line-height: 1.65; white-space: pre-wrap; flex: 1; overflow: auto; min-height: 0; opacity: 0.82; }
+.channel-description-editor { display: grid; gap: 6px; margin-top: 14px; }
+.channel-description-editor label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.channel-description-editor textarea { width: 100%; min-height: 220px; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; outline: 0; background: var(--bg-raise); color: var(--text); font: inherit; line-height: 1.55; resize: vertical; }
+.channel-description-editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.channel-description-editor > small { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.channel-description-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
 .chan-meta { list-style: none; padding: 0; margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 .chan-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 8px 0 6px; }
 .chan-name { font-family: Fraunces, Georgia, serif; font-size: 44px; margin: 0; letter-spacing: -0.03em; }
@@ -1068,7 +1074,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-connect-account { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-raise); color: var(--text); font-size: 12px; font-weight: 600; text-decoration: none; }
 .channel-connect-account:hover { background: var(--bg-hover); }
 .chan-card { display: grid; align-content: start; gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-raise); }
-.channel-detail-heading { display: flex; align-items: center; gap: 12px; }
+.channel-card-actions { position: absolute; top: 18px; right: 22px; display: flex; align-items: center; gap: 6px; z-index: 1; }
+.channel-share-action { min-height: 28px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
+.channel-share-action:hover { background: var(--bg-hover); }
+.channel-edit-metadata { display: inline-grid; width: 28px; height: 28px; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--accent); font-size: 17px; line-height: 1; cursor: pointer; }
+.channel-edit-metadata:hover { border-color: var(--line); background: var(--bg-hover); }
+.channel-detail-heading { display: flex; align-items: center; gap: 12px; padding-right: 150px; }
 .channel-detail-heading > img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
 .channel-detail-heading h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
 .channel-current-badge { width: fit-content; margin-bottom: 3px; color: var(--good); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
