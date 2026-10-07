@@ -236,6 +236,39 @@ def test_refresh_profile_returns_youtube_video_count_and_hidden_subscribers(
     assert response.json()["hidden_subscribers"] is True
 
 
+def test_refresh_profile_persists_cleared_channel_description(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="refresh-cleared-description")
+    channel_id, _, _ = create_channel(test_database, user_id, "refresh-cleared-description")
+    with test_database() as db:
+        channel = db.get(Channel, channel_id)
+        channel.description = "Old description"
+        db.commit()
+    authorized_client(client, token)
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(
+        main.yt,
+        "fetch_channel",
+        lambda credentials, youtube_channel_id: {
+            "title": "Channel refresh-cleared-description",
+            "description": "",
+            "keywords": "",
+            "subscriber_count": 0,
+            "video_count": 0,
+            "hidden_subscribers": False,
+        },
+    )
+
+    response = client.post(
+        f"/channels/{channel_id}/refresh-profile",
+        headers=post_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] == ""
+    with test_database() as db:
+        assert db.get(Channel, channel_id).description == ""
+
+
 def test_catalog_search_sort_and_cursor_use_effective_title(client, test_database):
     user_id, token = create_account(test_database, subject="effective-catalog-owner")
     channel_id, _, _ = create_channel(test_database, user_id, "effective-catalog")
