@@ -3470,3 +3470,14 @@ body {
 }
 .channel-settings-column .channel-link-actions .btn:hover { text-decoration: none; }
 .channel-settings-column .channel-remove-actions { margin-top: 28px; padding-top: 18px; }
+
+
+/* Cabinet hierarchy: YouTube channels are visually nested under their Google account. */
+.channel-option-list .channel-group-list-label { margin: 4px 0 0 10px; padding: 6px 6px 2px 12px; border-left: 2px solid var(--line); }
+.channel-option-list .channel-group > .channel-option {
+  width: calc(100% - 10px);
+  margin-left: 10px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+.channel-option-list .channel-group > .channel-option.on { border-left-color: var(--accent); box-shadow: none; }
