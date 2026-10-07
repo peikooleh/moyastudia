@@ -106,7 +106,7 @@ export function StatisticsDashboard({
           });
           status = await startResponse.json();
           if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
-        } else if (["COMPLETE", "EMPTY"].includes(status.state)) {
+        } else {
           const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
