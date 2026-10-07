@@ -854,7 +854,7 @@ def test_channel_discovery_provider_error_does_not_echo_exception_text(
     response = client.get(f"/google-connections/{connection_id}/available-channels")
 
     assert response.status_code == 502
-    assert response.json() == {"detail": "YouTube channel discovery failed"}
+    assert response.json() == {"detail": {"code": "youtube_channel_discovery_failed"}}
     assert "secret-refresh-token" not in response.text
 
 
