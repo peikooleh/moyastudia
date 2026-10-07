@@ -2339,7 +2339,7 @@ def refresh_profile(
         row.thumbnail_url = info["thumbnail_url"]
     if info.get("banner_url"):
         row.banner_url = info["banner_url"]
-    if info.get("description"):
+    if info.get("description") is not None:
         row.description = info["description"]
     if info.get("yt_published_at"):
         row.yt_published_at = info["yt_published_at"]
