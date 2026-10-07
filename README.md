@@ -6,6 +6,10 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Текущая реализация уже вышла за пределы раннего read-only Stage 3: есть server-authoritative Write Mode, локальный working state видео, контролируемая отправка поддерживаемых изменений в YouTube, playlist/calendar write increments, quota telemetry и серверные AI connection settings. Google OAuth остаётся единственным реализованным identity flow; Apple login и AI provider calls не включены. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md); принципы write security зафиксированы в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md).
 
+## Аудит 2026-10-07
+
+Полный повторный аудит текущего `main` и план устранения найденных проблем зафиксированы в [AUDIT_2026-10-07.md](AUDIT_2026-10-07.md). Рабочая ветка remediation — `audit-remediation-2026-10-07`; изменения должны применяться поэтапно, с тестами и документацией в тех же коммитах.
+
 ## Что умеем сегодня
 
 - Лендинг → вход через Google → онбординг языка/темы. Сервер проверяет аутентификацию; браузер хранит только настройки интерфейса.
