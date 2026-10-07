@@ -160,6 +160,34 @@ class VideoWorkingPatch(BaseModel):
     conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
 
+
+THUMBNAIL_MAX_BYTES = 10 * 1024 * 1024
+CAPTION_MAX_BYTES = 10 * 1024 * 1024
+CAPTION_CONTENT_TYPES = {
+    "application/x-subrip",
+    "text/plain",
+    "text/srt",
+    "text/vtt",
+}
+
+
+def _content_length_exceeds(request: Request, maximum: int) -> bool:
+    raw = request.headers.get("content-length", "").strip()
+    if not raw:
+        return False
+    try:
+        return int(raw) > maximum
+    except ValueError:
+        return True
+
+
+def _valid_thumbnail_signature(data: bytes, content_type: str) -> bool:
+    if content_type == "image/png":
+        return data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+    if content_type == "image/jpeg":
+        return data.startswith(b"\\xff\\xd8\\xff")
+    return False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
@@ -1670,9 +1698,13 @@ async def upload_channel_video_thumbnail(
     content_type = (request.headers.get("content-type") or "").split(";")[0].lower()
     if content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(415, detail={"code": "invalid_thumbnail_type"})
-    data = await request.body()
-    if not data or len(data) > 50 * 1024 * 1024:
+    if _content_length_exceeds(request, THUMBNAIL_MAX_BYTES):
         raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    data = await request.body()
+    if not data or len(data) > THUMBNAIL_MAX_BYTES:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    if not _valid_thumbnail_signature(data, content_type):
+        raise HTTPException(415, detail={"code": "invalid_thumbnail_content"})
     channel = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
@@ -1706,9 +1738,13 @@ async def upload_channel_video_captions(
     video = _catalog_video_or_404(db, user, channel_id, video_id)
     if video.availability_status != "available" or not video.youtube_video_id:
         raise HTTPException(409, detail={"code": "video_unavailable"})
-    content_type = (request.headers.get("content-type") or "application/octet-stream").split(";")[0].lower()
+    content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if content_type not in CAPTION_CONTENT_TYPES:
+        raise HTTPException(415, detail={"code": "invalid_caption_type"})
+    if _content_length_exceeds(request, CAPTION_MAX_BYTES):
+        raise HTTPException(413, detail={"code": "invalid_caption_size"})
     data = await request.body()
-    if not data or len(data) > 100 * 1024 * 1024:
+    if not data or len(data) > CAPTION_MAX_BYTES:
         raise HTTPException(413, detail={"code": "invalid_caption_size"})
     channel = _channel_or_404(db, user, channel_id)
     try:
@@ -2127,9 +2163,13 @@ async def upload_channel_playlist_thumbnail(
     content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
     if content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(415, "playlist thumbnail must be JPEG or PNG")
+    if _content_length_exceeds(request, THUMBNAIL_MAX_BYTES):
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
     data = await request.body()
-    if not data or len(data) > 50 * 1024 * 1024:
-        raise HTTPException(413, "playlist thumbnail must be between 1 byte and 50 MB")
+    if not data or len(data) > THUMBNAIL_MAX_BYTES:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    if not _valid_thumbnail_signature(data, content_type):
+        raise HTTPException(415, detail={"code": "invalid_thumbnail_content"})
     channel = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
