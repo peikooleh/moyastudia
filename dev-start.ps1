@@ -24,7 +24,7 @@ function Test-ServiceReady([string]$Name) {
         $response = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/health' -Method Get -TimeoutSec 3 -UseBasicParsing
         if ([int]$response.StatusCode -ne 200) { return $false }
         $body = $response.Content | ConvertFrom-Json
-        return ($body.ok -eq $true -and $body.db -eq $true)
+        return ($body.ok -eq $true)
     } catch { return $false }
 }
 

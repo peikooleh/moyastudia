@@ -204,11 +204,26 @@ def test_playlist_thumbnail_validates_type_and_forwards_bytes(client, test_datab
     accepted = client.put(
         f"/channels/{channel_id}/playlists/playlist-one/thumbnail",
         headers={**_headers(), "Content-Type": "image/png"},
-        content=b"png-data",
+        content=b"\x89PNG\r\n\x1a\npng-data",
     )
     assert accepted.status_code == 200
-    assert captured["data"] == b"png-data"
+    assert captured["data"] == b"\x89PNG\r\n\x1a\npng-data"
     assert captured["content_type"] == "image/png"
+
+
+def test_playlist_thumbnail_rejects_spoofed_image_content(client, test_database, monkeypatch):
+    token, channel_id = _playlist_fixture(test_database)
+    _authorize(client, token)
+    monkeypatch.setattr(main.yt, "set_playlist_thumbnail", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")))
+
+    response = client.put(
+        f"/channels/{channel_id}/playlists/playlist-one/thumbnail",
+        headers={**_headers(), "Content-Type": "image/png"},
+        content=b"not-a-png",
+    )
+
+    assert response.status_code == 415
+    assert response.json()["detail"]["code"] == "invalid_thumbnail_content"
 
 
 def test_playlist_writes_require_same_origin(client, test_database, monkeypatch):

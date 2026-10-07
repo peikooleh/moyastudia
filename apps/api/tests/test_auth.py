@@ -15,6 +15,55 @@ from app.youtube import IDENTITY_SCOPES, YOUTUBE_SCOPES
 from conftest import create_account
 
 
+def test_health_does_not_expose_configuration_state(client, monkeypatch):
+    class HealthyConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, statement):
+            return None
+
+    class HealthyEngine:
+        def connect(self):
+            return HealthyConnection()
+
+    monkeypatch.setattr(main.database, "engine", HealthyEngine())
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert "google_configured" not in response.text
+
+
+def test_production_configuration_fails_closed(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "http://localhost:3000")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "http://localhost:8000/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "http://localhost:8000/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "")
+    monkeypatch.setattr(settings, "google_client_id", "")
+    monkeypatch.setattr(settings, "google_client_secret", "")
+    monkeypatch.setattr(settings, "token_encryption_key", "")
+
+    with pytest.raises(RuntimeError, match="Unsafe production configuration"):
+        settings.validate_runtime_security()
+
+
+def test_production_configuration_accepts_https_and_required_secrets(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "https://app.example.test")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "postgresql://user:password@db.example.test/app")
+    monkeypatch.setattr(settings, "google_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "token_encryption_key", "encryption-key")
+
+    settings.validate_runtime_security()
+
+
 def test_verify_identity_token_uses_one_second_clock_skew(monkeypatch):
     captured = {}
 
@@ -151,6 +200,60 @@ def test_google_login_validates_one_time_state_and_issues_secure_cookie(
     )
     assert replay.status_code == 303
     assert "auth_error=invalid_state" in replay.headers["location"]
+
+
+def test_identity_login_rotates_existing_sessions_for_same_user(
+    client, test_database, monkeypatch
+):
+    user_id, old_token = create_account(test_database, subject="rotation-subject")
+    state = "identity-session-rotation"
+    monkeypatch.setattr(
+        main.yt,
+        "identity_authorization_url",
+        lambda: ("https://accounts.test", state),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "exchange_identity_code",
+        lambda code, callback_state: SimpleNamespace(id_token="verified-token"),
+    )
+    monkeypatch.setattr(
+        main.yt,
+        "verify_identity_token",
+        lambda token: {
+            "sub": "rotation-subject",
+            "email": "rotation@example.test",
+            "email_verified": True,
+        },
+    )
+
+    assert client.get("/auth/google/login").status_code == 307
+    callback = client.get(
+        "/auth/google/callback",
+        params={"code": "authorization-code", "state": state},
+    )
+    assert callback.status_code == 303
+
+    with test_database() as db:
+        sessions = db.query(UserSession).filter(UserSession.user_id == user_id).all()
+        assert len(sessions) == 1
+        assert all(session.token_hash != main.hash_secret(old_token) for session in sessions)
+
+
+def test_mutation_rejects_missing_or_foreign_origin(client, test_database):
+    _, token = create_account(test_database, subject="csrf-origin")
+    client.cookies.set(settings.session_cookie_name, token)
+
+    missing = client.put("/write-mode", json={"enabled": False})
+    foreign = client.put(
+        "/write-mode",
+        json={"enabled": False},
+        headers={"Origin": "https://attacker.example"},
+    )
+
+    assert missing.status_code == 403
+    assert foreign.status_code == 403
+    assert missing.json() == foreign.json() == {"detail": "same-origin request required"}
 
 
 def test_authenticated_user_without_google_connection_has_separate_connection_state(
@@ -751,7 +854,7 @@ def test_channel_discovery_provider_error_does_not_echo_exception_text(
     response = client.get(f"/google-connections/{connection_id}/available-channels")
 
     assert response.status_code == 502
-    assert response.json() == {"detail": "YouTube channel discovery failed"}
+    assert response.json() == {"detail": {"code": "youtube_channel_discovery_failed"}}
     assert "secret-refresh-token" not in response.text
 
 

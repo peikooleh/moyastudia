@@ -88,9 +88,11 @@ def consume_youtube_oauth_state(
 def create_session(db: Session, user_id: str) -> str:
     value = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
-    db.query(UserSession).filter(UserSession.expires_at <= now).delete(
-        synchronize_session=False
-    )
+    # A fresh identity login replaces prior browser sessions for this account.
+    # This prevents an older captured session from surviving a re-authentication.
+    db.query(UserSession).filter(
+        or_(UserSession.expires_at <= now, UserSession.user_id == user_id)
+    ).delete(synchronize_session=False)
     db.add(
         UserSession(
             token_hash=hash_secret(value),

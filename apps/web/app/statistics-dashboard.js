@@ -250,7 +250,7 @@ export function StatisticsDashboard({
     views: {
       label: t(uiLang, "videoViews"),
       value: analytics ? formatNumber(analytics.views, locale) : "—",
-      detail: periodLabel,
+      detail: analytics?.current_statistics?.views != null && scope === "video" ? t(uiLang, "statisticsCurrentYouTubeViews", { count: formatNumber(analytics.current_statistics.views, locale), period: periodLabel }) : periodLabel,
       seriesValue: (point) => Number(point.views || 0),
       seriesTitle: (point) => `${point.date}: ${formatNumber(point.views, locale)}`,
       chartTitle: t(uiLang, "statisticsViewsOverTime"),

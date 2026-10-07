@@ -265,7 +265,7 @@ function VideoInspector({
           <h2>{effectiveTitle || t(uiLang, "untitledVideo")}</h2>
           <dl className="video-summary-meta">
             <div><dt>{t(uiLang, "videoStatus")}</dt><dd className={`status-label ${selected.availability === "unavailable" || selected.remoteMissing ? "warning" : ""}`}>{statusLabel(uiLang, effectiveStatus)}</dd></div>
-            <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : "videoPublishedAt")}</dt><dd>{displayDate ? formatStudioDate(displayDate, uiLang) : "—"}</dd></div>
+            <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : selected.privacy === "private" ? "videoYoutubeDate" : "videoPublishedAt")}</dt><dd>{displayDate ? formatStudioDate(displayDate, uiLang) : "—"}</dd></div>
             <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
             <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
             <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} title={t(uiLang, "copyVideoIdHint")} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button></dd></div>
@@ -449,7 +449,8 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
   const timeValue = scheduledDate && !Number.isNaN(scheduledDate.getTime())
     ? `${String(scheduledDate.getHours()).padStart(2, "0")}:${String(scheduledDate.getMinutes()).padStart(2, "0")}`
     : "";
-  const canChooseScheduleDate = Boolean(selected.slot) || selected.privacy === "private";
+  const previouslyPublishedPrivate = selected.privacy === "private" && !selected.slot && Boolean(selected.previouslyPublished);
+  const canChooseScheduleDate = Boolean(selected.slot) || (selected.privacy === "private" && !previouslyPublishedPrivate);
   return (
     <aside className="calendar-event-details" aria-label={t(uiLang, "calendarEventDetails")}>
       {selected.thumb ? <img className="calendar-event-thumb" src={selected.thumb} alt={t(uiLang, "videoThumbnailAlt")} /> : null}
@@ -460,7 +461,7 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
         </span>
       </div>
       <dl className="inspector-data">
-        <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : "videoPublishedAt")}</dt><dd>{displayDate || "—"}</dd></div>
+        <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : selected.privacy === "private" ? "videoYoutubeDate" : "videoPublishedAt")}</dt><dd>{displayDate || "—"}</dd></div>
         <div><dt>{t(uiLang, "videoVisibility")}</dt><dd>{statusLabel(uiLang, selected.privacy || selected.status)}</dd></div>
         <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
         <div><dt>{t(uiLang, "videoViews")}</dt><dd>{selected.views ?? "—"}</dd></div>
@@ -1805,11 +1806,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const calendarSelected = effectiveCalendarVideos.find((video) => video.id === selectedId) || null;
   const calendarQueueVideos = effectiveCalendarVideos.filter((video) => {
     const needle = calendarQueueQuery.trim().toLocaleLowerCase();
-    const unscheduledPrivate = video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing;
+    const unscheduledPrivate = video.privacy === "private" && !video.slot && !video.previouslyPublished && video.availability !== "unavailable" && !video.remoteMissing;
     const matchesQuery = !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
     return unscheduledPrivate && matchesQuery;
   });
-  const calendarQueueCount = effectiveCalendarVideos.filter((video) => video.privacy === "private" && !video.slot && video.availability !== "unavailable" && !video.remoteMissing).length;
+  const calendarQueueCount = effectiveCalendarVideos.filter((video) => video.privacy === "private" && !video.slot && !video.previouslyPublished && video.availability !== "unavailable" && !video.remoteMissing).length;
   const workingStateKey = workingVideoStatusKey(
     workingVideo,
     workingEdits,
@@ -1823,8 +1824,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     saving: "workingSaving",
     error: "workingSaveError",
   };
+  function normalizedCalendarPublishAt(value) {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
+  }
+
   function calendarBaseline(video) {
-    return { privacy: video.privacy || "private", publishAt: video.slot || null };
+    return { privacy: video.privacy || "private", publishAt: normalizedCalendarPublishAt(video.slot) };
   }
 
   function stageCalendarChange(video, changes) {
@@ -1833,7 +1840,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCalendarDrafts((current) => {
       const previous = current[video.id] || baseline;
       const next = { ...previous, ...changes };
-      const clean = next.privacy === baseline.privacy && (next.publishAt || null) === (baseline.publishAt || null);
+      const clean = next.privacy === baseline.privacy
+        && normalizedCalendarPublishAt(next.publishAt) === baseline.publishAt;
       if (clean) {
         const copy = { ...current };
         delete copy[video.id];
@@ -1863,7 +1871,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
 
   function stageCalendarTime(video, timeValue) {
     if (!timeValue) return;
-    const source = calendarDrafts[video.id]?.publishAt || video.slot || video.publishedAt || new Date().toISOString();
+    const source = calendarDrafts[video.id]?.publishAt || video.slot || new Date().toISOString();
     const date = new Date(source);
     const [hours, minutes] = timeValue.split(":").map(Number);
     date.setHours(hours, minutes, 0, 0);
@@ -1918,7 +1926,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const cells = monthMatrix(month);
   const byDay = {};
   effectiveCalendarVideos.forEach((v) => {
-    const key = (v.slot || v.publishedAt || "").slice(0, 10);
+    const key = (v.slot || (v.privacy !== "private" ? v.publishedAt : "") || "").slice(0, 10);
     if (!key) return;
     byDay[key] = byDay[key] || [];
     byDay[key].push(v);
@@ -2071,7 +2079,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <span className="item-meta">
                       <span>{statusLabel(uiLang, v.status)}</span>
                       {v.availability === "available" ? <span>{t(uiLang, "availabilityAvailable")}</span> : null}
-                      <time dateTime={v.slot || v.publishedAt || undefined}>{formatStudioDate(v.slot || v.publishedAt || "", uiLang)}</time>
+                      <time dateTime={v.slot || v.publishedAt || undefined}>{t(uiLang, v.slot ? "videoScheduledAtShort" : v.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: {formatStudioDate(v.slot || v.publishedAt || "", uiLang)}</time>
                     </span>
                     {v.dirty ? (
                       <span className="item-change">{t(uiLang, "workingModified")}</span>
@@ -2575,7 +2583,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         <span className="calendar-hover-card" aria-hidden="true">
                           {video.thumb ? <img src={video.thumb} alt="" /> : null}
                           <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
-                          <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                          <small>{t(uiLang, video.slot ? "videoScheduledAtShort" : "videoPublishedAtShort")}: {formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
                           <small>{statusLabel(uiLang, video.status || video.privacy)}</small>
                           <small>{t(uiLang, "videoDuration")}: {formatStudioDuration(video.duration) || "—"}</small>
                           <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
@@ -2594,7 +2602,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             {calendarContext ? (() => {
               const video = effectiveCalendarVideos.find((item) => item.id === calendarContext.videoId);
               if (!video) return null;
-              const date = new Date(video.slot || video.publishedAt || Date.now());
+              const date = new Date(video.slot || Date.now());
               const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
               return (
                 <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu">
@@ -2665,7 +2673,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {video.thumb ? <img className="calendar-day-thumb" src={video.thumb} alt="" loading="lazy" /> : <span className="calendar-day-thumb empty-thumb" />}
                       <span className="calendar-day-copy">
                         <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
-                        <small>{formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                        <small>{t(uiLang, video.slot ? "videoScheduledAtShort" : "videoPublishedAtShort")}: {formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
                         <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
                       </span>
                     </button>

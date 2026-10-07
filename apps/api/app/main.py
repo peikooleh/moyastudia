@@ -1,7 +1,7 @@
 import base64
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -42,6 +42,7 @@ from .security import (
     set_oauth_state_cookie,
 )
 from .settings import settings
+from .rate_limit import AbuseRateLimitMiddleware
 from .tokens import (
     TokenEncryptionError,
     decrypt_refresh_token,
@@ -52,6 +53,7 @@ from . import quota as quota_service
 from . import youtube as yt
 
 app = FastAPI(title="MoyaStudia API")
+app.add_middleware(AbuseRateLimitMiddleware, session_cookie_name=settings.session_cookie_name)
 
 
 class AIConnectionUpdate(BaseModel):
@@ -64,8 +66,14 @@ class AIConnectionUpdate(BaseModel):
     description_prompt: str = Field(default="", max_length=12000)
 
 
+ExternalId = Annotated[str, Field(min_length=1, max_length=256)]
+YouTubeChannelId = Annotated[str, Field(min_length=1, max_length=128)]
+
+
 class ChannelSelection(BaseModel):
-    youtube_channel_ids: list[str]
+    model_config = ConfigDict(extra="forbid")
+
+    youtube_channel_ids: list[YouTubeChannelId] = Field(min_length=1, max_length=500)
 
 
 class ChannelWorkingLanguageUpdate(BaseModel):
@@ -96,7 +104,7 @@ class LocalPlaylistCreate(BaseModel):
 
 class LocalPlaylistMembershipUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    video_ids: list[str] = Field(default_factory=list, max_length=500)
+    video_ids: list[ExternalId] = Field(default_factory=list, max_length=500)
 
 
 class PlaylistMetadataUpdate(BaseModel):
@@ -108,7 +116,7 @@ class PlaylistMetadataUpdate(BaseModel):
 
 class PlaylistVideosUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    video_ids: list[str] = Field(min_length=1, max_length=500)
+    video_ids: list[ExternalId] = Field(min_length=1, max_length=500)
 
 
 class PlaylistItemPositionUpdate(BaseModel):
@@ -118,7 +126,7 @@ class PlaylistItemPositionUpdate(BaseModel):
 
 class PlaylistOrderUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    playlist_item_ids: list[str] = Field(min_length=1, max_length=500)
+    playlist_item_ids: list[ExternalId] = Field(min_length=1, max_length=500)
 
 
 class CalendarVideoUpdate(BaseModel):
@@ -135,6 +143,8 @@ class VideoPublishRequest(BaseModel):
 
 
 class CatalogSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     mode: Literal["initial", "incremental", "reconcile"]
 
 
@@ -152,6 +162,48 @@ class VideoWorkingPatch(BaseModel):
     conflict_resolution: Literal["keep_local", "use_snapshot"] | None = None
 
 
+
+THUMBNAIL_MAX_BYTES = 10 * 1024 * 1024
+CAPTION_MAX_BYTES = 10 * 1024 * 1024
+CAPTION_CONTENT_TYPES = {
+    "application/x-subrip",
+    "text/plain",
+    "text/srt",
+    "text/vtt",
+}
+
+
+def _content_length_exceeds(request: Request, maximum: int) -> bool:
+    raw = request.headers.get("content-length", "").strip()
+    if not raw:
+        return False
+    try:
+        return int(raw) > maximum
+    except ValueError:
+        return True
+
+
+
+async def _read_limited_body(request: Request, maximum: int) -> bytes:
+    if _content_length_exceeds(request, maximum):
+        raise HTTPException(413, detail={"code": "request_too_large"})
+    chunks = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > maximum:
+            raise HTTPException(413, detail={"code": "request_too_large"})
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _valid_thumbnail_signature(data: bytes, content_type: str) -> bool:
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    return False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
@@ -163,6 +215,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    settings.validate_runtime_security()
     database.init_engine()
 
 
@@ -176,11 +229,9 @@ def health():
             db_ok = True
         except Exception:
             db_ok = False
-    return {
-        "ok": True,
-        "db": db_ok,
-        "google_configured": bool(settings.google_client_id),
-    }
+    if not db_ok:
+        raise HTTPException(503, detail={"code": "unhealthy"})
+    return {"ok": True}
 
 
 def _require_google_configuration() -> None:
@@ -221,7 +272,7 @@ def quota_today(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return quota_service.quota_summary(db)
+    return quota_service.quota_summary(db, user_id=user.id)
 
 
 @app.get("/auth/session")
@@ -781,7 +832,7 @@ def _available_youtube_channels(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, "YouTube channel discovery failed") from exc
+        raise HTTPException(502, detail={"code": "youtube_channel_discovery_failed"}) from exc
 
 
 @app.get("/google-connections/{connection_id}/available-channels")
@@ -1152,6 +1203,11 @@ def _video_catalog_item(video: Video) -> dict:
         "dirtyFields": dirty_fields,
         "thumb": video.youtube_thumbnail_url or "",
         "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
+        "previouslyPublished": bool(
+            video.youtube_visibility == "private"
+            and scheduled_at is None
+            and published_at is not None
+        ),
         "duration": video.youtube_duration or "",
         "views": video.youtube_view_count,
         "likes": video.youtube_like_count,
@@ -1531,7 +1587,7 @@ def publish_channel_video_metadata(
         raise HTTPException(422, detail={"code": "invalid_title"})
     if len(description.encode("utf-8")) > 5000 or "<" in description or ">" in description:
         raise HTTPException(422, detail={"code": "invalid_description"})
-    quota = quota_service.quota_summary(db)
+    quota = quota_service.quota_summary(db, user_id=user.id)
     publish_quota_cost = (
         quota_service.operation_cost("videos.list")[1]
         + quota_service.operation_cost("videos.update")[1]
@@ -1606,6 +1662,13 @@ def update_channel_video_calendar_status(
         raise HTTPException(409, detail={"code": "video_unavailable"})
 
     publish_at = payload.publishAt
+    if (
+        publish_at is not None
+        and video.youtube_visibility == "private"
+        and video.youtube_scheduled_at is None
+        and video.youtube_published_at is not None
+    ):
+        raise HTTPException(422, detail={"code": "youtube_previously_published_cannot_schedule"})
     if publish_at is not None:
         if publish_at.tzinfo is None or publish_at.utcoffset() is None:
             raise HTTPException(422, detail={"code": "schedule_timezone_required"})
@@ -1614,6 +1677,20 @@ def update_channel_video_calendar_status(
             raise HTTPException(422, detail={"code": "schedule_must_be_future"})
         if payload.privacy != "private":
             raise HTTPException(422, detail={"code": "scheduled_video_must_be_private"})
+
+    current_publish_at = video.youtube_scheduled_at
+    if current_publish_at is not None and current_publish_at.tzinfo is None:
+        current_publish_at = current_publish_at.replace(tzinfo=timezone.utc)
+    same_publish_at = (
+        (publish_at is None and current_publish_at is None)
+        or (
+            publish_at is not None
+            and current_publish_at is not None
+            and publish_at == current_publish_at.astimezone(timezone.utc)
+        )
+    )
+    if payload.privacy == (video.youtube_visibility or "") and same_publish_at:
+        return _video_catalog_item(video)
 
     channel = _channel_or_404(db, user, channel_id)
     try:
@@ -1630,9 +1707,23 @@ def update_channel_video_calendar_status(
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
-        message = str(exc).lower()
-        if "insufficient" in message or "permission" in message or "scope" in message:
+        response = getattr(exc, "resp", None)
+        status = getattr(response, "status", None)
+        reasons = {
+            detail.get("reason")
+            for detail in (getattr(exc, "error_details", None) or [])
+            if isinstance(detail, dict)
+        }
+        if status == 401 or "insufficientPermissions" in reasons:
             raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        if "invalidPublishAt" in reasons:
+            raise HTTPException(422, detail={"code": "youtube_invalid_publish_time"}) from exc
+        if "videoNotFound" in reasons:
+            raise HTTPException(404, detail={"code": "video_not_found_on_youtube"}) from exc
+        if status == 403:
+            raise HTTPException(403, detail={"code": "youtube_status_change_rejected"}) from exc
+        if status == 400:
+            raise HTTPException(422, detail={"code": "youtube_invalid_status_update"}) from exc
         raise HTTPException(502, detail={"code": "youtube_calendar_update_failed"}) from exc
 
     video.youtube_visibility = remote["privacy"]
@@ -1662,9 +1753,16 @@ async def upload_channel_video_thumbnail(
     content_type = (request.headers.get("content-type") or "").split(";")[0].lower()
     if content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(415, detail={"code": "invalid_thumbnail_type"})
-    data = await request.body()
-    if not data or len(data) > 50 * 1024 * 1024:
+    if _content_length_exceeds(request, THUMBNAIL_MAX_BYTES):
         raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    try:
+        data = await _read_limited_body(request, THUMBNAIL_MAX_BYTES)
+    except HTTPException as exc:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"}) from exc
+    if not data:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    if not _valid_thumbnail_signature(data, content_type):
+        raise HTTPException(415, detail={"code": "invalid_thumbnail_content"})
     channel = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
@@ -1698,9 +1796,16 @@ async def upload_channel_video_captions(
     video = _catalog_video_or_404(db, user, channel_id, video_id)
     if video.availability_status != "available" or not video.youtube_video_id:
         raise HTTPException(409, detail={"code": "video_unavailable"})
-    content_type = (request.headers.get("content-type") or "application/octet-stream").split(";")[0].lower()
-    data = await request.body()
-    if not data or len(data) > 100 * 1024 * 1024:
+    content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if content_type not in CAPTION_CONTENT_TYPES:
+        raise HTTPException(415, detail={"code": "invalid_caption_type"})
+    if _content_length_exceeds(request, CAPTION_MAX_BYTES):
+        raise HTTPException(413, detail={"code": "invalid_caption_size"})
+    try:
+        data = await _read_limited_body(request, CAPTION_MAX_BYTES)
+    except HTTPException as exc:
+        raise HTTPException(413, detail={"code": "invalid_caption_size"}) from exc
+    if not data:
         raise HTTPException(413, detail={"code": "invalid_caption_size"})
     channel = _channel_or_404(db, user, channel_id)
     try:
@@ -1758,6 +1863,13 @@ def channel_analytics_summary(
             youtube_video_id,
             playlist_id or "",
         )
+        current_statistics = None
+        if youtube_video_id:
+            try:
+                current_statistics = yt.video_current_statistics(token, youtube_video_id)
+            except Exception:
+                # Current counters are supplementary; delayed Analytics must remain available.
+                current_statistics = None
         series = yt.channel_analytics_timeseries(
             token,
             start_date,
@@ -1773,6 +1885,7 @@ def channel_analytics_summary(
             "playlist_id": playlist_id,
             "dimension": dimension,
             "series": series,
+            "current_statistics": current_statistics,
         }
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
@@ -1987,7 +2100,7 @@ def continue_catalog_sync(
             sync.lease_token = None
             sync.lease_expires_at = None
             db.commit()
-        raise HTTPException(502, "YouTube catalog sync failed") from exc
+        raise HTTPException(502, detail={"code": "youtube_catalog_sync_failed"}) from exc
 
     return _catalog_status(db, channel)
 
@@ -2073,7 +2186,7 @@ def channel_playlists(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}", dependencies=[Depends(require_same_origin)])
@@ -2103,7 +2216,7 @@ def update_channel_playlist(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}/thumbnail", dependencies=[Depends(require_same_origin)])
@@ -2119,9 +2232,16 @@ async def upload_channel_playlist_thumbnail(
     content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
     if content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(415, "playlist thumbnail must be JPEG or PNG")
-    data = await request.body()
-    if not data or len(data) > 50 * 1024 * 1024:
-        raise HTTPException(413, "playlist thumbnail must be between 1 byte and 50 MB")
+    if _content_length_exceeds(request, THUMBNAIL_MAX_BYTES):
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    try:
+        data = await _read_limited_body(request, THUMBNAIL_MAX_BYTES)
+    except HTTPException as exc:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"}) from exc
+    if not data:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
+    if not _valid_thumbnail_signature(data, content_type):
+        raise HTTPException(415, detail={"code": "invalid_thumbnail_content"})
     channel = _channel_or_404(db, user, channel_id)
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
@@ -2132,7 +2252,7 @@ async def upload_channel_playlist_thumbnail(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.post("/channels/{channel_id}/playlists/{playlist_id}/videos", dependencies=[Depends(require_same_origin)])
@@ -2155,7 +2275,7 @@ def add_channel_playlist_videos(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}/order", dependencies=[Depends(require_same_origin)])
@@ -2182,7 +2302,7 @@ def reorder_channel_playlist(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.delete("/channels/{channel_id}/playlists/{playlist_id}/items/{playlist_item_id}", dependencies=[Depends(require_same_origin)])
@@ -2207,7 +2327,7 @@ def delete_channel_playlist_item(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}/items/{playlist_item_id}/position", dependencies=[Depends(require_same_origin)])
@@ -2233,7 +2353,7 @@ def update_channel_playlist_item_position(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.get("/channels/{channel_id}/playlists/{playlist_id}/items")
@@ -2259,7 +2379,7 @@ def channel_playlist_items(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
     video_ids = [item["videoId"] for item in result["items"]]
     catalog_items = {}
@@ -2311,7 +2431,7 @@ def channel_playlist_memberships(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
     return {"memberships": memberships}
 
 
@@ -2337,7 +2457,7 @@ def refresh_profile(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
     row.title = info.get("title") or row.title
     if info.get("thumbnail_url"):
         row.thumbnail_url = info["thumbnail_url"]
