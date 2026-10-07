@@ -34,6 +34,82 @@ def create_channel(session_factory, user_id, suffix="one", active=True):
 
 
 
+def test_channel_metadata_write_requires_write_mode(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="channel-metadata-write-mode")
+    channel_id, _, _ = create_channel(test_database, user_id, "channel-metadata-write-mode")
+    authorized_client(client, token)
+    monkeypatch.setattr(
+        main.yt,
+        "update_channel_metadata",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")),
+    )
+
+    response = client.put(
+        f"/channels/{channel_id}/metadata",
+        headers=post_headers(),
+        json={"description": "New description", "keywords": "one two"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "write_mode_off"
+
+
+def test_channel_metadata_write_updates_youtube_and_persists_description(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="channel-metadata-owner")
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id, "channel-metadata")
+    with test_database() as db:
+        db.get(main.User, user_id).write_mode_enabled = True
+        db.commit()
+    authorized_client(client, token)
+    captured = {}
+
+    def fake_update(refresh_token, remote_channel_id, *, description, keywords, recorder=None):
+        captured.update(
+            refresh_token=refresh_token,
+            remote_channel_id=remote_channel_id,
+            description=description,
+            keywords=keywords,
+        )
+        return {"description": description, "keywords": keywords}
+
+    monkeypatch.setattr(main.yt, "update_channel_metadata", fake_update)
+
+    response = client.put(
+        f"/channels/{channel_id}/metadata",
+        headers=post_headers(),
+        json={"description": "New description", "keywords": "one two"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "refresh_token": "refresh-token",
+        "remote_channel_id": youtube_channel_id,
+        "description": "New description",
+        "keywords": "one two",
+    }
+    assert response.json()["description"] == "New description"
+    assert response.json()["keywords"] == "one two"
+    with test_database() as db:
+        assert db.get(Channel, channel_id).description == "New description"
+
+
+def test_detach_channel_is_owner_scoped_and_removes_local_channel(client, test_database):
+    owner_id, owner_token = create_account(test_database, subject="detach-channel-owner")
+    _, other_token = create_account(test_database, subject="detach-channel-other")
+    channel_id, _, _ = create_channel(test_database, owner_id, "detach-channel")
+
+    authorized_client(client, other_token)
+    foreign = client.delete(f"/channels/{channel_id}", headers=post_headers())
+    assert foreign.status_code == 404
+
+    authorized_client(client, owner_token)
+    response = client.delete(f"/channels/{channel_id}", headers=post_headers())
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    with test_database() as db:
+        assert db.get(Channel, channel_id) is None
+
+
 def test_channel_working_language_persists_without_active_google_connection(client, test_database):
     user_id, token = create_account(test_database, subject="language-offline-owner")
     channel_id, _, _ = create_channel(test_database, user_id, "language-offline", active=False)
