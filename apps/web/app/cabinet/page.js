@@ -43,6 +43,12 @@ export default function CabinetPage() {
   const [removeError, setRemoveError] = useState("");
   const [channelLanguageSaving, setChannelLanguageSaving] = useState(false);
   const [channelLanguageError, setChannelLanguageError] = useState("");
+  const [writeMode, setWriteMode] = useState({ enabled: false });
+  const [channelEditing, setChannelEditing] = useState(false);
+  const [channelDescriptionDraft, setChannelDescriptionDraft] = useState("");
+  const [channelDescriptionSaving, setChannelDescriptionSaving] = useState(false);
+  const [channelDescriptionError, setChannelDescriptionError] = useState("");
+  const [channelShareNotice, setChannelShareNotice] = useState("");
   const migratedChannelLanguages = useRef(new Set());
   const [aiConnections, setAiConnections] = useState([]);
   const [aiProvider, setAiProvider] = useState("openai");
@@ -98,6 +104,16 @@ export default function CabinetPage() {
       cancelled = true;
     };
   }, [router, sessionRetry]);
+
+  useEffect(() => {
+    if (!session?.authenticated) return undefined;
+    let cancelled = false;
+    apiFetch("/write-mode")
+      .then((response) => (response.ok ? response.json() : { enabled: false }))
+      .then((status) => { if (!cancelled) setWriteMode(status); })
+      .catch(() => { if (!cancelled) setWriteMode({ enabled: false }); });
+    return () => { cancelled = true; };
+  }, [session?.authenticated]);
 
   useEffect(() => {
     const userId = String(session?.user?.id || "");
@@ -431,6 +447,54 @@ export default function CabinetPage() {
     }
   }
 
+  function beginChannelEditing(channel) {
+    setChannelDescriptionDraft(channel.description || "");
+    setChannelDescriptionError("");
+    setChannelEditing(true);
+  }
+
+  function cancelChannelEditing() {
+    setChannelEditing(false);
+    setChannelDescriptionDraft("");
+    setChannelDescriptionError("");
+  }
+
+  async function saveChannelDescription(channel) {
+    if (!writeMode?.enabled || channelDescriptionSaving) return;
+    if (!window.confirm(t(uiLang, "channelDescriptionSaveConfirm"))) return;
+    setChannelDescriptionSaving(true);
+    setChannelDescriptionError("");
+    try {
+      const response = await apiFetch(`/channels/${channel.id}/description`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: channelDescriptionDraft }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(t(uiLang, response.status === 403 ? "saveToYoutubeWriteModeHint" : "channelDescriptionSaveError"));
+      setChannels((current) => current?.map((item) => (
+        String(item.id) === String(channel.id) ? { ...item, description: data.description ?? channelDescriptionDraft } : item
+      )));
+      setChannelEditing(false);
+      setChannelDescriptionDraft("");
+    } catch (error) {
+      setChannelDescriptionError(error.message || t(uiLang, "channelDescriptionSaveError"));
+    } finally {
+      setChannelDescriptionSaving(false);
+    }
+  }
+
+  async function copyChannelLink(channel) {
+    const url = `https://www.youtube.com/channel/${channel.youtube_channel_id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setChannelShareNotice(t(uiLang, "channelLinkCopied"));
+    } catch {
+      setChannelShareNotice(t(uiLang, "channelLinkCopyFailed"));
+    }
+    window.setTimeout(() => setChannelShareNotice(""), 1800);
+  }
+
   async function removeChannelFromMoya(channel) {
     if (!window.confirm(t(uiLang, "removeChannelConfirm"))) return;
     const removedId = String(channel.id);
@@ -639,7 +703,11 @@ export default function CabinetPage() {
                   </div>
                   <div className="selected-channel-column">
                   {ch ? (
-                    <article className="chan-card">
+                    <article className={`chan-card ${channelEditing ? "editing" : ""}`}>
+                      <div className="channel-card-actions">
+                        <button className="text-button channel-share-action" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "channelShare")}</button>
+                        {!channelEditing ? <button className="playlist-edit-metadata channel-edit-metadata" type="button" title={t(uiLang, "channelEditDescriptionHint")} aria-label={t(uiLang, "channelEditDescriptionHint")} onClick={() => beginChannelEditing(ch)}>✎</button> : null}
+                      </div>
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
                         <div><div className="channel-current-badge">{t(uiLang, "activeStudioChannel")}</div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small></div>
@@ -650,7 +718,21 @@ export default function CabinetPage() {
                         <div><dt>{t(uiLang, "channelSubscribers")}</dt><dd>{ch.hidden_subscribers ? t(uiLang, "channelSubscribersHidden") : (ch.subscriber_count ?? "—")}</dd></div>
                         <div><dt>{t(uiLang, "channelLikes")}</dt><dd>{ch.catalog_like_count ?? "—"}</dd></div>
                       </dl>
-                      <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
+                      {channelEditing ? (
+                        <div className="channel-description-editor">
+                          <label>{t(uiLang, "channelDescription")}
+                            <textarea rows={10} maxLength={1000} value={channelDescriptionDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelDescriptionDraft(event.target.value)} />
+                          </label>
+                          <small>{channelDescriptionDraft.length} / 1000</small>
+                          {channelDescriptionError ? <p className="selection-error" role="alert">{channelDescriptionError}</p> : null}
+                          <div className="channel-description-actions">
+                            <button className="btn ghost" type="button" disabled={channelDescriptionSaving} onClick={cancelChannelEditing}>{t(uiLang, "actionCancel")}</button>
+                            <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "channelDescriptionSaveHint")}>
+                              <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || channelDescriptionSaving || channelDescriptionDraft === (ch.description || "")} onClick={() => saveChannelDescription(ch)}>{channelDescriptionSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+                            </span>
+                          </div>
+                        </div>
+                      ) : <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>}
                     </article>
                   ) : null}
                   </div>
