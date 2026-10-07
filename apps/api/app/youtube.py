@@ -256,6 +256,15 @@ def quota_recording(recorder: QuotaRecorder):
         _current_quota_recorder.reset(token)
 
 
+class PartialMutationError(RuntimeError):
+    """A multi-request YouTube mutation changed remote state before a later step failed."""
+
+    def __init__(self, code: str, result: dict):
+        super().__init__(code)
+        self.code = code
+        self.result = result
+
+
 def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
     recorder = recorder or _current_quota_recorder.get()
     try:
@@ -837,17 +846,7 @@ def reorder_playlist_items(
     service = service_for(refresh_token)
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
     wanted = list(dict.fromkeys(value for value in playlist_item_ids if value))
-    current = []
-    token = None
-    while True:
-        kwargs = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
-        if token:
-            kwargs["pageToken"] = token
-        response = _execute(service.playlistItems().list(**kwargs), "playlistItems.list", recorder)
-        current.extend(response.get("items") or [])
-        token = response.get("nextPageToken")
-        if not token:
-            break
+    current = _all_playlist_items(service, playlist_id, recorder)
     current_ids = [item.get("id") or "" for item in current]
     if len(wanted) != len(current_ids) or set(wanted) != set(current_ids):
         raise ValueError("playlist order must contain every current playlist item exactly once")
@@ -860,24 +859,43 @@ def reorder_playlist_items(
             continue
         snippet = (by_id[playlist_item_id].get("snippet") or {})
         resource = snippet.get("resourceId") or {}
-        _execute(
-            service.playlistItems().update(
-                part="snippet",
-                body={
-                    "id": playlist_item_id,
-                    "snippet": {
-                        "playlistId": playlist_id,
-                        "resourceId": {
-                            "kind": resource.get("kind") or "youtube#video",
-                            "videoId": resource.get("videoId"),
+        try:
+            _execute(
+                service.playlistItems().update(
+                    part="snippet",
+                    body={
+                        "id": playlist_item_id,
+                        "snippet": {
+                            "playlistId": playlist_id,
+                            "resourceId": {
+                                "kind": resource.get("kind") or "youtube#video",
+                                "videoId": resource.get("videoId"),
+                            },
+                            "position": target_position,
                         },
-                        "position": target_position,
                     },
+                ),
+                "playlistItems.update",
+                recorder,
+            )
+        except Exception as exc:
+            reconciled = _all_playlist_items(service, playlist_id, recorder)
+            actual_order = [
+                item.get("id") or ""
+                for item in sorted(
+                    reconciled,
+                    key=lambda item: int((item.get("snippet") or {}).get("position") or 0),
+                )
+            ]
+            raise PartialMutationError(
+                "playlist_reorder_partial",
+                {
+                    "playlistId": playlist_id,
+                    "updated": updated,
+                    "playlistItemIds": actual_order,
+                    "failedPlaylistItemId": playlist_item_id,
                 },
-            ),
-            "playlistItems.update",
-            recorder,
-        )
+            ) from exc
         working.pop(current_position)
         working.insert(target_position, playlist_item_id)
         updated += 1
@@ -905,27 +923,83 @@ def delete_playlist_item(
 
 
 
+def _all_playlist_items(service, playlist_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
+    items = []
+    token = None
+    seen_tokens = set()
+    while True:
+        kwargs = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
+        if token:
+            if token in seen_tokens:
+                raise RuntimeError("YouTube playlist pagination token repeated")
+            seen_tokens.add(token)
+            kwargs["pageToken"] = token
+        response = _execute(service.playlistItems().list(**kwargs), "playlistItems.list", recorder)
+        items.extend(response.get("items") or [])
+        next_token = response.get("nextPageToken")
+        if next_token and next_token in seen_tokens:
+            raise RuntimeError("YouTube playlist pagination token repeated")
+        token = next_token
+        if not token:
+            break
+    return items
+
+
+def _playlist_video_ids(items: list[dict]) -> set[str]:
+    return {
+        ((item.get("snippet") or {}).get("resourceId") or {}).get("videoId")
+        for item in items
+        if ((item.get("snippet") or {}).get("resourceId") or {}).get("videoId")
+    }
+
+
 def add_videos_to_playlist(
     refresh_token: str,
     youtube_channel_id: str,
     playlist_id: str,
     video_ids: list[str],
     recorder: QuotaRecorder | None = None,
-) -> list[dict]:
+) -> dict:
     service = service_for(refresh_token)
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
-    out = []
-    for video_id in dict.fromkeys(video_id for video_id in video_ids if video_id):
-        response = _execute(
-            service.playlistItems().insert(
-                part="snippet",
-                body={"snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
-            ),
-            "playlistItems.insert",
-            recorder,
-        )
-        out.append({"playlistItemId": response.get("id") or "", "videoId": video_id})
-    return out
+    wanted = list(dict.fromkeys(video_id for video_id in video_ids if video_id))
+    current_items = _all_playlist_items(service, playlist_id, recorder)
+    present = _playlist_video_ids(current_items)
+    inserted = []
+    already_present = [video_id for video_id in wanted if video_id in present]
+
+    for video_id in wanted:
+        if video_id in present:
+            continue
+        try:
+            response = _execute(
+                service.playlistItems().insert(
+                    part="snippet",
+                    body={"snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
+                ),
+                "playlistItems.insert",
+                recorder,
+            )
+        except Exception as exc:
+            reconciled_items = _all_playlist_items(service, playlist_id, recorder)
+            reconciled_present = _playlist_video_ids(reconciled_items)
+            raise PartialMutationError(
+                "playlist_add_partial",
+                {
+                    "items": inserted,
+                    "alreadyPresent": already_present,
+                    "presentVideoIds": [value for value in wanted if value in reconciled_present],
+                    "failedVideoId": video_id,
+                },
+            ) from exc
+        inserted.append({"playlistItemId": response.get("id") or "", "videoId": video_id})
+        present.add(video_id)
+
+    return {
+        "items": inserted,
+        "alreadyPresent": already_present,
+        "presentVideoIds": [value for value in wanted if value in present],
+    }
 
 
 def add_video_to_playlist(
