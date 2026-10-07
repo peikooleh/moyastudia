@@ -61,6 +61,7 @@ export default function CabinetPage() {
   const [aiSaving, setAiSaving] = useState(false);
   const [aiNotice, setAiNotice] = useState("");
   const [aiError, setAiError] = useState("");
+  const AI_PROMPT_CHAR_LIMIT = 12000;
   const [aiBaseline, setAiBaseline] = useState(null);
 
   useEffect(() => {
@@ -622,8 +623,8 @@ export default function CabinetPage() {
                   <aside className="ai-model-settings-column" aria-labelledby="ai-model-settings-title">
                     <h2 id="ai-model-settings-title">{t(uiLang, "aiModelSettings")}</h2>
                     <div className="ai-model-settings">
-                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /></label>
-                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /></label>
+                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
                     </div>
                   </aside>
                   {aiDirty ? (
