@@ -1,3 +1,5 @@
+from fastapi import HTTPException
+import pytest
 from app import main
 from app.models import Channel, GoogleConnection, User, Video
 from app.settings import settings
