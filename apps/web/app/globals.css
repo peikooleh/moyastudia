@@ -3455,3 +3455,8 @@ body {
 .channel-settings-column .channel-link-actions .btn:hover { background: var(--bg-hover); text-decoration: none; }
 .channel-settings-column .channel-remove-actions { margin-top: 24px; padding-top: 16px; }
 .channel-settings-column .channel-remove-button { min-height: 36px; border-radius: var(--radius-md); }
+
+
+/* Global header grouping: keep controls stable and distinguish status from actions. */
+.header-write-mode { padding-left: 12px; border-left: 1px solid var(--line); }
+.cabinet-link.active { background: var(--bg-hover); color: var(--text); box-shadow: inset 0 -2px var(--accent); font-weight: 700; }
