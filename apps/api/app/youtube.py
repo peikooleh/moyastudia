@@ -10,8 +10,25 @@ from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.errors import HttpError
 
 from .settings import settings
+
+_READ_OPERATION_SUFFIXES = (".list", ".query")
+_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
+
+
+def _is_safe_read_operation(operation: str) -> bool:
+    return operation.endswith(_READ_OPERATION_SUFFIXES)
+
+
+def _is_transient_provider_error(exc: Exception) -> bool:
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    if isinstance(exc, HttpError):
+        return getattr(exc.resp, "status", None) in _TRANSIENT_HTTP_STATUSES
+    return False
+
 
 IDENTITY_SCOPES = [
     "openid",
@@ -163,7 +180,7 @@ def channel_analytics_summary(
     analytics_filter = _analytics_filter(video_id, playlist_id)
     if analytics_filter:
         kwargs["filters"] = analytics_filter
-    response = service.reports().query(**kwargs).execute()
+    response = _execute(service.reports().query(**kwargs), "reports.query")
     if playlist_id:
         rows = response.get("rows") or []
         row = list(rows[0]) if rows else []
@@ -267,12 +284,18 @@ class PartialMutationError(RuntimeError):
 
 def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
     recorder = recorder or _current_quota_recorder.get()
-    try:
-        response = request.execute()
-    except Exception:
-        if recorder:
-            recorder(operation, "youtube_error")
-        raise
+    max_retries = settings.provider_read_retries if _is_safe_read_operation(operation) else 0
+    attempt = 0
+    while True:
+        try:
+            response = request.execute(num_retries=0)
+            break
+        except Exception as exc:
+            if attempt >= max_retries or not _is_transient_provider_error(exc):
+                if recorder:
+                    recorder(operation, "youtube_error")
+                raise
+            attempt += 1
     if recorder:
         recorder(operation, "success")
     return response
