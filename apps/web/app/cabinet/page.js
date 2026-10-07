@@ -108,11 +108,18 @@ export default function CabinetPage() {
   useEffect(() => {
     if (!session?.authenticated) return undefined;
     let cancelled = false;
+    const syncWriteMode = (event) => {
+      if (!cancelled && event.detail) setWriteMode(event.detail);
+    };
+    window.addEventListener("moyastudia:write-mode", syncWriteMode);
     apiFetch("/write-mode")
       .then((response) => (response.ok ? response.json() : { enabled: false }))
       .then((status) => { if (!cancelled) setWriteMode(status); })
       .catch(() => { if (!cancelled) setWriteMode({ enabled: false }); });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.removeEventListener("moyastudia:write-mode", syncWriteMode);
+    };
   }, [session?.authenticated]);
 
   useEffect(() => {
