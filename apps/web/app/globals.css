@@ -3350,7 +3350,7 @@ body {
   opacity: 1;
 }
 [data-theme="dark"] .statistics-channel-menu { box-shadow: 0 18px 44px rgb(0 0 0 / 48%); }
-[data-theme="dark"] .statistics-kpis article::after { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+[data-theme="dark"] .statistics-kpis .statistics-kpi::after { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
 @media (max-width: 1120px) {
   .statistics-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -3409,28 +3409,38 @@ body {
   transform: scale(.72) rotate(180deg);
 }
 .statistics-status-link {
-  width: 100%;
-  margin: 12px 0 0;
-  padding: 0;
+  width: calc(100% + 12px);
+  margin: 6px -6px 0;
+  padding: 7px 6px;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
 }
-.statistics-status-link:hover > span:first-child,
-.statistics-status-link:focus-visible > span:first-child {
+.statistics-status-name { display: inline-flex; align-items: center; gap: 5px; }
+.statistics-status-name > i {
+  display: inline-block;
   color: var(--accent);
+  font-style: normal;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity .15s ease, transform .15s ease;
 }
+.statistics-status-link:hover,
+.statistics-status-link:focus-visible { background: var(--bg-hover); }
+.statistics-status-link:hover > .statistics-status-name,
+.statistics-status-link:focus-visible > .statistics-status-name { color: var(--accent); }
+.statistics-status-link:hover .statistics-status-name > i,
+.statistics-status-link:focus-visible .statistics-status-name > i { opacity: 1; transform: translateX(0); }
 .statistics-status-link:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-  outline-offset: 4px;
-  border-radius: var(--radius-sm);
+  outline-offset: 1px;
 }
 .statistics-status-link:hover > i > span,
-.statistics-status-link:focus-visible > i > span {
-  filter: brightness(.92);
-}
+.statistics-status-link:focus-visible > i > span { filter: brightness(.92); }
 
 /* Cabinet: shared Studio visual language. */
 .cabinet-tabs { padding: 9px 24px; }
