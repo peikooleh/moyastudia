@@ -32,7 +32,7 @@ export function Landing({ authError = "" }) {
           <div className="land-preview-top">
             <div className="land-window-dots" aria-hidden="true"><i /><i /><i /></div>
             <span>{t(uiLang, "workspacePreview")}</span>
-            <span className="land-preview-live">{t(uiLang, "secureReadOnly")}</span>
+            <span className="land-preview-live">{t(uiLang, "landProtectedShort")}</span>
           </div>
           <div className="land-preview-content">
             <div className="land-preview-sidebar" aria-hidden="true">
