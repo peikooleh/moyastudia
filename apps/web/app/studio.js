@@ -696,6 +696,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setWorkingVideo(null);
     setWorkingDraft(null);
     setWorkingEdits({});
+    setVideoStatusDraft("");
     setWorkingError("");
     setWorkingSaveState("");
     if (
