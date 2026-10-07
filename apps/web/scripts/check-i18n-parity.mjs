@@ -16,20 +16,41 @@ function localeBlock(locale, nextLocale) {
   return source.slice(start, end);
 }
 
-function localeKeys(block) {
-  return new Set([...block.matchAll(/^ {4}([A-Za-z0-9_]+):/gm)].map((match) => match[1]));
+function localeKeyList(block) {
+  return [...block.matchAll(/^ {4}([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
 }
 
-const keys = Object.fromEntries(
+function duplicateKeys(list) {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const key of list) {
+    if (seen.has(key)) duplicates.add(key);
+    seen.add(key);
+  }
+  return [...duplicates].sort();
+}
+
+const keyLists = Object.fromEntries(
   locales.map((locale, index) => [
     locale,
-    localeKeys(localeBlock(locale, locales[index + 1])),
+    localeKeyList(localeBlock(locale, locales[index + 1])),
   ]),
 );
+const keys = Object.fromEntries(
+  locales.map((locale) => [locale, new Set(keyLists[locale])]),
+);
 
-const baseline = keys.en;
 let failed = false;
 
+for (const locale of locales) {
+  const duplicates = duplicateKeys(keyLists[locale]);
+  if (duplicates.length) {
+    failed = true;
+    console.error(`i18n duplicate keys in ${locale}: ${duplicates.join(", ")}`);
+  }
+}
+
+const baseline = keys.en;
 for (const locale of locales.slice(1)) {
   const missing = [...baseline].filter((key) => !keys[locale].has(key));
   const extra = [...keys[locale]].filter((key) => !baseline.has(key));
@@ -43,4 +64,4 @@ for (const locale of locales.slice(1)) {
 
 if (failed) process.exit(1);
 
-console.log(`i18n parity OK: ${baseline.size} keys in EN/RU/UK`);
+console.log(`i18n parity OK: ${baseline.size} unique keys in EN/RU/UK, no duplicates`);
