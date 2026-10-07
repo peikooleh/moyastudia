@@ -603,10 +603,11 @@ export default function CabinetPage() {
               <div className="panel cabinet-account-panel">
                 <div className="cabinet-account-layout">
                   <aside className="cabinet-account-summary">
-                    <h1>{t(uiLang, "account")}</h1>
+                    <h1>{t(uiLang, "profileSection")}</h1>
                     <div className="profile-fields field">
                       <label>{t(uiLang, "email")}</label>
                       <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
+                      <p className="account-session-hint">{t(uiLang, "moyaStudiaAccountHint")}</p>
                     </div>
                   </aside>
                   <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
