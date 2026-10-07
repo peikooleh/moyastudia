@@ -6,7 +6,7 @@ class _Request:
         self.response = response
         self.error = error
 
-    def execute(self):
+    def execute(self, **_kwargs):
         if self.error is not None:
             raise self.error
         return self.response
