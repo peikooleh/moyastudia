@@ -407,7 +407,7 @@ export function StatisticsDashboard({
               onClick={() => onOpenStatus?.(key)}
               title={t(uiLang, "statisticsOpenStatusVideos", { status: t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled") })}
             >
-              <span>{t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled")}</span>
+              <span className="statistics-status-name">{t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled")}<i aria-hidden="true">→</i></span>
               <b>{formatNumber(value, locale)}</b>
               <i><span style={{ width: `${Math.round((value / maxContent) * 100)}%` }} /></i>
             </button>
