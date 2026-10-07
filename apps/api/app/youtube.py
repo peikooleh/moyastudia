@@ -1106,7 +1106,8 @@ def update_video_calendar_status(
         if field in current_status
     }
     status["privacyStatus"] = privacy_status
-    if publish_at:
+    current_publish_at = current_status.get("publishAt")
+    if publish_at and publish_at != current_publish_at:
         status["publishAt"] = publish_at
     response = _execute(
         service.videos().update(
