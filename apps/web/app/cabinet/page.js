@@ -638,10 +638,12 @@ export default function CabinetPage() {
                           );
                         })}
                         {connection.channels.length === 0 ? <p className="empty-block">{t(uiLang, "connectionNoChannels")}</p> : null}
-                        <button className="text-button" type="button" onClick={() => selectConnectionChannels(connection.id)}>{t(uiLang, "selectConnectionChannels")}</button>
                       </section>
                     ))}
                     {connectionsError ? <p className="selection-error" role="alert">{t(uiLang, "connectionsLoadError")}</p> : null}
+                    <div className="channel-list-footer">
+                      <a className="text-button channel-connect-account" href={apiUrl("/auth/youtube/login")}>+ {t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                    </div>
                   </div>
                   <div className="selected-channel-column">
                   {ch ? (
