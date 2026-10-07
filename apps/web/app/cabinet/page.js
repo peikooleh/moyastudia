@@ -650,7 +650,7 @@ export default function CabinetPage() {
                     <article className="chan-card">
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
-                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "activeStudioChannel")}</span></div>
+                        <div><div className="channel-current-badge">{t(uiLang, "activeStudioChannel")}</div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small></div>
                       </header>
                       <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
                         <select value={ch.working_language || prefs.channelLangs[channelPreferenceKey(ch)] || ""} disabled={channelLanguageSaving} onChange={(event) => saveChannelWorkingLanguage(ch, event.target.value)}>
@@ -668,7 +668,6 @@ export default function CabinetPage() {
                       <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                     </article>
                   ) : null}
-                    <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
                   </div>
                   {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>
