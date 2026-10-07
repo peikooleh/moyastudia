@@ -20,9 +20,9 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 ## Что пока намеренно не включено
 
-- Загрузка больших видеофайлов в MoyaStudia.
-- Полный набор операций YouTube Studio: реализованы только явно поддерживаемые write increments; неподдерживаемые destructive/upload flows не считаются доступными автоматически.
-- Загрузка больших видеофайлов и полноценный upload pipeline.
+- Хранение больших исходных видеофайлов и полноценный video upload pipeline.
+- Полный набор операций YouTube Studio: доступны только явно реализованные write flows; destructive удаление YouTube video/channel не реализовано.
+- Полноценный Google revoke/disconnect lifecycle.
 - Биллинг и публичный SaaS multi-tenancy.
 - Вызовы OpenAI/Gemini/Anthropic пока не включены: AI connection settings уже хранятся server-side, но наличие ключа не запускает provider call и не даёт AI права напрямую изменять YouTube.
 
@@ -45,7 +45,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Подробные команды и OAuth setup приведены в [HOWTOSTART.md](HOWTOSTART.md). Не применяйте начальные миграции к базе с prototype `channels`/`videos`, пока не проверено сохранение её данных: `0001_foundation` удаляет эти старые таблицы.
 
-Проверки: из `apps/api` — `python -m pytest`; из `apps/web` — `node --test tests/studio-catalog.test.mjs`, `npm run lint`, `npm run build`.
+Проверки: из `apps/api` — `python -m pytest`; из `apps/web` — `node --test tests/studio-catalog.test.mjs`, `npm run check:i18n`, `npm run lint`, `npm run build`.
 
 ## Foundation data model
 
@@ -61,19 +61,17 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - `GET /auth/google/login` → callback `GET /auth/google/callback`
 - `GET /auth/session`; `POST /auth/logout`
 - `GET /auth/youtube/login` → callback `GET /auth/youtube/callback`
-- `GET /write-mode`; `PUT /write-mode` для server-authoritative Write Mode
-- `GET /quota/today` для MoyaStudia-tracked YouTube API usage
-- `GET /ai-connections`; `PUT /ai-connections` для encrypted per-user AI settings
-- `GET /channels` and channel data routes require a server session and owner match
-- `GET /google-connections/{connection_id}/available-channels`
-- `POST /google-connections/{connection_id}/channels`
-- `POST /channels/{id}/refresh-profile`
-- `DELETE /channels/{id}` (пока отвечает 409; disconnect ещё не реализован)
-- `GET /channels/{id}/videos`
-- `GET /channels/{id}/catalog/status`
-- `POST /channels/{id}/catalog/sync`
-- `POST /channels/{id}/catalog/sync/continue`
-- `GET /channels/{id}/playlists`
+- `GET /write-mode`; `PUT /write-mode` — server-authoritative Write Mode
+- `GET /quota/today` — MoyaStudia-tracked YouTube Data API usage
+- `GET /ai-connections`; `PUT /ai-connections` — encrypted per-user AI settings
+- `GET /channels`, `POST /channels/{id}/refresh-profile`, `PUT /channels/{id}/working-language`, `PUT /channels/{id}/metadata`
+- `DELETE /channels/{id}` — убрать managed channel из MoyaStudia; YouTube-канал не удаляется
+- `GET /google-connections/{connection_id}/available-channels`; `POST /google-connections/{connection_id}/channels`
+- Video catalog/working/write routes: `/channels/{id}/videos`, `.../working`, `.../publish-metadata`, `.../calendar-status`, `.../thumbnail`, `.../captions`
+- Catalog sync: `GET .../catalog/status`, `POST .../catalog/sync`, `POST .../catalog/sync/continue`
+- Statistics: `GET /channels/{id}/analytics/summary`
+- Remote playlists: list/items plus metadata, thumbnail, add-video, reorder/position and remove-item write routes
+- Local playlist drafts: list/create/membership/delete under `/channels/{id}/local-playlists`
 
 `apps/api/app/youtube.py` — Google/YouTube OAuth и API. `apps/api/app/main.py` — HTTP routes и ownership checks. `apps/api/app/tokens.py` — шифрование токенов. Не копировать `main.py` поверх `youtube.py`.
 
