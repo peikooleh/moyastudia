@@ -1,7 +1,7 @@
 import base64
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -64,8 +64,14 @@ class AIConnectionUpdate(BaseModel):
     description_prompt: str = Field(default="", max_length=12000)
 
 
+ExternalId = Annotated[str, Field(min_length=1, max_length=256)]
+YouTubeChannelId = Annotated[str, Field(min_length=1, max_length=128)]
+
+
 class ChannelSelection(BaseModel):
-    youtube_channel_ids: list[str]
+    model_config = ConfigDict(extra="forbid")
+
+    youtube_channel_ids: list[YouTubeChannelId] = Field(min_length=1, max_length=500)
 
 
 class ChannelWorkingLanguageUpdate(BaseModel):
@@ -96,7 +102,7 @@ class LocalPlaylistCreate(BaseModel):
 
 class LocalPlaylistMembershipUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    video_ids: list[str] = Field(default_factory=list, max_length=500)
+    video_ids: list[ExternalId] = Field(default_factory=list, max_length=500)
 
 
 class PlaylistMetadataUpdate(BaseModel):
@@ -108,7 +114,7 @@ class PlaylistMetadataUpdate(BaseModel):
 
 class PlaylistVideosUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    video_ids: list[str] = Field(min_length=1, max_length=500)
+    video_ids: list[ExternalId] = Field(min_length=1, max_length=500)
 
 
 class PlaylistItemPositionUpdate(BaseModel):
@@ -118,7 +124,7 @@ class PlaylistItemPositionUpdate(BaseModel):
 
 class PlaylistOrderUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    playlist_item_ids: list[str] = Field(min_length=1, max_length=500)
+    playlist_item_ids: list[ExternalId] = Field(min_length=1, max_length=500)
 
 
 class CalendarVideoUpdate(BaseModel):
@@ -135,6 +141,8 @@ class VideoPublishRequest(BaseModel):
 
 
 class CatalogSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     mode: Literal["initial", "incremental", "reconcile"]
 
 
@@ -2073,7 +2081,7 @@ def channel_playlists(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}", dependencies=[Depends(require_same_origin)])
@@ -2103,7 +2111,7 @@ def update_channel_playlist(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}/thumbnail", dependencies=[Depends(require_same_origin)])
@@ -2132,7 +2140,7 @@ async def upload_channel_playlist_thumbnail(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.post("/channels/{channel_id}/playlists/{playlist_id}/videos", dependencies=[Depends(require_same_origin)])
@@ -2155,7 +2163,7 @@ def add_channel_playlist_videos(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}/order", dependencies=[Depends(require_same_origin)])
@@ -2182,7 +2190,7 @@ def reorder_channel_playlist(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.delete("/channels/{channel_id}/playlists/{playlist_id}/items/{playlist_item_id}", dependencies=[Depends(require_same_origin)])
@@ -2207,7 +2215,7 @@ def delete_channel_playlist_item(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.put("/channels/{channel_id}/playlists/{playlist_id}/items/{playlist_item_id}/position", dependencies=[Depends(require_same_origin)])
@@ -2233,7 +2241,7 @@ def update_channel_playlist_item_position(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
 
 @app.get("/channels/{channel_id}/playlists/{playlist_id}/items")
@@ -2259,7 +2267,7 @@ def channel_playlist_items(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
 
     video_ids = [item["videoId"] for item in result["items"]]
     catalog_items = {}
@@ -2311,7 +2319,7 @@ def channel_playlist_memberships(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
     return {"memberships": memberships}
 
 
@@ -2337,7 +2345,7 @@ def refresh_profile(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(502, detail={"code": "youtube_request_failed"}) from exc
     row.title = info.get("title") or row.title
     if info.get("thumbnail_url"):
         row.thumbnail_url = info["thumbnail_url"]
