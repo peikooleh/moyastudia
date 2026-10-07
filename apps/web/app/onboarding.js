@@ -20,7 +20,6 @@ export function Onboarding({ channels = [], youtubeConnected = false }) {
       <div className="onb-card">
         <div className="onb-logo">{t(uiLang, "brand")}</div>
         <nav className="onb-account-nav" aria-label={t(uiLang, "account") }>
-          <a className="btn ghost" href="/cabinet">{t(uiLang, "openCabinet")}</a>
           <LogoutControl />
         </nav>
         <div
