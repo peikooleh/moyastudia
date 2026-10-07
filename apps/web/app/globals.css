@@ -1967,7 +1967,7 @@ body {
 .video-summary-meta dt,
 .video-properties > label,
 .video-properties legend {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 .video-summary-meta code {
@@ -1985,7 +1985,7 @@ body {
   font-weight: 600;
 }
 .field-limit {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -1997,13 +1997,13 @@ body {
 .video-properties fieldset small,
 .video-properties > p,
 .write-action-help {
-  font-size: 12px;
+  font-size: 13px;
 }
 .ai-improve-btn {
   padding: 3px 7px;
   border: 1px solid transparent;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 .ai-improve-btn:hover:not(:disabled) {
@@ -2014,7 +2014,7 @@ body {
 .captions-upload {
   min-height: 34px;
   padding-block: 6px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .video-summary {
   padding-bottom: 14px;
@@ -2970,7 +2970,7 @@ body {
   display: block;
   margin-bottom: 5px;
   color: var(--accent);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -3022,7 +3022,7 @@ body {
   align-content: start;
   gap: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .statistics-control select,
@@ -3086,7 +3086,7 @@ body {
 .statistics-channel-trigger strong,
 .statistics-channel-menu strong { color: var(--text); font-size: 13px; }
 .statistics-channel-trigger small,
-.statistics-channel-menu small { margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.statistics-channel-menu small { margin-top: 1px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .statistics-channel-menu {
   position: absolute;
   z-index: 80;
@@ -3128,7 +3128,7 @@ body {
   min-height: 30px;
   padding: 0 2px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .statistics-status-slot:empty { min-height: 0; padding: 0; }
 .statistics-status-slot .statistics-error {
@@ -3294,7 +3294,7 @@ body {
   gap: 8px;
   margin: 12px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .statistics-lower-grid {
@@ -3475,17 +3475,17 @@ body {
 .channel-edit-metadata { border-radius: var(--radius-sm); }
 .channel-detail-heading { gap: 10px; padding-right: 44px; }
 .channel-detail-heading h2 { font-size: 16px; line-height: 1.25; }
-.channel-current-badge { font-size: 9px; }
-.channel-detail-heading small { font-size: 10px; }
+.channel-current-badge { font-size: 11px; }
+.channel-detail-heading small { font-size: 11px; }
 .channel-metrics { margin: 2px 0 8px; padding: 12px 0; }
-.channel-metrics dt { font-size: 10px; }
+.channel-metrics dt { font-size: 11px; }
 .channel-metrics dd { margin-top: 4px; font-size: 20px; }
 .chan-card .chan-desc { margin: 10px 0 0; font-size: 13px; line-height: 1.55; }
 .channel-keywords-view { display: grid; gap: 5px; margin-top: -2px; padding-top: 10px; border-top: 1px solid var(--line); }
-.channel-keywords-view > span { color: var(--muted); font-size: 10px; }
+.channel-keywords-view > span { color: var(--muted); font-size: 11px; }
 .channel-keywords-view > p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .channel-settings-panel h2 { margin-bottom: 16px; font-size: 14px; }
-.channel-settings-column .channel-language-control { gap: 6px; font-size: 11px; color: var(--muted); }
+.channel-settings-column .channel-language-control { gap: 6px; font-size: 12px; color: var(--muted); }
 .channel-settings-column .channel-language-control select { min-height: 36px; border-radius: var(--radius-md); font-size: 12px; color: var(--text); }
 .channel-settings-column .channel-link-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .channel-settings-column .channel-link-actions .btn { width: 100%; min-height: 36px; justify-content: center; box-sizing: border-box; padding: 7px 10px; border-radius: var(--radius-md); font-size: 12px; text-decoration: none; }
