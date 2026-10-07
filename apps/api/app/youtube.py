@@ -1041,25 +1041,28 @@ def update_video_metadata(
     if not current_items:
         raise RuntimeError("YouTube video status is unavailable")
     current_status = current_items[0].get("status") or {}
-    mutable_status_fields = (
-        "privacyStatus",
-        "publishAt",
-        "license",
-        "embeddable",
-        "publicStatsViewable",
-        "containsSyntheticMedia",
-    )
-    status = {
-        field: current_status[field]
-        for field in mutable_status_fields
-        if field in current_status
-    }
-    status["selfDeclaredMadeForKids"] = made_for_kids
+    audience_changed = current_status.get("selfDeclaredMadeForKids") is not made_for_kids
+    body = {"id": youtube_video_id, "snippet": snippet}
+    part = "snippet"
+    if audience_changed:
+        mutable_status_fields = (
+            "privacyStatus",
+            "publishAt",
+            "license",
+            "embeddable",
+            "publicStatsViewable",
+            "containsSyntheticMedia",
+        )
+        status = {
+            field: current_status[field]
+            for field in mutable_status_fields
+            if field in current_status
+        }
+        status["selfDeclaredMadeForKids"] = made_for_kids
+        body["status"] = status
+        part = "snippet,status"
     response = _execute(
-        service.videos().update(
-            part="snippet,status",
-            body={"id": youtube_video_id, "snippet": snippet, "status": status},
-        ),
+        service.videos().update(part=part, body=body),
         "videos.update",
         recorder,
     )
@@ -1105,9 +1108,13 @@ def update_video_calendar_status(
         )
         if field in current_status
     }
-    status["privacyStatus"] = privacy_status
+    current_privacy = current_status.get("privacyStatus") or ""
     current_publish_at = current_status.get("publishAt")
-    if publish_at and publish_at != current_publish_at:
+    same_publish_at = (publish_at or None) == (current_publish_at or None)
+    if current_privacy == privacy_status and same_publish_at:
+        return {"privacy": current_privacy, "publishAt": current_publish_at}
+    status["privacyStatus"] = privacy_status
+    if publish_at:
         status["publishAt"] = publish_at
     response = _execute(
         service.videos().update(
