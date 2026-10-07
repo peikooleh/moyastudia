@@ -122,6 +122,7 @@ export function Shell({ children }) {
         return;
       }
       setWriteMode(data);
+      window.dispatchEvent(new CustomEvent("moyastudia:write-mode", { detail: data }));
     } catch {
       setWriteMode((current) => ({ ...current, error: t(uiLang, "writeModeUpdateError") }));
     } finally {
@@ -243,8 +244,7 @@ export function Shell({ children }) {
         </nav>
         <div className="spacer" />
         <div className="header-system-status">
-          {!inCabinet ? (
-            <div className="header-write-mode">
+          <div className="header-write-mode">
               <span>{t(uiLang, "writeMode")}</span>
               <button
                 className={`mode-switch ${writeMode.enabled ? "is-on" : "is-off"}`}
@@ -259,7 +259,6 @@ export function Shell({ children }) {
                 <span aria-hidden="true" />
               </button>
             </div>
-          ) : null}
           <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
             <span>{t(uiLang, "syncStatus")}</span>
             <strong>{t(uiLang, syncStatusKey)}</strong>
