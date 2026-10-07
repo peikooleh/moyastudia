@@ -3434,3 +3434,39 @@ body {
 .channel-link-actions .text-button { width: auto; padding: 0; border: 0; background: transparent; color: var(--text); font-size: 12px; font-weight: 400; line-height: 1.4; text-decoration: none; cursor: pointer; }
 .channel-link-actions a:hover,
 .channel-link-actions .text-button:hover { color: var(--text); text-decoration: underline; }
+
+
+/* Cabinet visual correction: restore dense left rail and separate channel actions. */
+.channel-management > .channel-option-list { display: block; padding: 8px 12px; }
+.channel-option-list .channel-group { margin: 0; padding: 6px 0 8px; }
+.channel-option-list .channel-group > header { min-height: 0; padding: 0 6px 4px; }
+.channel-option-list .channel-group-list-label { padding: 3px 6px 1px; }
+.channel-option-list .channel-group > .channel-option {
+  min-height: 0;
+  margin: 0;
+  padding: 7px 6px;
+  gap: 8px;
+  border-bottom: 0;
+}
+.channel-option-list .channel-option > img,
+.channel-option-list .channel-option > .avatar { flex-basis: 36px; width: 36px; height: 36px; }
+.channel-option-list .channel-option-copy { gap: 2px; }
+.channel-option-list .channel-list-footer { padding: 8px 6px 2px; }
+.channel-option-list .channel-connect-account { min-height: 30px; padding: 5px 12px; font-size: 11px; }
+.channel-settings-column .channel-link-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.channel-settings-column .channel-link-actions .btn {
+  width: 100%;
+  justify-content: center;
+  box-sizing: border-box;
+  font-size: 12px;
+  text-decoration: none;
+}
+.channel-settings-column .channel-link-actions .btn:hover { text-decoration: none; }
+.channel-settings-column .channel-remove-actions { margin-top: 28px; padding-top: 18px; }
