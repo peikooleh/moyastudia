@@ -182,11 +182,16 @@ def channel_analytics_timeseries(
     dimension: str = "day",
 ) -> list[dict]:
     service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    timeseries_metrics = (
+        "views,estimatedMinutesWatched"
+        if playlist_id
+        else "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost"
+    )
     kwargs = {
         "ids": "channel==MINE",
         "startDate": start_date,
         "endDate": end_date,
-        "metrics": "views,estimatedMinutesWatched",
+        "metrics": timeseries_metrics,
         "dimensions": dimension,
         "sort": dimension,
     }
@@ -198,11 +203,24 @@ def channel_analytics_timeseries(
     for row in response.get("rows") or []:
         if len(row) < 3:
             continue
-        result.append({
+        point = {
             "date": str(row[0]),
             "views": int(row[1] or 0),
             "estimated_minutes_watched": float(row[2] or 0),
-        })
+            "average_view_duration": None,
+            "average_view_percentage": None,
+            "subscribers_gained": None,
+            "subscribers_lost": None,
+        }
+        if not playlist_id:
+            values = list(row) + [0] * 7
+            point.update({
+                "average_view_duration": float(values[3] or 0),
+                "average_view_percentage": float(values[4] or 0),
+                "subscribers_gained": int(values[5] or 0),
+                "subscribers_lost": int(values[6] or 0),
+            })
+        result.append(point)
     return result
 
 

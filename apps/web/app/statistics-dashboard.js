@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { catalogVideosUrl } from "../lib/catalog-state.mjs";
+import { catalogVideosUrl, continueCatalogSyncPage } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
 
@@ -56,9 +56,12 @@ export function StatisticsDashboard({
   const [analytics, setAnalytics] = useState(null);
   const [analyticsError, setAnalyticsError] = useState("");
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [activeKpi, setActiveKpi] = useState("views");
   const [catalogVideos, setCatalogVideos] = useState([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState({});
+  const [catalogSyncing, setCatalogSyncing] = useState(false);
+  const [catalogSyncError, setCatalogSyncError] = useState("");
   const requestId = useRef(0);
   const locale = t(uiLang, "calendarLocale");
 
@@ -86,7 +89,54 @@ export function StatisticsDashboard({
     const controller = new AbortController();
     let cancelled = false;
 
+    async function ensureCompleteCatalog() {
+      setCatalogSyncing(true);
+      setCatalogSyncError("");
+      try {
+        let statusResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/status`, { signal: controller.signal });
+        let status = await statusResponse.json();
+        if (!statusResponse.ok) throw new Error(status?.detail || "catalog status unavailable");
+
+        if (status.state === "NOT_IMPORTED") {
+          const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "initial" }),
+            signal: controller.signal,
+          });
+          status = await startResponse.json();
+          if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
+        } else {
+          const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "incremental" }),
+            signal: controller.signal,
+          });
+          status = await startResponse.json();
+          if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
+        }
+
+        while (["LOADING", "PARTIAL", "STALE", "ERROR"].includes(status.state)) {
+          if (cancelled) return;
+          status = await continueCatalogSyncPage(
+            selectedChannelId,
+            apiFetch,
+            "catalog sync unavailable",
+            () => {},
+          );
+        }
+      } catch (error) {
+        if (error.name === "AbortError" || cancelled) return;
+        setCatalogSyncError(String(error.message || error));
+      } finally {
+        if (!cancelled) setCatalogSyncing(false);
+      }
+    }
+
     async function loadCompleteCatalog() {
+      await ensureCompleteCatalog();
+      if (cancelled) return;
       const items = [];
       let cursor = "";
       let firstPage = true;
@@ -109,6 +159,7 @@ export function StatisticsDashboard({
     setCatalogVideos([]);
     setCatalogTotal(0);
     setStatusCounts({});
+    setCatalogSyncError("");
     loadCompleteCatalog().catch((error) => {
       if (error.name !== "AbortError" && !cancelled) {
         setCatalogVideos([]);
@@ -125,7 +176,7 @@ export function StatisticsDashboard({
     [playlists],
   );
   const analyticsVideos = useMemo(
-    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public"),
+    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public" && video.availability !== "unavailable"),
     [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
@@ -183,7 +234,6 @@ export function StatisticsDashboard({
     : scope === "playlist"
       ? remotePlaylists.find((playlist) => String(playlist.id) === String(playlistId))?.title || t(uiLang, "statisticsChoosePlaylist")
       : t(uiLang, "statisticsScopeChannel");
-  const maxViews = Math.max(1, ...(analytics?.series || []).map((point) => Number(point.views || 0)));
   const subscriberMetricsAvailable = analytics?.subscribers_gained != null && analytics?.subscribers_lost != null;
   const netSubscribers = subscriberMetricsAvailable
     ? Number(analytics.subscribers_gained) - Number(analytics.subscribers_lost)
@@ -195,6 +245,48 @@ export function StatisticsDashboard({
     scheduled: Number(statusCounts?.scheduled || 0),
   };
   const maxContent = Math.max(1, ...Object.values(counts));
+  const currentSubscriberTotal = currentChannel?.subscriber_count == null ? null : Number(currentChannel.subscriber_count);
+  const kpiDefinitions = {
+    views: {
+      label: t(uiLang, "videoViews"),
+      value: analytics ? formatNumber(analytics.views, locale) : "—",
+      detail: periodLabel,
+      seriesValue: (point) => Number(point.views || 0),
+      seriesTitle: (point) => `${point.date}: ${formatNumber(point.views, locale)}`,
+      chartTitle: t(uiLang, "statisticsViewsOverTime"),
+    },
+    watchTime: {
+      label: t(uiLang, "statisticsWatchTime"),
+      value: analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—",
+      detail: periodLabel,
+      seriesValue: (point) => Number(point.estimated_minutes_watched || 0),
+      seriesTitle: (point) => `${point.date}: ${t(uiLang, "statisticsWatchTimeValue", { count: (Number(point.estimated_minutes_watched || 0) / 60).toFixed(1) })}`,
+      chartTitle: t(uiLang, "statisticsWatchTimeOverTime"),
+    },
+    averageDuration: {
+      label: t(uiLang, "statisticsAverageViewDuration"),
+      value: analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—",
+      detail: analytics?.average_view_percentage != null ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage).toFixed(1) }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
+      seriesValue: (point) => point.average_view_duration == null ? null : Number(point.average_view_duration),
+      seriesTitle: (point) => `${point.date}: ${formatDuration(point.average_view_duration, uiLang)}`,
+      chartTitle: t(uiLang, "statisticsAverageDurationOverTime"),
+    },
+    subscribers: {
+      label: t(uiLang, scope === "channel" ? "statisticsSubscribersTotal" : "statisticsSubscribersChange"),
+      value: analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : formatNullableNumber(netSubscribers, locale)) : "—",
+      detail: analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
+      seriesValue: (point) => point.subscribers_gained == null || point.subscribers_lost == null ? null : Number(point.subscribers_gained) - Number(point.subscribers_lost),
+      seriesTitle: (point) => `${point.date}: ${Number(point.subscribers_gained || 0) - Number(point.subscribers_lost || 0)} (${t(uiLang, "statisticsSubscribersDetail", { gained: point.subscribers_gained || 0, lost: point.subscribers_lost || 0 })})`,
+      chartTitle: t(uiLang, "statisticsSubscribersOverTime"),
+    },
+  };
+  const activeMetric = kpiDefinitions[activeKpi] || kpiDefinitions.views;
+  const chartPoints = (analytics?.series || []).map((point) => ({ point, value: activeMetric.seriesValue(point) })).filter(({ value }) => value != null);
+  const chartValues = chartPoints.map(({ value }) => Number(value));
+  const chartMin = Math.min(0, ...chartValues);
+  const chartMax = Math.max(0, ...chartValues);
+  const chartRange = Math.max(1, chartMax - chartMin);
+  const positiveShare = chartMin < 0 ? (chartMax / chartRange) * 100 : 100;
 
   return (
     <main className="statistics-workspace">
@@ -265,25 +357,33 @@ export function StatisticsDashboard({
 
       <div className="statistics-status-slot" aria-live="polite">
         {!scopeReady ? <span>{scope === "video" ? t(uiLang, "statisticsChooseVideoHint") : t(uiLang, "statisticsChoosePlaylistHint")}</span> : null}
+        {catalogSyncing ? <span>{t(uiLang, "statisticsCatalogUpdating")}</span> : null}
+        {catalogSyncError ? <span className="statistics-error">{t(uiLang, "statisticsCatalogUpdateFailed")}</span> : null}
         {analyticsLoading ? <span>{t(uiLang, "statisticsUpdating")}</span> : null}
         {analyticsError ? <span className="statistics-error">{t(uiLang, analyticsError)}</span> : null}
       </div>
 
       <section className="statistics-kpis">
-        <article><span>{t(uiLang, "videoViews")}</span><strong>{analytics ? formatNumber(analytics.views, locale) : "—"}</strong><small>{periodLabel}</small></article>
-        <article><span>{t(uiLang, "statisticsWatchTime")}</span><strong>{analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—"}</strong><small>{periodLabel}</small></article>
-        <article><span>{t(uiLang, "statisticsAverageViewDuration")}</span><strong>{analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—"}</strong><small>{analytics?.average_view_percentage != null ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage).toFixed(1) }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel}</small></article>
-        <article><span>{t(uiLang, "statisticsSubscribersNet")}</span><strong>{analytics ? formatNullableNumber(netSubscribers, locale) : "—"}</strong><small>{analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel}</small></article>
+        {Object.entries(kpiDefinitions).map(([key, metric]) => (
+          <button key={key} type="button" className={`statistics-kpi ${activeKpi === key ? "active" : ""}`} onClick={() => setActiveKpi(key)} aria-pressed={activeKpi === key}>
+            <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small>
+          </button>
+        ))}
       </section>
 
       <section className="statistics-panel statistics-trend">
-        <header><div><small>{t(uiLang, "statisticsTrend")}</small><h2>{t(uiLang, "statisticsViewsOverTime")}</h2></div><span>{scopeLabel} · {periodLabel}</span></header>
+        <header><div><small>{t(uiLang, "statisticsTrend")}</small><h2>{activeMetric.chartTitle}</h2></div><span>{scopeLabel} · {periodLabel}</span></header>
         <div className="statistics-chart-stage">
-          {(analytics?.series || []).length ? (
-            <div className="statistics-bars" aria-label={t(uiLang, "statisticsViewsOverTime")}>
-              {analytics.series.map((point) => <i key={point.date} style={{ height: `${Math.max(2, Math.round((Number(point.views || 0) / maxViews) * 100))}%` }} title={`${point.date}: ${point.views}`} />)}
+          {chartPoints.length ? (
+            <div className={`statistics-bars ${chartMin < 0 ? "signed" : ""}`} aria-label={activeMetric.chartTitle}>
+              {chartMin < 0 ? <span className="statistics-zero-line" style={{ bottom: `${positiveShare}%` }} /> : null}
+              {chartPoints.map(({ point, value }) => {
+                const positive = Number(value) >= 0;
+                const size = Math.max(2, Math.round((Math.abs(Number(value)) / Math.max(1, positive ? chartMax : Math.abs(chartMin))) * (chartMin < 0 ? (positive ? positiveShare : 100 - positiveShare) : 100)));
+                return <i key={point.date} className={positive ? "positive" : "negative"} style={chartMin < 0 ? (positive ? { height: `${size}%`, bottom: `${100 - positiveShare}%` } : { height: `${size}%`, top: `${positiveShare}%` }) : { height: `${size}%` }} title={activeMetric.seriesTitle(point)} />;
+              })}
             </div>
-          ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, "statisticsNoAnalyticsData") : ""}</div>}
+          ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
         </div>
         <p>{t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
       </section>
@@ -307,7 +407,7 @@ export function StatisticsDashboard({
               onClick={() => onOpenStatus?.(key)}
               title={t(uiLang, "statisticsOpenStatusVideos", { status: t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled") })}
             >
-              <span>{t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled")}</span>
+              <span className="statistics-status-name">{t(uiLang, key === "public" ? "filterPublic" : key === "private" ? "filterPrivate" : key === "unlisted" ? "filterUnlisted" : "filterScheduled")}<i aria-hidden="true">→</i></span>
               <b>{formatNumber(value, locale)}</b>
               <i><span style={{ width: `${Math.round((value / maxContent) * 100)}%` }} /></i>
             </button>

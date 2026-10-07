@@ -301,12 +301,13 @@ test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () =>
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
   const keys = [
     "more", "statisticsTab", "calendarToday", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
-    "writeMode", "comingLater", "readOnlySnapshot", "calendarEventDetails", "videoReadonlyMetadata",
-    "calendarDayVideos", "playlistPageStatus", "statisticsCoverage", "statisticsMetricCount", "statisticsCatalogNotImported",
+    "writeMode", "comingLater", "landSafeWrite", "landSafeWriteHint", "landProtectedShort", "readOnlySnapshot", "calendarEventDetails", "videoReadonlyMetadata",
+    "calendarDayVideos", "playlistPageStatus", "statisticsCoverage", "statisticsMetricCount",
     "statisticsOverview", "statisticsDashboardIntro", "statisticsChannel", "statisticsScope", "statisticsScopeChannel",
     "statisticsScopePlaylist", "statisticsScopeVideo", "statisticsPeriod", "statisticsPeriodLifetime",
-    "statisticsAverageViewDuration", "statisticsSubscribersNet", "statisticsViewsOverTime", "statisticsShares",
-    "statisticsPlaylistMetricUnavailable",
+    "statisticsAverageViewDuration", "statisticsSubscribersNet", "statisticsSubscribersTotal", "statisticsSubscribersChange",
+    "statisticsViewsOverTime", "statisticsWatchTimeOverTime", "statisticsAverageDurationOverTime", "statisticsSubscribersOverTime", "statisticsShares",
+    "statisticsPlaylistMetricUnavailable", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
     "youtubeChangesPreview", "youtubeValueBefore", "youtubeValueAfter", "youtubeOrderCurrent", "youtubeOrderChanged",
     "statisticsContentMix", "youtube_analytics_api_disabled", "youtube_analytics_permission_required",
     "youtubeDescriptionByteRule",
