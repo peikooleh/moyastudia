@@ -258,7 +258,7 @@ def quota_today(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return quota_service.quota_summary(db)
+    return quota_service.quota_summary(db, user_id=user.id)
 
 
 @app.get("/auth/session")
@@ -1568,7 +1568,7 @@ def publish_channel_video_metadata(
         raise HTTPException(422, detail={"code": "invalid_title"})
     if len(description.encode("utf-8")) > 5000 or "<" in description or ">" in description:
         raise HTTPException(422, detail={"code": "invalid_description"})
-    quota = quota_service.quota_summary(db)
+    quota = quota_service.quota_summary(db, user_id=user.id)
     publish_quota_cost = (
         quota_service.operation_cost("videos.list")[1]
         + quota_service.operation_cost("videos.update")[1]
