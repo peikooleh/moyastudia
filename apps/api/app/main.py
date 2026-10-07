@@ -183,6 +183,20 @@ def _content_length_exceeds(request: Request, maximum: int) -> bool:
         return True
 
 
+
+async def _read_limited_body(request: Request, maximum: int) -> bytes:
+    if _content_length_exceeds(request, maximum):
+        raise HTTPException(413, detail={"code": "request_too_large"})
+    chunks = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > maximum:
+            raise HTTPException(413, detail={"code": "request_too_large"})
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _valid_thumbnail_signature(data: bytes, content_type: str) -> bool:
     if content_type == "image/png":
         return data.startswith(b"\x89PNG\r\n\x1a\n")
@@ -1701,8 +1715,11 @@ async def upload_channel_video_thumbnail(
         raise HTTPException(415, detail={"code": "invalid_thumbnail_type"})
     if _content_length_exceeds(request, THUMBNAIL_MAX_BYTES):
         raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
-    data = await request.body()
-    if not data or len(data) > THUMBNAIL_MAX_BYTES:
+    try:
+        data = await _read_limited_body(request, THUMBNAIL_MAX_BYTES)
+    except HTTPException as exc:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"}) from exc
+    if not data:
         raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
     if not _valid_thumbnail_signature(data, content_type):
         raise HTTPException(415, detail={"code": "invalid_thumbnail_content"})
@@ -1744,8 +1761,11 @@ async def upload_channel_video_captions(
         raise HTTPException(415, detail={"code": "invalid_caption_type"})
     if _content_length_exceeds(request, CAPTION_MAX_BYTES):
         raise HTTPException(413, detail={"code": "invalid_caption_size"})
-    data = await request.body()
-    if not data or len(data) > CAPTION_MAX_BYTES:
+    try:
+        data = await _read_limited_body(request, CAPTION_MAX_BYTES)
+    except HTTPException as exc:
+        raise HTTPException(413, detail={"code": "invalid_caption_size"}) from exc
+    if not data:
         raise HTTPException(413, detail={"code": "invalid_caption_size"})
     channel = _channel_or_404(db, user, channel_id)
     try:
@@ -2166,8 +2186,11 @@ async def upload_channel_playlist_thumbnail(
         raise HTTPException(415, "playlist thumbnail must be JPEG or PNG")
     if _content_length_exceeds(request, THUMBNAIL_MAX_BYTES):
         raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
-    data = await request.body()
-    if not data or len(data) > THUMBNAIL_MAX_BYTES:
+    try:
+        data = await _read_limited_body(request, THUMBNAIL_MAX_BYTES)
+    except HTTPException as exc:
+        raise HTTPException(413, detail={"code": "invalid_thumbnail_size"}) from exc
+    if not data:
         raise HTTPException(413, detail={"code": "invalid_thumbnail_size"})
     if not _valid_thumbnail_signature(data, content_type):
         raise HTTPException(415, detail={"code": "invalid_thumbnail_content"})
