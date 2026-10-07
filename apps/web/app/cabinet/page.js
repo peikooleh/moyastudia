@@ -503,7 +503,6 @@ export default function CabinetPage() {
 
   async function saveChannelDescription(channel) {
     if (!writeMode?.enabled || channelDescriptionSaving) return;
-    if (!window.confirm(t(uiLang, "channelDescriptionSaveConfirm"))) return;
     setChannelDescriptionSaving(true);
     setChannelDescriptionError("");
     try {
@@ -783,6 +782,13 @@ export default function CabinetPage() {
                           </label>
                           <small>{channelKeywordsDraft.length} / 500</small>
                           {channelDescriptionError ? <p className="selection-error" role="alert">{channelDescriptionError}</p> : null}
+                          {channelDescriptionDraft !== (ch.description || "") || channelKeywordsDraft !== (ch.keywords || "") ? (
+                            <div className="youtube-change-preview">
+                              <strong>{t(uiLang, "youtubeChangesPreview")}</strong>
+                              {channelDescriptionDraft !== (ch.description || "") ? <div className="youtube-change-row"><span>{t(uiLang, "channelDescription")}</span><div><small>{t(uiLang, "youtubeValueBefore")}</small><code>{ch.description || "—"}</code></div><b aria-hidden="true">→</b><div><small>{t(uiLang, "youtubeValueAfter")}</small><code>{channelDescriptionDraft || "—"}</code></div></div> : null}
+                              {channelKeywordsDraft !== (ch.keywords || "") ? <div className="youtube-change-row"><span>{t(uiLang, "channelKeywords")}</span><div><small>{t(uiLang, "youtubeValueBefore")}</small><code>{ch.keywords || "—"}</code></div><b aria-hidden="true">→</b><div><small>{t(uiLang, "youtubeValueAfter")}</small><code>{channelKeywordsDraft || "—"}</code></div></div> : null}
+                            </div>
+                          ) : null}
                           <div className="channel-description-actions">
                             <button className="btn ghost" type="button" disabled={channelDescriptionSaving} onClick={cancelChannelEditing}>{t(uiLang, "actionCancel")}</button>
                             <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "channelDescriptionSaveHint")}>
