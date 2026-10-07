@@ -1037,7 +1037,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-add-button { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
 .channel-add-button:hover { color: var(--text); background: var(--bg-hover); }
 .channel-group .channel-option-list { border-top: 0; }
-.channel-management { display: grid; grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr); gap: 16px 24px; align-items: start; margin-top: 20px; }
+.cabinet-workspace { display: block; max-width: none; padding: 0; }
+.cabinet-workspace > .main { max-width: none; padding: 0; }
+.cabinet-tabs { display: flex; gap: 6px; padding: 10px 24px; border-bottom: 1px solid var(--line); }
+.cabinet-tabs button { padding: 7px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.cabinet-tabs button:hover { background: var(--bg-hover); color: var(--text); }
+.cabinet-tabs button.on { background: var(--bg-hover); color: var(--text); font-weight: 600; }
+.cabinet-workspace > .main > .panel { padding: 22px 24px 32px; }
+.channel-management { display: grid; grid-template-columns: minmax(280px, 340px) minmax(320px, 1fr) minmax(280px, 360px); gap: 0; align-items: stretch; margin: 20px -24px -32px; border-top: 1px solid var(--line); min-height: calc(100vh - 245px); }
+.channel-management > .channel-option-list, .channel-management > .selected-channel-column { border-right: 1px solid var(--line); }
+.channel-management > .channel-option-list { padding: 12px; }
+.selected-channel-column, .channel-settings-column { min-width: 0; padding: 18px 20px 30px; }
+.channel-settings-panel h2 { margin: 0 0 18px; font-size: 16px; }
+.channel-summary-data { margin-top: 16px; }
+.channel-settings-column .channel-language-control { margin: 0; }
+.channel-settings-column .channel-details { margin-top: 14px; }
 .channel-option-list { display: grid; border-top: 1px solid var(--line); }
 .channel-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .channel-option.on { background: var(--bg-hover); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
