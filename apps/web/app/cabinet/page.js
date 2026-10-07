@@ -623,6 +623,7 @@ export default function CabinetPage() {
                               type="button"
                               className={`channel-option ${selected ? "on" : ""}`}
                               aria-pressed={selected}
+                              title={selected ? t(uiLang, "activeStudioChannel") : t(uiLang, "switchStudioChannel")}
                               onClick={() => {
                                 if (selected || !window.confirm(t(uiLang, "confirmChannelSwitch", { channel: channelDisplayLabel(item) }))) return;
                                 update({ selectedChannelId: String(item.id) });
@@ -635,7 +636,6 @@ export default function CabinetPage() {
                                 {subscriberCount ? <small>{subscriberCount}</small> : null}
                                 {videoCount ? <small>{videoCount}</small> : null}
                               </span>
-                              <span className="channel-option-status">{selected ? t(uiLang, "activeStudioChannel") : t(uiLang, "switchStudioChannel")}</span>
                             </button>
                           );
                         })}
