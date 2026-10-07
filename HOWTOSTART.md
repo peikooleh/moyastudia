@@ -47,11 +47,21 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ```powershell
 alembic upgrade head
-
-`head` now includes `0006_youtube_quota_usage` (server-side YouTube API usage ledger for `/quota/today`), `0007_user_write_mode` (server-authoritative Write Mode, default OFF), `0008_video_working_language` (local/base video language draft fields), `0009_local_playlist_drafts` (persistent local playlist drafts and membership), `0010_video_working_settings` (additional local video working settings), and `0011_ai_connections` (encrypted per-user AI provider/model credentials and prompts). Apply migrations before starting this branch; the application does not create these schema changes automatically.
-
-For the Statistics watch-time card, enable **YouTube Analytics API** in the same Google Cloud project as the existing YouTube Data API credentials. The app queries `estimatedMinutesWatched` with the existing read-only YouTube connection; if Analytics is unavailable, the card stays empty rather than estimating watch time.
 ```
+
+Текущий migration head — `0012_channel_working_language`. В актуальную цепочку также входят:
+
+- `0006_youtube_quota_usage` — server-side YouTube API usage ledger для `/quota/today`;
+- `0007_user_write_mode` — server-authoritative Write Mode, default OFF;
+- `0008_video_working_language` — local/base video language draft fields;
+- `0009_local_playlist_drafts` — persistent local playlist drafts/membership;
+- `0010_video_working_settings` — дополнительные video working settings;
+- `0011_ai_connections` — encrypted per-user AI provider/model credentials и prompts;
+- `0012_channel_working_language` — постоянный server-side язык канала.
+
+Приложение не создаёт эти schema changes автоматически, поэтому перед запуском актуального кода выполняйте `alembic upgrade head`.
+
+Для Statistics watch-time включите **YouTube Analytics API** в том же Google Cloud project, где настроен YouTube Data API. Если Analytics недоступен или connection не имеет требуемого разрешения, Statistics показывает недоступное значение вместо расчётной подмены.
 
 Важно: `0001_foundation` удаляет старые prototype-таблицы `channels` и `videos` без переноса записей. Используйте новую/проверенную базу и сделайте backup перед migration существующей базы. Schema далее управляется Alembic; API не меняет её при старте.
 
@@ -117,6 +127,7 @@ Frontend, из `apps\web`:
 
 ```powershell
 node --test tests\studio-catalog.test.mjs
+npm run check:i18n
 npm run lint
 npm run build
 ```
@@ -138,6 +149,8 @@ npm run build
 Остановка: Ctrl+C в каждом терминале.
 
 
-### W4 YouTube write permission
+### YouTube write permission
 
-W4 adds single-video metadata writes through `videos.update`. YouTube connections authorized before W4 only have the previous read permission, so reconnect/reauthorize the YouTube connection before testing the first write. The current OAuth request keeps `youtube.readonly` and adds `youtube.force-ssl`; no bulk or delete operation is exposed by MoyaStudia in W4.
+Поддерживаемые YouTube mutations требуют включённого server-authoritative Write Mode и connection с актуальными write scopes. Старые YouTube connections, созданные до добавления `youtube.force-ssl`, нужно reconnect/reauthorize перед первой записью. Write Mode только разрешает поддерживаемые операции: отправка происходит после отдельного явного действия пользователя.
+
+Сейчас write surface включает video metadata, privacy/scheduling, thumbnail/captions, channel description/keywords и поддерживаемые playlist mutations. Удаление managed channel из Cabinet удаляет только запись канала из MoyaStudia; destructive удаление YouTube video/channel не реализовано.
