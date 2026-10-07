@@ -580,25 +580,46 @@ def list_videos(
     credentials = creds_from_refresh(refresh_token)
     service = build("youtube", "v3", credentials=credentials)
 
-    search_kwargs = {
-        "part": "id",
-        "forMine": True,
-        "type": "video",
-        "order": "date",
+    uploads_id = uploads_playlist_id
+    if not uploads_id:
+        channel_response = _execute(
+            service.channels().list(
+                part="contentDetails",
+                id=youtube_channel_id,
+                maxResults=1,
+            ),
+            "channels.list",
+            recorder,
+        )
+        channel_items = channel_response.get("items") or []
+        if not channel_items:
+            raise LookupError("YouTube channel is unavailable")
+        uploads_id = (
+            (channel_items[0].get("contentDetails") or {})
+            .get("relatedPlaylists", {})
+            .get("uploads")
+            or ""
+        )
+        if not uploads_id:
+            raise RuntimeError("YouTube uploads playlist is unavailable")
+
+    page_kwargs = {
+        "part": "contentDetails",
+        "playlistId": uploads_id,
         "maxResults": page_size,
     }
     if page_token:
-        search_kwargs["pageToken"] = page_token
-    search_response = _execute(
-        service.search().list(**search_kwargs),
-        "search.list",
+        page_kwargs["pageToken"] = page_token
+    playlist_response = _execute(
+        service.playlistItems().list(**page_kwargs),
+        "playlistItems.list",
         recorder,
     )
     video_ids = list(
         dict.fromkeys(
-            item.get("id", {}).get("videoId")
-            for item in search_response.get("items") or []
-            if item.get("id", {}).get("videoId")
+            (item.get("contentDetails") or {}).get("videoId")
+            for item in playlist_response.get("items") or []
+            if (item.get("contentDetails") or {}).get("videoId")
         )
     )
 
@@ -612,7 +633,15 @@ def list_videos(
             "videos.list",
             recorder,
         )
-        for item in video_response.get("items") or []:
+        video_by_id = {
+            item.get("id"): item
+            for item in video_response.get("items") or []
+            if item.get("id")
+        }
+        for youtube_video_id in video_ids:
+            item = video_by_id.get(youtube_video_id)
+            if not item:
+                continue
             snippet = item.get("snippet") or {}
             status = item.get("status") or {}
             content = item.get("contentDetails") or {}
@@ -646,12 +675,11 @@ def list_videos(
             )
 
     return {
-        "uploads_playlist_id": None,
+        "uploads_playlist_id": uploads_id,
         "video_ids": video_ids,
         "videos": videos,
-        "next_page_token": search_response.get("nextPageToken"),
+        "next_page_token": playlist_response.get("nextPageToken"),
     }
-
 
 def create_playlist(
     refresh_token: str,
