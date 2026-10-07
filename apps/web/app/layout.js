@@ -4,6 +4,11 @@ import { PrefsProvider } from "./providers";
 export const metadata = {
   title: "MoyaStudia",
   description: "MoyaStudia | YouTube workspace",
+  icons: {
+    icon: "/logo.svg",
+    shortcut: "/logo.svg",
+    apple: "/logo.svg",
+  },
 };
 
 export default function RootLayout({ children }) {
