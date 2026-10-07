@@ -652,7 +652,7 @@ def update_channel_working_language(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    row = _channel_or_404(db, user, channel_id)
+    row = _channel_or_404(db, user, channel_id, require_token=False)
     row.working_language = payload.language
     db.commit()
     return {"id": row.id, "working_language": row.working_language}
