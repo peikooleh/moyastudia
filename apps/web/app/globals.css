@@ -1468,10 +1468,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     padding-inline: 0;
   }
   .cab {
-    width: min(1320px, 100%);
+    width: min(1600px, 100%);
   }
   .cab .main {
-    padding-inline: clamp(28px, 3vw, 44px);
+    padding-inline: 24px;
   }
   .cab .panel {
     max-width: 1040px;
