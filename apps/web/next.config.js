@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const isProduction = process.env.NODE_ENV === "production";
-const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const apiOrigin = (() => {
   try {
     return new URL(apiBase).origin;
