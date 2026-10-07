@@ -1052,7 +1052,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-summary-data { margin-top: 16px; }
 .channel-settings-column .channel-language-control { margin: 0; }
 .channel-settings-column .channel-details { margin-top: 14px; }
-.channel-option-list { display: grid; border-top: 1px solid var(--line); }
+.channel-option-list { display: grid; }
 .channel-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .channel-option.on { background: var(--bg-hover); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
 .channel-option > img, .channel-option > .avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
@@ -1476,8 +1476,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max-width: 1040px;
   }
   .channel-management {
-    grid-template-columns: minmax(360px, .9fr) minmax(420px, 1.1fr);
-    gap: 24px;
+    grid-template-columns: minmax(300px, 340px) minmax(360px, 1fr) minmax(280px, 360px);
+    gap: 0;
   }
 }
 .playlist-picker-search {
