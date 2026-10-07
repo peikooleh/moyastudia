@@ -100,7 +100,7 @@ def test_single_video_publish_updates_snapshot_and_clears_working_copy(client, t
         }
 
     monkeypatch.setattr(main.yt, "update_video_metadata", fake_update)
-    monkeypatch.setattr(main.quota_service, "quota_summary", lambda db: {"buckets": {"general": {"estimated_remaining": 10_000}}})
+    monkeypatch.setattr(main.quota_service, "quota_summary", lambda db, **kwargs: {"buckets": {"general": {"estimated_remaining": 10_000}}})
     response = client.post(
         f"/channels/{channel_id}/videos/{video_id}/publish-metadata",
         headers={"Origin": settings.frontend_origin},
