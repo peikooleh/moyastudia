@@ -1662,6 +1662,13 @@ def update_channel_video_calendar_status(
         raise HTTPException(409, detail={"code": "video_unavailable"})
 
     publish_at = payload.publishAt
+    if (
+        publish_at is not None
+        and video.youtube_visibility == "private"
+        and video.youtube_scheduled_at is None
+        and video.youtube_published_at is not None
+    ):
+        raise HTTPException(422, detail={"code": "youtube_previously_published_cannot_schedule"})
     if publish_at is not None:
         if publish_at.tzinfo is None or publish_at.utcoffset() is None:
             raise HTTPException(422, detail={"code": "schedule_timezone_required"})
