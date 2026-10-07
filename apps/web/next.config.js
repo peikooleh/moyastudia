@@ -1,5 +1,13 @@
 /** @type {import('next').NextConfig} */
 const isProduction = process.env.NODE_ENV === "production";
+const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+const apiOrigin = (() => {
+  try {
+    return new URL(apiBase).origin;
+  } catch {
+    return "http://localhost:8000";
+  }
+})();
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -12,7 +20,7 @@ const contentSecurityPolicy = [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
-  "connect-src 'self' http://localhost:8000 https:",
+  `connect-src 'self' ${apiOrigin}`,
   ...(isProduction ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
