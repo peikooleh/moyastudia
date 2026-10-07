@@ -665,10 +665,7 @@ export default function CabinetPage() {
                           </select>
                         </label>
                         {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
-                        <details className="channel-details">
-                          <summary>{t(uiLang, "channelDetails")}</summary>
-                          <div className="channel-remove-actions"><button className="text-button" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
-                        </details>
+                        <div className="channel-remove-actions"><button className="text-button" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
                       </section>
                     ) : null}
                   </div>
