@@ -1200,7 +1200,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         body: JSON.stringify({ video_ids: videoIds }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistAddVideosError"));
+      if (!response.ok) {
+        if (data?.detail?.code === "youtube_partial_write") {
+          setPlaylistVideoPicker(null);
+          setPlaylistContentsRetry((current) => current + 1);
+          setPlaylistRetry((current) => current + 1);
+          throw new Error(t(uiLang, "playlistPartialWriteReconciled"));
+        }
+        throw new Error(data.detail || t(uiLang, "playlistAddVideosError"));
+      }
       setPlaylistVideoPicker(null);
       setPlaylistContentsRetry((current) => current + 1);
       setPlaylistRetry((current) => current + 1);
@@ -1289,7 +1297,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           body: JSON.stringify({ playlist_item_ids: orderedIds }),
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+        if (!response.ok) {
+          if (data?.detail?.code === "youtube_partial_write") {
+            setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, positions: {}, basePositions: {} } : current);
+            setPlaylistContentsRetry((current) => current + 1);
+            throw new Error(t(uiLang, "playlistPartialWriteReconciled"));
+          }
+          throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+        }
         completed += 1;
         setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, positions: {}, basePositions: {} } : current);
       }
@@ -1551,6 +1566,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setWorkingSaving(true);
     setWorkingError("");
     let draft = workingVideo;
+    let metadataPublished = false;
     try {
       if (Object.keys(workingEdits).length) {
         const saveResponse = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
@@ -1594,6 +1610,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           throw new Error(t(uiLang, "youtubePublishError"));
         }
         draft = data;
+        metadataPublished = true;
         setWorkingVideo(data);
         setWorkingDraft(data.effective);
         setWorkingEdits({});
@@ -1609,6 +1626,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (!statusResponse.ok) {
           const code = statusData?.detail?.code;
           if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          if (metadataPublished) throw new Error(t(uiLang, "videoPartialWriteError"));
           throw new Error(code || statusData?.detail || t(uiLang, "youtubePublishError"));
         }
         setVideoStatusDraft("");
@@ -1618,6 +1636,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setWorkingDetailReload((current) => current + 1);
       setCatalogReload((current) => current + 1);
     } catch (error) {
+      if (metadataPublished) {
+        setWorkingDetailReload((current) => current + 1);
+        setCatalogReload((current) => current + 1);
+      }
       setWorkingSaveState((current) => current === "conflict" ? current : "error");
       setWorkingError(String(error.message || error));
     } finally {
