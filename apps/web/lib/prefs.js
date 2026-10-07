@@ -60,8 +60,6 @@ const defaults = {
   catalogSort: "date",
   playlistVideoSort: "position",
   playlistPageSize: 10,
-  dailyEdits: 20,
-  dailyUploads: 10,
 };
 
 export function accountPrefsForUser(userId) {
