@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { catalogVideosUrl } from "../lib/catalog-state.mjs";
+import { catalogVideosUrl, continueCatalogSyncPage } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
 
@@ -60,6 +60,8 @@ export function StatisticsDashboard({
   const [catalogVideos, setCatalogVideos] = useState([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState({});
+  const [catalogSyncing, setCatalogSyncing] = useState(false);
+  const [catalogSyncError, setCatalogSyncError] = useState("");
   const requestId = useRef(0);
   const locale = t(uiLang, "calendarLocale");
 
@@ -87,7 +89,54 @@ export function StatisticsDashboard({
     const controller = new AbortController();
     let cancelled = false;
 
+    async function ensureCompleteCatalog() {
+      setCatalogSyncing(true);
+      setCatalogSyncError("");
+      try {
+        let statusResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/status`, { signal: controller.signal });
+        let status = await statusResponse.json();
+        if (!statusResponse.ok) throw new Error(status?.detail || "catalog status unavailable");
+
+        if (status.state === "NOT_IMPORTED") {
+          const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "initial" }),
+            signal: controller.signal,
+          });
+          status = await startResponse.json();
+          if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
+        } else if (["COMPLETE", "EMPTY"].includes(status.state)) {
+          const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "incremental" }),
+            signal: controller.signal,
+          });
+          status = await startResponse.json();
+          if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
+        }
+
+        while (["LOADING", "PARTIAL", "STALE", "ERROR"].includes(status.state)) {
+          if (cancelled) return;
+          status = await continueCatalogSyncPage(
+            selectedChannelId,
+            apiFetch,
+            "catalog sync unavailable",
+            () => {},
+          );
+        }
+      } catch (error) {
+        if (error.name === "AbortError" || cancelled) return;
+        setCatalogSyncError(String(error.message || error));
+      } finally {
+        if (!cancelled) setCatalogSyncing(false);
+      }
+    }
+
     async function loadCompleteCatalog() {
+      await ensureCompleteCatalog();
+      if (cancelled) return;
       const items = [];
       let cursor = "";
       let firstPage = true;
@@ -110,6 +159,7 @@ export function StatisticsDashboard({
     setCatalogVideos([]);
     setCatalogTotal(0);
     setStatusCounts({});
+    setCatalogSyncError("");
     loadCompleteCatalog().catch((error) => {
       if (error.name !== "AbortError" && !cancelled) {
         setCatalogVideos([]);
@@ -126,7 +176,7 @@ export function StatisticsDashboard({
     [playlists],
   );
   const analyticsVideos = useMemo(
-    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public"),
+    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public" && video.availability !== "unavailable"),
     [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
@@ -307,6 +357,8 @@ export function StatisticsDashboard({
 
       <div className="statistics-status-slot" aria-live="polite">
         {!scopeReady ? <span>{scope === "video" ? t(uiLang, "statisticsChooseVideoHint") : t(uiLang, "statisticsChoosePlaylistHint")}</span> : null}
+        {catalogSyncing ? <span>{t(uiLang, "statisticsCatalogUpdating")}</span> : null}
+        {catalogSyncError ? <span className="statistics-error">{t(uiLang, "statisticsCatalogUpdateFailed")}</span> : null}
         {analyticsLoading ? <span>{t(uiLang, "statisticsUpdating")}</span> : null}
         {analyticsError ? <span className="statistics-error">{t(uiLang, analyticsError)}</span> : null}
       </div>
