@@ -601,6 +601,19 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
         if rows
         else {}
     )
+    catalog_like_counts = (
+        dict(
+            db.query(Video.channel_id, func.coalesce(func.sum(Video.youtube_like_count), 0))
+            .filter(
+                Video.channel_id.in_([row.id for row in rows]),
+                Video.youtube_video_id.is_not(None),
+            )
+            .group_by(Video.channel_id)
+            .all()
+        )
+        if rows
+        else {}
+    )
     return [
         {
             "id": row.id,
@@ -615,6 +628,7 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
             "yt_published_at": getattr(row, "yt_published_at", "") or "",
             "subscriber_count": int(getattr(row, "subscriber_count", 0) or 0),
             "catalog_video_count": catalog_video_counts.get(row.id, 0),
+            "catalog_like_count": int(catalog_like_counts.get(row.id, 0) or 0),
             "hidden_subscribers": None,
         }
         for row in rows
