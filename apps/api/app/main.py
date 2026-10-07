@@ -2330,6 +2330,10 @@ def refresh_profile(
         creds = yt.creds_from_refresh(token)
         with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
             info = yt.fetch_channel(creds, row.youtube_channel_id)
+        if info.get("youtube_channel_id") != row.youtube_channel_id:
+            raise LookupError("channel not found on YouTube")
+    except LookupError as exc:
+        raise HTTPException(404, detail={"code": "channel_not_found_on_youtube"}) from exc
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
