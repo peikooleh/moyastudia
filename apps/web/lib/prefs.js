@@ -55,6 +55,7 @@ const defaults = {
   onboarded: false,
   channelLangs: {},
   selectedChannelId: "",
+  statisticsPeriod: "28",
   dailyEdits: 20,
   dailyUploads: 10,
 };
