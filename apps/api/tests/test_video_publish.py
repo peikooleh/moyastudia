@@ -197,6 +197,39 @@ def test_video_thumbnail_write_forwards_bytes_and_updates_snapshot(client, test_
         assert db.get(Video, video_id).youtube_thumbnail_url == "https://img.example/new-thumbnail.jpg"
 
 
+def test_limited_body_rejects_stream_that_exceeds_limit_without_content_length():
+    import asyncio
+    from starlette.requests import Request
+
+    chunks = [b"a" * 6, b"b" * 5]
+    index = 0
+
+    async def receive():
+        nonlocal index
+        chunk = chunks[index]
+        index += 1
+        return {"type": "http.request", "body": chunk, "more_body": index < len(chunks)}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "PUT",
+            "path": "/upload",
+            "raw_path": b"/upload",
+            "query_string": b"",
+            "headers": [],
+            "scheme": "https",
+            "server": ("testserver", 443),
+            "client": ("203.0.113.10", 12345),
+        },
+        receive,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(main._read_limited_body(request, 10))
+    assert exc_info.value.status_code == 413
+
+
 def test_video_thumbnail_rejects_spoofed_type_and_oversized_content_length(client, test_database, monkeypatch):
     token, channel_id, video_id = _video_fixture(test_database)
     client.cookies.set(settings.session_cookie_name, token)
