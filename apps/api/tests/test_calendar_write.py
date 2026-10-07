@@ -178,3 +178,26 @@ def test_calendar_unchanged_schedule_short_circuits_before_youtube(client, test_
     assert response.status_code == 200
     assert response.json()["status"] == "scheduled"
     assert response.json()["slot"].startswith("2099-01-02T15:30")
+
+
+def test_calendar_rejects_rescheduling_previously_published_private_video(client, test_database, monkeypatch):
+    token, channel_id, video_id = _calendar_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    with test_database() as db:
+        video = db.get(Video, video_id)
+        video.youtube_published_at = main._parse_youtube_datetime("2026-10-07T10:31:00Z")
+        db.commit()
+
+    monkeypatch.setattr(
+        main.yt,
+        "update_video_calendar_status",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("invalid schedule must not call YouTube")),
+    )
+    response = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/calendar-status",
+        headers={"Origin": settings.frontend_origin},
+        json={"privacy": "private", "publishAt": "2099-01-02T15:30:00Z"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "youtube_previously_published_cannot_schedule"
