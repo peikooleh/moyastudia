@@ -152,18 +152,18 @@ def test_local_playlist_routes_are_owner_scoped(client, test_database):
     assert client.post(
         f"/channels/{channel_id}/local-playlists",
         headers=post_headers(),
-        json={"local_id": "private-local", "title": "Private local"},
+        json={"local_id": "local-private", "title": "Private local"},
     ).status_code == 200
 
     authorized_client(client, other_token)
     assert client.get(f"/channels/{channel_id}/local-playlists").status_code == 404
     assert client.put(
-        f"/channels/{channel_id}/local-playlists/private-local/membership",
+        f"/channels/{channel_id}/local-playlists/local-private/membership",
         headers=post_headers(),
         json={"video_ids": ["YT1"]},
     ).status_code == 404
     assert client.delete(
-        f"/channels/{channel_id}/local-playlists/private-local",
+        f"/channels/{channel_id}/local-playlists/local-private",
         headers=post_headers(),
     ).status_code == 404
 
