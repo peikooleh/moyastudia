@@ -6,7 +6,7 @@ import { catalogVideosUrl } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
 
-const PERIODS = ["7", "28", "90", "365", "lifetime"];
+const PERIODS = ["7", "28", "90", "lifetime"];
 
 function formatNumber(value, locale) {
   return Number(value || 0).toLocaleString(locale);
