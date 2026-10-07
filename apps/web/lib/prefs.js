@@ -56,6 +56,10 @@ const defaults = {
   channelLangs: {},
   selectedChannelId: "",
   statisticsPeriod: "28",
+  catalogFilter: "all",
+  catalogSort: "date",
+  playlistVideoSort: "position",
+  playlistPageSize: 10,
   dailyEdits: 20,
   dailyUploads: 10,
 };
