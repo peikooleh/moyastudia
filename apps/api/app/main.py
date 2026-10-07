@@ -818,7 +818,7 @@ def _available_youtube_channels(
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
-        raise HTTPException(502, "YouTube channel discovery failed") from exc
+        raise HTTPException(502, detail={"code": "youtube_channel_discovery_failed"}) from exc
 
 
 @app.get("/google-connections/{connection_id}/available-channels")
@@ -2032,7 +2032,7 @@ def continue_catalog_sync(
             sync.lease_token = None
             sync.lease_expires_at = None
             db.commit()
-        raise HTTPException(502, "YouTube catalog sync failed") from exc
+        raise HTTPException(502, detail={"code": "youtube_catalog_sync_failed"}) from exc
 
     return _catalog_status(db, channel)
 
