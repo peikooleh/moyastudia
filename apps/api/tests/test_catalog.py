@@ -110,6 +110,64 @@ def test_detach_channel_is_owner_scoped_and_removes_local_channel(client, test_d
         assert db.get(Channel, channel_id) is None
 
 
+def test_local_playlist_persists_membership_and_delete_without_active_google_connection(client, test_database):
+    user_id, token = create_account(test_database, subject="local-playlist-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "local-playlist", active=False)
+    authorized_client(client, token)
+
+    created = client.post(
+        f"/channels/{channel_id}/local-playlists",
+        headers=post_headers(),
+        json={"local_id": "local-test", "title": "Local test"},
+    )
+    assert created.status_code == 200
+    assert created.json()["videoIds"] == []
+
+    updated = client.put(
+        f"/channels/{channel_id}/local-playlists/local-test/membership",
+        headers=post_headers(),
+        json={"video_ids": ["YT1", "YT2", "YT1"]},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["videoIds"] == ["YT1", "YT2"]
+
+    reloaded = client.get(f"/channels/{channel_id}/local-playlists")
+    assert reloaded.status_code == 200
+    assert reloaded.json() == [{"id": "local-test", "title": "Local test", "videoIds": ["YT1", "YT2"]}]
+
+    deleted = client.delete(
+        f"/channels/{channel_id}/local-playlists/local-test",
+        headers=post_headers(),
+    )
+    assert deleted.status_code == 200
+    assert client.get(f"/channels/{channel_id}/local-playlists").json() == []
+
+
+def test_local_playlist_routes_are_owner_scoped(client, test_database):
+    owner_id, owner_token = create_account(test_database, subject="local-playlist-scope-owner")
+    _, other_token = create_account(test_database, subject="local-playlist-scope-other")
+    channel_id, _, _ = create_channel(test_database, owner_id, "local-playlist-scope")
+
+    authorized_client(client, owner_token)
+    assert client.post(
+        f"/channels/{channel_id}/local-playlists",
+        headers=post_headers(),
+        json={"local_id": "private-local", "title": "Private local"},
+    ).status_code == 200
+
+    authorized_client(client, other_token)
+    assert client.get(f"/channels/{channel_id}/local-playlists").status_code == 404
+    assert client.put(
+        f"/channels/{channel_id}/local-playlists/private-local/membership",
+        headers=post_headers(),
+        json={"video_ids": ["YT1"]},
+    ).status_code == 404
+    assert client.delete(
+        f"/channels/{channel_id}/local-playlists/private-local",
+        headers=post_headers(),
+    ).status_code == 404
+
+
 def test_channel_working_language_persists_without_active_google_connection(client, test_database):
     user_id, token = create_account(test_database, subject="language-offline-owner")
     channel_id, _, _ = create_channel(test_database, user_id, "language-offline", active=False)
