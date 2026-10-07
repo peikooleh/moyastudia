@@ -288,7 +288,7 @@ def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
     attempt = 0
     while True:
         try:
-            response = request.execute(num_retries=0)
+            response = request.execute()
             break
         except Exception as exc:
             if attempt >= max_retries or not _is_transient_provider_error(exc):
