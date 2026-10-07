@@ -3597,3 +3597,5 @@ body {
 .cabinet-account-summary .readonly-value { padding: 2px 0; color: var(--muted); font-size: 12px; }
 .ai-model-settings-column .ai-model-settings label { position: relative; }
 .ai-prompt-counter { display: block; margin-top: -2px; text-align: right; color: var(--muted); font-size: 10px; line-height: 1.2; }
+
+.account-session-hint { margin: 8px 0 0; max-width: 190px; color: var(--muted); font-size: 11px; line-height: 1.4; }
