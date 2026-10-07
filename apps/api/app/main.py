@@ -183,9 +183,9 @@ def _content_length_exceeds(request: Request, maximum: int) -> bool:
 
 def _valid_thumbnail_signature(data: bytes, content_type: str) -> bool:
     if content_type == "image/png":
-        return data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
     if content_type == "image/jpeg":
-        return data.startswith(b"\\xff\\xd8\\xff")
+        return data.startswith(b"\xff\xd8\xff")
     return False
 
 app.add_middleware(
