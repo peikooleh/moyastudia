@@ -665,7 +665,7 @@ def test_channel_playlists_empty_and_api_error_responses(client, test_database, 
         def playlists(self):
             def fail(**kwargs):
                 return SimpleNamespace(
-                    execute=lambda: (_ for _ in ()).throw(RuntimeError("playlist API failed"))
+                    execute=lambda: (_ for _ in ()).throw(RuntimeError("playlist API failed access_token=fixture-secret"))
                 )
 
             return SimpleNamespace(list=fail)
@@ -673,7 +673,8 @@ def test_channel_playlists_empty_and_api_error_responses(client, test_database, 
     monkeypatch.setattr(youtube, "service_for", lambda refresh_token: FailedService())
     response = client.get(f"/channels/{channel_id}/playlists")
     assert response.status_code == 502
-    assert response.json() == {"detail": "RuntimeError: playlist API failed"}
+    assert response.json() == {"detail": {"code": "youtube_request_failed"}}
+    assert "fixture-secret" not in response.text
 
 
 def test_channel_playlists_repeated_page_token_fails_instead_of_looping(
@@ -704,9 +705,7 @@ def test_channel_playlists_repeated_page_token_fails_instead_of_looping(
     response = client.get(f"/channels/{channel_id}/playlists")
 
     assert response.status_code == 502
-    assert response.json() == {
-        "detail": "RuntimeError: YouTube playlists pagination token repeated"
-    }
+    assert response.json() == {"detail": {"code": "youtube_request_failed"}}
     assert page_tokens == [None, "repeat"]
 
 
