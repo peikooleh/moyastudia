@@ -3410,3 +3410,27 @@ body {
 .statistics-status-link:focus-visible > i > span {
   filter: brightness(.92);
 }
+
+
+/* Cabinet channel polish: keep channel cards compact and make metadata/actions consistent. */
+.channel-group {
+  margin-bottom: 0;
+  padding: 10px 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.channel-group > header { padding: 0 8px 6px; border-bottom: 0; }
+.channel-group > .channel-option { margin-top: 0; padding: 12px 8px; border-bottom: 1px solid var(--line); border-radius: 0; }
+.channel-group-list-label { padding: 5px 8px 2px; }
+.channel-list-footer { padding: 16px 8px 4px; }
+.channel-connect-account { min-height: 34px; padding: 7px 14px; }
+.channel-keywords-view { display: grid; gap: 5px; margin-top: -4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.channel-keywords-view > span { color: var(--muted); font-size: 11px; }
+.channel-keywords-view > p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.channel-link-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.channel-link-actions a,
+.channel-link-actions .text-button { width: auto; padding: 0; border: 0; background: transparent; color: var(--text); font-size: 12px; font-weight: 400; line-height: 1.4; text-decoration: none; cursor: pointer; }
+.channel-link-actions a:hover,
+.channel-link-actions .text-button:hover { color: var(--text); text-decoration: underline; }
