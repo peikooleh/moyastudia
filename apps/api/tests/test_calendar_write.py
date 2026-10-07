@@ -135,3 +135,22 @@ def test_calendar_write_requires_same_origin(client, test_database):
     )
     assert response.status_code == 403
 
+
+
+def test_calendar_write_classifies_provider_403_without_leaking_text(client, test_database, monkeypatch):
+    token, channel_id, video_id = _calendar_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+
+    class ProviderError(Exception):
+        resp = type("Response", (), {"status": 403})()
+        error_details = []
+
+    monkeypatch.setattr(main.yt, "update_video_calendar_status", lambda *args, **kwargs: (_ for _ in ()).throw(ProviderError("private provider detail")))
+    response = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/calendar-status",
+        headers={"Origin": settings.frontend_origin},
+        json={"privacy": "public", "publishAt": None},
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": {"code": "youtube_status_change_rejected"}}
+    assert "private provider detail" not in response.text
