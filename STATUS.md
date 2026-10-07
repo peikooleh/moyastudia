@@ -1,3 +1,110 @@
+# Statistics v3 UI convergence — 2026-10-06
+
+## Scope and reference baseline
+
+- Performed a source-level UI consistency pass across Videos, Playlists, Calendar, Statistics and Cabinet on `feature-statistics-v3`.
+- Videos, Playlists and Calendar remain the accepted visual/reference baseline. Their page layouts were audited rather than redesigned in this pass.
+- Restored the pre-rollback Statistics dashboard geometry from the old polished implementation while keeping the isolated `statistics-dashboard.js` architecture and current Analytics/data-loading implementation.
+- Statistics CSS remains scoped under `.statistics-*`; the restoration does not reintroduce the old Statistics-to-Video layout coupling that caused the previous regression.
+
+## Statistics polish completed
+
+- Restored the accepted dashboard rhythm: heading/coverage badge, channel/scope/period controls, four KPI cards, views trend, engagement/content panels and responsive breakpoints.
+- Channel picker and native scope/target selects now use a consistent dropdown language. Native selects retain the browser control used by the accepted Studio pages; the custom channel picker uses a matching CSS caret rather than a text glyph.
+- Added localized EN/RU/UK hints for channel, scope, playlist/video target and reporting-period controls.
+- Restored status drill-down from Statistics content composition to Videos: selecting Public / Private / Unlisted / Scheduled clears search, applies the corresponding Videos filter, resets date sorting/selection and opens the Videos workspace.
+- Status drill-down has localized EN/RU/UK tooltips and keyboard focus/hover treatment.
+- Statistics continues to load its own complete catalog independently and keeps channel / playlist / video Analytics scopes and 7 / 28 / 90 / 365 / lifetime periods.
+
+## Statistics visual review accepted — 2026-10-06
+
+- Manual browser review accepted the first post-audit Statistics pass.
+- Statistics now uses the same page-heading scale as the accepted Studio pages; the former overview eyebrow, dashboard intro and duplicate catalog-count badge were removed.
+- The Statistics outer workspace now follows the Studio page edge/padding rhythm while preserving the existing KPI/chart/lower-panel dashboard structure.
+- Statistics labels and supporting text were brought toward the shared Studio typography scale; primary controls were reduced to the shared ~38 px control height and the channel avatar was scaled with them.
+- All four KPI cards now have equal visual treatment; the first Views card no longer carries a selection-like accent.
+- Deferred intentionally until later: duplicate Statistics CSS consolidation, shared radius normalization and Ukrainian Statistics locale parity work.
+
+## Videos top rhythm accepted — 2026-10-06
+
+- Manual browser review accepted the Videos page-order correction.
+- The shared catalog-state row now appears before the Videos page heading, matching the page rhythm used by the other Studio workspaces.
+- No Videos catalog, toolbar, list, Inspector, editor or write-flow visuals/logic were changed in this step.
+
+## Calendar visual review accepted — 2026-10-06
+
+- Manual browser review accepted the Calendar spacing pass.
+- The Calendar detail panel was slightly tightened without changing its grid, calendar structure, event cards or scheduling/write logic.
+- The shared Studio catalog-state row no longer shifts horizontally when switching between Videos, Playlists, Calendar and Statistics; the root viewport now reserves stable scrollbar space.
+- Calendar YouTube-link metadata was corrected so the short video URL, Copy link action and Open video action read cleanly inline in one row.
+- No other Calendar layout or behavior was changed in this accepted pass.
+
+## Playlists visual review accepted — 2026-10-06
+
+- Manual browser review accepted the Playlists compact-control pass.
+- Existing compact control heights were preserved intentionally (bulk actions 32 px, compact selects/pagination around 34 px, reorder controls 25 px); stray compact-control radii were aligned with the shared control radius instead of enlarging the controls.
+- The Playlists YouTube action was verified in source to target the playlist URL (youtube.com/playlist?list=<playlist id>), not a video URL.
+- The visible YouTube action now explicitly says Open playlist on YouTube in EN/RU/UK, matching its existing playlist-specific tooltip.
+- The playlist YouTube action is kept on one line without widening the fixed settings column or taking space from the metadata editor.
+
+## EN/RU/UK locale parity restored — 2026-10-06
+
+- The missing Ukrainian Statistics / YouTube Analytics package was traced to 38 Ukrainian entries accidentally living inside the Russian locale block ahead of Russian duplicates.
+- Those existing Ukrainian translations were moved into the proper `uk` locale block and removed from `ru`; no fallback-to-English is now required for those Statistics/Analytics keys.
+- Added `apps/web/scripts/check-i18n-parity.mjs` and the `npm run check:i18n` command to fail when RU or UK key sets diverge from EN.
+- Local validation on Windows/Node 24.13.0 completed successfully: `i18n parity OK: 625 keys in EN/RU/UK`.
+- A pre-existing `comingLater` duplicate exists equally in all three locale blocks; it is outside this Statistics parity fix and was intentionally left untouched in this pass.
+
+## Shared radius and separator review accepted — 2026-10-06
+
+- Manual browser review accepted the shared semantic-radius pass. The existing radius system remains authoritative: 6 px small/internal controls, 8 px primary controls, 12 px large cards/panels, and pill radii where semantically appropriate.
+- Statistics channel-menu and period controls were normalized to the existing small-control radius token; intentional shapes such as avatars, progress bars, chart marks, thumbnails, Calendar event strips, and pills were left unchanged.
+- Videos left-column structure now follows the accepted Playlists pattern: the page heading lives inside the list column, toolbar sizing stays within the column, and heading/toolbar separators no longer double.
+- Duplicate horizontal separators were removed at the Playlist summary/tools boundary and from the Video properties column below the preview, leaving one visual divider per section boundary.
+- The user completed browser review and accepted the resulting Video and Playlist geometry.
+
+## Final validation — Statistics v3 convergence — 2026-10-06
+
+- Final manual browser review is accepted for Statistics, Videos, Calendar, and Playlists, including the consolidated Statistics controls and long-video-title selector case.
+- Frontend i18n parity check passed for EN/RU/UK.
+- Frontend catalog unit test passed.
+- Frontend lint passed.
+- Next.js production build passed.
+- Full backend pytest suite passed.
+- The `feature-statistics-v3` implementation is green after the final visual and source-level cleanup.
+
+## Statistics final controls and CSS consolidation accepted — 2026-10-06
+
+- Statistics v3 base CSS was consolidated to one active source by removing the older overridden v3 block; the unrelated legacy Statistics selectors were intentionally left untouched.
+- The channel picker menu is positioned out of normal flow, so opening it no longer changes the controls-panel height. Channel secondary text was aligned to the shared compact-control typography.
+- Statistics video scope now offers only catalog videos whose normalized status is `public`; scheduled, private, unlisted, unavailable, and deleted videos are excluded from the video selector.
+- Period selection was converted from five persistent buttons to the same native select pattern used by the other Statistics controls, preserving 7 / 28 / 90 / 365 days and lifetime options.
+- The four desktop controls are now Channel / Scope / target Playlist-or-Video / Period. Native selects are constrained with `width: 100%` and `min-width: 0`, preventing long selected video titles from overflowing into the Period column.
+- During the period refactor, an accidentally removed shared Statistics control block was identified by source comparison and restored in place; obsolete period-button mobile rules were then removed explicitly.
+- Manual browser review accepted the final controls layout, including the long-video-title case.
+
+## Cross-page consistency audit
+
+- Videos: retained accepted catalog/Inspector layout and existing localized search/filter/sort/editor hints.
+- Playlists: retained accepted two-pane/detail/bulk-action layout and existing localized action/search/sort hints.
+- Calendar: retained accepted calendar/queue/detail layout and existing localized navigation/manipulation hints.
+- Cabinet: retained current hierarchy/layout; added localized EN/RU/UK hints to AI provider/model/API-key controls and retained the existing channel-language hint.
+- Shared form controls continue to use the common theme/focus/disabled rules in `globals.css`; Statistics now follows that control language rather than overriding native select appearance.
+
+## Final UI corrections and validation
+
+- Videos catalog filtering now keeps scheduled uploads out of the generic Private filter; Scheduled remains a separate catalog status. Regression coverage was added in `tests/test_catalog.py`.
+- Updated the OAuth scope regression expectation for the Statistics Analytics permission `yt-analytics.readonly`; the production scope itself was already intentional and correct.
+- Videos and Calendar status-filter controls were corrected at their existing grid definitions so the longest localized status labels remain readable without adding CSS override selectors.
+- Playlist `Change thumbnail` now matches the accepted Videos button sizing/typography while leaving the Videos reference control unchanged.
+- Backend suite: **133 passed**, with 3 non-blocking dependency/FastAPI deprecation warnings.
+- Frontend lint: **0 errors**. Existing non-blocking Next.js warnings remain for raw `<img>` usage/custom font handling; `next lint` itself is deprecated ahead of Next.js 16.
+- Production build: **successful** on Next.js 15.5.27. Lint/type validation, page-data collection, static generation (7/7), build traces and page optimization all completed.
+- Build warnings are non-blocking: existing image/font lint warnings plus Autoprefixer compatibility notices for `start`/`end` alignment values in `globals.css`.
+- Browser visual smoke remains the final manual gate for accepted desktop/responsive UI before merge.
+
+---
+
 # Current Handoff — Functional Architecture, 2026-10-04
 
 ## UI baseline closed
@@ -816,3 +923,18 @@ Security:
 - Контрольная проверка 2026-10-05 после AI/Cabinet polish: backend `pytest` — **130 passed**; frontend `node --test tests/studio-catalog.test.mjs` — **31 passed, 0 failed**; `npm run lint` — без ошибок (только существующие warnings); `npm run build` — успешно, все 7 static pages сгенерированы. Неблокирующие warnings: FastAPI `on_event`/Starlette deprecations, Node module-type warning, существующие Next.js `<img>`/font warnings и autoprefixer `end` compatibility warning.
 - Финальный pre-merge audit обнаружил и исправил server-side whitespace validation gap: модель из одних пробелов и новый API key из одних пробелов теперь отклоняются с 422; добавлен regression test. Cabinet Cancel также очищает введённый, но не сохранённый API key из browser state. После этих последних правок полный validation suite требуется повторить перед merge.
 - `HOWTOSTART.md` должен считать `0011_ai_connections` текущим migration head после merge этой ветки.
+
+
+## Запись 2026-10-06 — финальная полировка интерфейса и pre-merge validation
+
+- Последовательно приняты и визуально проверены финальные состояния Video, Playlists, Calendar и Statistics на ветке `feature-statistics-v3`.
+- Video: одиночный статус добавлен как staged control в настройки видео; изменение участвует в общем индикаторе несохранённых изменений и Cancel, но фактическая отправка нового статуса на YouTube пока намеренно не подключена. Добавлены локализованные hover-подсказки EN/RU/UK для редактируемых metadata/status и conflict actions.
+- Cabinet: язык канала переведён из хрупкой browser-only preference в постоянное поле `Channel.working_language`. Migration `0012_channel_working_language` применена к локальной PostgreSQL; `/channels` возвращает значение, owner-scoped same-origin PUT сохраняет его. Старое localStorage-значение автоматически мигрируется один раз.
+- Statistics: раскрытый список каналов ограничен шириной первого control вместо растягивания на всю рабочую область.
+- Localization parity: `npm run check:i18n` — **630 keys in EN/RU/UK**, parity OK.
+- Backend validation после migration 0012: полный `pytest -q` — **134 passed** (по progress output: 112 + 22), 0 failed. Остались только существующие deprecation warnings Starlette/FastAPI (`BlockingPortal`, `on_event`/lifespan).
+- Frontend `npm run lint` — **0 errors**; остаются неблокирующие существующие Next.js warnings по `<img>`, custom font и deprecated `next lint`.
+- Frontend `npm run build` — **успешно**, lint/type check пройдены, static pages **7/7**, production build завершён.
+- Два build warnings Autoprefixer по `align-items: end` после основного прогона точечно исправлены на эквивалентный `flex-end`; визуальная геометрия не менялась. Повторный frontend validation после этой правки: `npm run check:i18n` — 630 keys EN/RU/UK, `npm run lint` — 0 errors, `npm run build` — успешно, 7/7 static pages; Autoprefixer warnings исчезли. Остались только известные неблокирующие Next.js `<img>`/custom-font и deprecated `next lint` warnings.
+- Реальные YouTube write операции в этом validation-прогоне не выполнялись.
+- **Merge не выполнять:** следующий обязательный gate — ручная проверка интерфейса и основных пользовательских сценариев 2026-10-07. Merge разрешён только после её явного принятия пользователем.

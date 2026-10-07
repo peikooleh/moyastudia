@@ -68,6 +68,19 @@ class ChannelSelection(BaseModel):
     youtube_channel_ids: list[str]
 
 
+class ChannelWorkingLanguageUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    language: Literal["", "en", "ru", "uk", "de", "pl", "fr", "es", "it", "pt", "tr", "ja", "ko", "zh"]
+
+
+class ChannelMetadataUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(default="", max_length=1000)
+    keywords: str = Field(default="", max_length=500)
+
+
 class WriteModeUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -595,6 +608,19 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
         if rows
         else {}
     )
+    catalog_like_counts = (
+        dict(
+            db.query(Video.channel_id, func.coalesce(func.sum(Video.youtube_like_count), 0))
+            .filter(
+                Video.channel_id.in_([row.id for row in rows]),
+                Video.youtube_video_id.is_not(None),
+            )
+            .group_by(Video.channel_id)
+            .all()
+        )
+        if rows
+        else {}
+    )
     return [
         {
             "id": row.id,
@@ -605,13 +631,67 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
             "banner_url": getattr(row, "banner_url", "") or "",
             "owner_email": row.google_connection.email or "",
             "description": getattr(row, "description", "") or "",
+            "working_language": getattr(row, "working_language", "") or "",
             "yt_published_at": getattr(row, "yt_published_at", "") or "",
             "subscriber_count": int(getattr(row, "subscriber_count", 0) or 0),
             "catalog_video_count": catalog_video_counts.get(row.id, 0),
+            "catalog_like_count": int(catalog_like_counts.get(row.id, 0) or 0),
             "hidden_subscribers": None,
         }
         for row in rows
     ]
+
+
+@app.put(
+    "/channels/{channel_id}/working-language",
+    dependencies=[Depends(require_same_origin)],
+)
+def update_channel_working_language(
+    channel_id: int,
+    payload: ChannelWorkingLanguageUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = _channel_or_404(db, user, channel_id)
+    row.working_language = payload.language
+    db.commit()
+    return {"id": row.id, "working_language": row.working_language}
+
+
+@app.put(
+    "/channels/{channel_id}/metadata",
+    dependencies=[Depends(require_same_origin)],
+)
+def update_channel_metadata(
+    channel_id: int,
+    payload: ChannelMetadataUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.write_mode_enabled:
+        raise HTTPException(403, detail={"code": "write_mode_off"})
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            result = yt.update_channel_metadata(
+                token,
+                channel.youtube_channel_id,
+                description=payload.description,
+                keywords=payload.keywords,
+            )
+    except LookupError as exc:
+        raise HTTPException(404, detail={"code": "channel_not_found_on_youtube"}) from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        message = str(exc).lower()
+        if "insufficient" in message or "permission" in message or "scope" in message:
+            raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_update_failed"}) from exc
+    channel.description = result.get("description", payload.description)
+    db.commit()
+    return {"id": channel.id, "description": channel.description, "keywords": result.get("keywords", payload.keywords)}
 
 
 @app.get("/google-connections")
@@ -1220,6 +1300,10 @@ def channel_videos(
             Video.availability_status == "available",
             Video.youtube_visibility == visibility,
         )
+        if visibility == "private":
+            # Scheduled videos are private on YouTube, but they are a separate
+            # Studio status and must not leak into the plain Private filter.
+            query = query.filter(Video.youtube_scheduled_at.is_(None))
 
     total = query.count()
     status_expression = case(
@@ -1635,19 +1719,70 @@ async def upload_channel_video_captions(
 @app.get("/channels/{channel_id}/analytics/summary")
 def channel_analytics_summary(
     channel_id: int,
+    days: int | None = Query(default=None, ge=1, le=3650),
+    video_id: int | None = Query(default=None, ge=1),
+    playlist_id: str | None = Query(default=None, min_length=1, max_length=128),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if video_id is not None and playlist_id is not None:
+        raise HTTPException(422, detail={"code": "analytics_scope_conflict"})
+
     channel = _channel_or_404(db, user, channel_id)
+    youtube_video_id = ""
+    if video_id is not None:
+        video = db.get(Video, video_id)
+        if video is None or video.channel_id != channel.id or not video.youtube_video_id:
+            raise HTTPException(404, detail={"code": "analytics_video_not_found"})
+        youtube_video_id = video.youtube_video_id
+
+    end = _utcnow().date()
+    if days is not None:
+        start = end - timedelta(days=days - 1)
+    elif video_id is not None and video.youtube_published_at is not None:
+        start = video.youtube_published_at.date()
+    else:
+        published = channel.yt_published_at
+        start = datetime.fromisoformat(published.replace("Z", "+00:00")).date() if published else datetime(2005, 2, 14).date()
+
+    start_date = start.isoformat()
+    end_date = end.isoformat()
+    dimension = "day" if (end - start).days <= 120 else "month"
+
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
-        start_date = (channel.yt_published_at or "2005-02-14")[:10]
-        end_date = _utcnow().date().isoformat()
-        return yt.channel_analytics_summary(token, start_date, end_date)
+        summary = yt.channel_analytics_summary(
+            token,
+            start_date,
+            end_date,
+            youtube_video_id,
+            playlist_id or "",
+        )
+        series = yt.channel_analytics_timeseries(
+            token,
+            start_date,
+            end_date,
+            youtube_video_id,
+            playlist_id or "",
+            dimension,
+        )
+        return {
+            **summary,
+            "scope": "video" if video_id is not None else "playlist" if playlist_id else "channel",
+            "local_video_id": video_id,
+            "playlist_id": playlist_id,
+            "dimension": dimension,
+            "series": series,
+        }
     except TokenEncryptionError as exc:
-        raise HTTPException(500, "Stored YouTube credentials are unavailable") from exc
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
-        raise HTTPException(502, "YouTube Analytics is unavailable") from exc
+        message = str(exc).lower()
+        if "accessnotconfigured" in message or "api has not been used" in message:
+            raise HTTPException(503, detail={"code": "youtube_analytics_api_disabled"}) from exc
+        if "insufficient" in message or "scope" in message or "permission" in message or "403" in message:
+            raise HTTPException(403, detail={"code": "youtube_analytics_permission_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_analytics_unavailable"}) from exc
 
 
 @app.get("/channels/{channel_id}/catalog/status")
@@ -2220,6 +2355,7 @@ def refresh_profile(
         "youtube_channel_id": row.youtube_channel_id,
         "has_token": True,
         "description": info.get("description") or "",
+        "keywords": info.get("keywords") or "",
         "yt_published_at": info.get("yt_published_at") or "",
         "subscriber_count": int(info.get("subscriber_count") or 0),
         "video_count": int(info.get("video_count") or 0),

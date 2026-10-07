@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, apiUrl } from "../../lib/api";
 import { t } from "../../lib/i18n";
@@ -41,6 +41,16 @@ export default function CabinetPage() {
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [removingChannelId, setRemovingChannelId] = useState("");
   const [removeError, setRemoveError] = useState("");
+  const [channelLanguageSaving, setChannelLanguageSaving] = useState(false);
+  const [channelLanguageError, setChannelLanguageError] = useState("");
+  const [writeMode, setWriteMode] = useState({ enabled: false });
+  const [channelEditing, setChannelEditing] = useState(false);
+  const [channelDescriptionDraft, setChannelDescriptionDraft] = useState("");
+  const [channelKeywordsDraft, setChannelKeywordsDraft] = useState("");
+  const [channelDescriptionSaving, setChannelDescriptionSaving] = useState(false);
+  const [channelDescriptionError, setChannelDescriptionError] = useState("");
+  const [channelShareNotice, setChannelShareNotice] = useState("");
+  const migratedChannelLanguages = useRef(new Set());
   const [aiConnections, setAiConnections] = useState([]);
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiModel, setAiModel] = useState("");
@@ -51,6 +61,8 @@ export default function CabinetPage() {
   const [aiSaving, setAiSaving] = useState(false);
   const [aiNotice, setAiNotice] = useState("");
   const [aiError, setAiError] = useState("");
+  const AI_PROMPT_CHAR_LIMIT = 12000;
+  const [aiBaseline, setAiBaseline] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -95,6 +107,23 @@ export default function CabinetPage() {
       cancelled = true;
     };
   }, [router, sessionRetry]);
+
+  useEffect(() => {
+    if (!session?.authenticated) return undefined;
+    let cancelled = false;
+    const syncWriteMode = (event) => {
+      if (!cancelled && event.detail) setWriteMode(event.detail);
+    };
+    window.addEventListener("moyastudia:write-mode", syncWriteMode);
+    apiFetch("/write-mode")
+      .then((response) => (response.ok ? response.json() : { enabled: false }))
+      .then((status) => { if (!cancelled) setWriteMode(status); })
+      .catch(() => { if (!cancelled) setWriteMode({ enabled: false }); });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("moyastudia:write-mode", syncWriteMode);
+    };
+  }, [session?.authenticated]);
 
   useEffect(() => {
     const userId = String(session?.user?.id || "");
@@ -225,6 +254,34 @@ export default function CabinetPage() {
   }, [channels, channelsError, prefs, update]);
 
   useEffect(() => {
+    if (!channels?.length) return;
+    channels.forEach((channel) => {
+      if (channel.working_language || migratedChannelLanguages.current.has(String(channel.id))) return;
+      const savedLanguage = prefs.channelLangs[channelPreferenceKey(channel)] || "";
+      if (!savedLanguage) return;
+      migratedChannelLanguages.current.add(String(channel.id));
+      apiFetch(`/channels/${channel.id}/working-language`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: savedLanguage }),
+      })
+        .then((response) => {
+          if (!response.ok) return null;
+          return response.json();
+        })
+        .then((updated) => {
+          if (!updated?.working_language) return;
+          setChannels((current) => current?.map((item) => (
+            String(item.id) === String(channel.id)
+              ? { ...item, working_language: updated.working_language }
+              : item
+          )));
+        })
+        .catch(() => {});
+    });
+  }, [channels, prefs.channelLangs]);
+
+  useEffect(() => {
     if (!session?.authenticated) return undefined;
     let cancelled = false;
     apiFetch("/ai-connections")
@@ -240,6 +297,14 @@ export default function CabinetPage() {
           setAiModel(rows[0].model);
           setAiTitlePrompt(rows[0].title_prompt || "");
           setAiDescriptionPrompt(rows[0].description_prompt || "");
+          setAiBaseline({
+            provider: rows[0].provider,
+            model: rows[0].model,
+            titlePrompt: rows[0].title_prompt || "",
+            descriptionPrompt: rows[0].description_prompt || "",
+          });
+        } else {
+          setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "" });
         }
       })
       .catch((error) => { if (!cancelled) setAiError(error.message); });
@@ -258,16 +323,23 @@ export default function CabinetPage() {
   }
 
   function cancelAiSettings() {
-    const saved = aiConnections.find(
-      (item) => item.provider === aiProvider && item.model === aiModel.trim(),
-    );
-    setAiTitlePrompt(saved?.title_prompt || "");
-    setAiDescriptionPrompt(saved?.description_prompt || "");
+    if (!aiBaseline) return;
+    setAiProvider(aiBaseline.provider);
+    setAiModel(aiBaseline.model);
+    setAiTitlePrompt(aiBaseline.titlePrompt);
+    setAiDescriptionPrompt(aiBaseline.descriptionPrompt);
     setAiApiKey("");
     setAiError("");
     setAiNotice("");
-    setAiSettingsOpen(false);
   }
+
+  const aiDirty = Boolean(aiBaseline) && (
+    aiProvider !== aiBaseline.provider
+    || aiModel !== aiBaseline.model
+    || aiTitlePrompt !== aiBaseline.titlePrompt
+    || aiDescriptionPrompt !== aiBaseline.descriptionPrompt
+    || Boolean(aiApiKey.trim())
+  );
 
   async function saveAiConnection() {
     if (!aiModel.trim()) {
@@ -298,6 +370,12 @@ export default function CabinetPage() {
       const row = await response.json();
       setAiConnections((current) => [...current.filter((item) => item.id !== row.id), row]);
       setAiApiKey("");
+      setAiBaseline({
+        provider: row.provider,
+        model: row.model,
+        titlePrompt: row.title_prompt || "",
+        descriptionPrompt: row.description_prompt || "",
+      });
       setAiNotice(t(uiLang, "aiSaved"));
     } catch (error) {
       setAiError(error.message || t(uiLang, "aiSaveError"));
@@ -373,6 +451,83 @@ export default function CabinetPage() {
     setSelectionError("");
   }
 
+  async function saveChannelWorkingLanguage(channel, language) {
+    const key = channelPreferenceKey(channel);
+    const previousLanguage = channel.working_language || prefs.channelLangs[key] || "";
+    setChannelLanguageSaving(true);
+    setChannelLanguageError("");
+    update({ channelLangs: { ...prefs.channelLangs, [key]: language } });
+    setChannels((current) => current?.map((item) => (
+      String(item.id) === String(channel.id) ? { ...item, working_language: language } : item
+    )));
+    try {
+      const response = await apiFetch(`/channels/${channel.id}/working-language`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language }),
+      });
+      if (!response.ok) throw new Error(t(uiLang, "channelLanguageSaveError"));
+    } catch (error) {
+      update({ channelLangs: { ...prefs.channelLangs, [key]: previousLanguage } });
+      setChannels((current) => current?.map((item) => (
+        String(item.id) === String(channel.id) ? { ...item, working_language: previousLanguage } : item
+      )));
+      setChannelLanguageError(error.message || t(uiLang, "channelLanguageSaveError"));
+    } finally {
+      setChannelLanguageSaving(false);
+    }
+  }
+
+  function beginChannelEditing(channel) {
+    setChannelDescriptionDraft(channel.description || "");
+    setChannelKeywordsDraft(channel.keywords || "");
+    setChannelDescriptionError("");
+    setChannelEditing(true);
+  }
+
+  function cancelChannelEditing() {
+    setChannelEditing(false);
+    setChannelDescriptionDraft("");
+    setChannelKeywordsDraft("");
+    setChannelDescriptionError("");
+  }
+
+  async function saveChannelDescription(channel) {
+    if (!writeMode?.enabled || channelDescriptionSaving) return;
+    if (!window.confirm(t(uiLang, "channelDescriptionSaveConfirm"))) return;
+    setChannelDescriptionSaving(true);
+    setChannelDescriptionError("");
+    try {
+      const response = await apiFetch(`/channels/${channel.id}/metadata`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: channelDescriptionDraft, keywords: channelKeywordsDraft }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(t(uiLang, response.status === 403 ? "saveToYoutubeWriteModeHint" : "channelDescriptionSaveError"));
+      setChannels((current) => current?.map((item) => (
+        String(item.id) === String(channel.id) ? { ...item, description: data.description ?? channelDescriptionDraft, keywords: data.keywords ?? channelKeywordsDraft } : item
+      )));
+      setChannelEditing(false);
+      setChannelDescriptionDraft("");
+    } catch (error) {
+      setChannelDescriptionError(error.message || t(uiLang, "channelDescriptionSaveError"));
+    } finally {
+      setChannelDescriptionSaving(false);
+    }
+  }
+
+  async function copyChannelLink(channel) {
+    const url = `https://www.youtube.com/channel/${channel.youtube_channel_id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setChannelShareNotice(t(uiLang, "channelLinkCopied"));
+    } catch {
+      setChannelShareNotice(t(uiLang, "channelLinkCopyFailed"));
+    }
+    window.setTimeout(() => setChannelShareNotice(""), 1800);
+  }
+
   async function removeChannelFromMoya(channel) {
     if (!window.confirm(t(uiLang, "removeChannelConfirm"))) return;
     const removedId = String(channel.id);
@@ -435,43 +590,54 @@ export default function CabinetPage() {
           }}>{t(uiLang, "retry")}</button> : null}
         </div>
       ) : (
-        <div className="cab">
-          <aside className="side" aria-label={t(uiLang, "cabinet")}>
+        <div className="cab cabinet-workspace">
+          <nav className="cabinet-tabs" aria-label={t(uiLang, "cabinet")}>
             {[["profile", "account"], ["channels", "channelsConnections"]].map(([id, key]) => (
               <button key={id} className={tab === id ? "on" : ""} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                 {t(uiLang, key)}
               </button>
             ))}
-          </aside>
+          </nav>
           <section className="main">
             {tab === "profile" ? (
-              <div className="panel">
-                <p className="section-kicker">{t(uiLang, "profileSection")}</p>
-                <h1>{t(uiLang, "account")}</h1>
-                <div className="profile-fields field">
-                  <label>{t(uiLang, "email")}</label>
-                  <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
-                </div>
-                <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
-                  <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
-                  <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
-                  <div className="ai-connection-grid">
-                    <label>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
-                    <label>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
-                    <label>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
-                    <button className={`btn ghost ai-settings-button ${aiSettingsOpen ? "active" : ""}`} type="button" title={t(uiLang, "aiSettings")} onClick={() => (aiSettingsOpen ? cancelAiSettings() : setAiSettingsOpen(true))} aria-expanded={aiSettingsOpen}>⚙ {t(uiLang, "aiSettings")}</button>
-                  </div>
-                  {aiSettingsOpen ? (
+              <div className="panel cabinet-account-panel">
+                <div className="cabinet-account-layout">
+                  <aside className="cabinet-account-summary">
+                    <h1>{t(uiLang, "profileSection")}</h1>
+                    <div className="profile-fields field">
+                      <label>{t(uiLang, "email")}</label>
+                      <div className="readonly-value" role="status">{session.user?.email || "—"}</div>
+                      <p className="account-session-hint">{t(uiLang, "moyaStudiaAccountHint")}</p>
+                    </div>
+                  </aside>
+                  <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
+                    <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
+                    <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
+                    <div className="ai-connection-grid">
+                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
+                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
+                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
+                    </div>
+                    {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
+                    {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
+                  </section>
+                  <aside className="ai-model-settings-column" aria-labelledby="ai-model-settings-title">
+                    <h2 id="ai-model-settings-title">{t(uiLang, "aiModelSettings")}</h2>
                     <div className="ai-model-settings">
-                      <h3>{t(uiLang, "aiModelSettings")}</h3>
-                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /></label>
-                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /></label>
+                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                    </div>
+                  </aside>
+                  {aiDirty ? (
+                    <div className="ai-dirty-actions" role="status">
+                      <span>{t(uiLang, "unsavedChanges")}</span>
+                      <div>
+                        <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button>
+                        <button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button>
+                      </div>
                     </div>
                   ) : null}
-                  {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
-                  {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
-                  <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
-                </section>
+                </div>
               </div>
             ) : null}
 
@@ -527,7 +693,8 @@ export default function CabinetPage() {
                       <section className="channel-group" key={connection.id}>
                         <header>
                           <div className="channel-group-account">
-                            <strong>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
+                            <span className="channel-group-type">{t(uiLang, "googleAccountLabel")}</span>
+                            <strong className="channel-group-email" title={connection.email || t(uiLang, "connectionAccountUnknown")}>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
                             {connection.status === "reauthorization_required" ? (
                               <span className={`connection-status ${connection.status}`}>
                                 {t(uiLang, "connectionStatusReauthorization")}
@@ -535,31 +702,27 @@ export default function CabinetPage() {
                             ) : null}
                             
                           </div>
-                          {connection.status === "reauthorization_required" ? (
-                            <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
-                              {t(uiLang, "reauthorizeConnection")}
-                            </a>
-                          ) : null}
+                          <div className="channel-group-actions">
+                            {connection.status === "reauthorization_required" ? (
+                              <a className="btn ghost" href={apiUrl(`/auth/youtube/login?reconnect_connection_id=${connection.id}`)}>
+                                {t(uiLang, "reauthorizeConnection")}
+                              </a>
+                            ) : null}
+                            <button className="channel-add-button" type="button" title={t(uiLang, "addYoutubeChannelsHint")} aria-label={t(uiLang, "addYoutubeChannelsHint")} onClick={() => selectConnectionChannels(connection.id)}>+</button>
+                          </div>
                         </header>
+                        <div className="channel-group-list-label">{t(uiLang, "youtubeChannelsLabel")}</div>
                         {connection.channels.map((item) => {
                           const selected = String(item.id) === String(prefs.selectedChannelId);
                           const profile = channels?.find((channel) => String(channel.id) === String(item.id)) || item;
-                          const subscriberCount = profile.hidden_subscribers
-                            ? t(uiLang, "channelSubscribersHidden")
-                            : profile.subscriber_count != null
-                              ? t(uiLang, "channelSubscribersCount", { count: profile.subscriber_count })
-                              : "";
-                          const videoCount = profile.video_count != null
-                            ? t(uiLang, "channelVideoCount", { count: profile.video_count })
-                            : profile.catalog_video_count != null
-                              ? t(uiLang, "catalogVideoCount", { count: profile.catalog_video_count })
-                              : "";
+                          const createdAt = profile.yt_published_at || "";
                           return (
                             <button
                               key={item.id}
                               type="button"
                               className={`channel-option ${selected ? "on" : ""}`}
                               aria-pressed={selected}
+                              title={selected ? t(uiLang, "activeStudioChannel") : t(uiLang, "switchStudioChannel")}
                               onClick={() => {
                                 if (selected || !window.confirm(t(uiLang, "confirmChannelSwitch", { channel: channelDisplayLabel(item) }))) return;
                                 update({ selectedChannelId: String(item.id) });
@@ -569,42 +732,85 @@ export default function CabinetPage() {
                               <span className="channel-option-copy">
                                 <strong>{item.title}</strong>
                                 <small>{channelDisplayContext(item)}</small>
-                                {subscriberCount ? <small>{subscriberCount}</small> : null}
-                                {videoCount ? <small>{videoCount}</small> : null}
+                                {createdAt ? <small>{t(uiLang, "channelCreated")}: {String(createdAt).slice(0, 10)}</small> : null}
                               </span>
-                              <span className="channel-option-status">{selected ? t(uiLang, "activeStudioChannel") : t(uiLang, "switchStudioChannel")}</span>
                             </button>
                           );
                         })}
                         {connection.channels.length === 0 ? <p className="empty-block">{t(uiLang, "connectionNoChannels")}</p> : null}
-                        <button className="text-button" type="button" onClick={() => selectConnectionChannels(connection.id)}>{t(uiLang, "selectConnectionChannels")}</button>
                       </section>
                     ))}
                     {connectionsError ? <p className="selection-error" role="alert">{t(uiLang, "connectionsLoadError")}</p> : null}
+                    <div className="channel-list-footer">
+                      <a className="text-button channel-connect-account" href={apiUrl("/auth/youtube/login")}>+ {t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                    </div>
                   </div>
                   <div className="selected-channel-column">
                   {ch ? (
-                    <article className="chan-card">
+                    <article className={`chan-card ${channelEditing ? "editing" : ""}`}>
+                      <div className="channel-card-actions">
+                        {!channelEditing ? <button className="channel-edit-metadata" type="button" title={t(uiLang, "channelEditDescriptionHint")} aria-label={t(uiLang, "channelEditDescriptionHint")} onClick={() => beginChannelEditing(ch)}>✎</button> : null}
+                      </div>
                       <header className="channel-detail-heading">
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
-                        <div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small><span>{t(uiLang, "activeStudioChannel")}</span></div>
+                        <div><div className="channel-current-badge">{t(uiLang, "activeStudioChannel")}</div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small></div>
                       </header>
-                      <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
-                        <select value={prefs.channelLangs[channelPreferenceKey(ch)] || ""} onChange={(event) => update({ channelLangs: { ...prefs.channelLangs, [channelPreferenceKey(ch)]: event.target.value } })}>
-                          <option value="">{t(uiLang, "notSet")}</option>
-                          {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
-                        </select>
-                      </label>
-                      <details className="channel-details">
-                        <summary>{t(uiLang, "channelDetails")}</summary>
-                        {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
-                        <dl className="inspector-data"><div><dt>{t(uiLang, "channelCreated")}</dt><dd>{ch.yt_published_at || "—"}</dd></div></dl>
-                        <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
-                      </details>
-                      <div className="actions"><button className="btn ghost" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
+                      {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
+                      <dl className="channel-metrics">
+                        <div><dt>{t(uiLang, "channelVideos")}</dt><dd>{ch.catalog_video_count ?? "—"}</dd></div>
+                        <div><dt>{t(uiLang, "channelSubscribers")}</dt><dd>{ch.hidden_subscribers ? t(uiLang, "channelSubscribersHidden") : (ch.subscriber_count ?? "—")}</dd></div>
+                        <div><dt>{t(uiLang, "channelLikes")}</dt><dd>{ch.catalog_like_count ?? "—"}</dd></div>
+                      </dl>
+                      {channelEditing ? (
+                        <div className="channel-description-editor">
+                          <label>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setChannelDescriptionError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></span>
+                            <textarea rows={10} maxLength={1000} value={channelDescriptionDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelDescriptionDraft(event.target.value)} />
+                          </label>
+                          <small>{channelDescriptionDraft.length} / 1000</small>
+                          <label>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setChannelDescriptionError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></span>
+                            <textarea rows={4} maxLength={500} value={channelKeywordsDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelKeywordsDraft(event.target.value)} />
+                          </label>
+                          <small>{channelKeywordsDraft.length} / 500</small>
+                          {channelDescriptionError ? <p className="selection-error" role="alert">{channelDescriptionError}</p> : null}
+                          <div className="channel-description-actions">
+                            <button className="btn ghost" type="button" disabled={channelDescriptionSaving} onClick={cancelChannelEditing}>{t(uiLang, "actionCancel")}</button>
+                            <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "channelDescriptionSaveHint")}>
+                              <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || channelDescriptionSaving || channelDescriptionDraft === (ch.description || "") && channelKeywordsDraft === (ch.keywords || "")} onClick={() => saveChannelDescription(ch)}>{channelDescriptionSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
+                          <div className="channel-keywords-view">
+                            <span>{t(uiLang, "channelKeywords")}</span>
+                            <p>{ch.keywords || t(uiLang, "notSet")}</p>
+                          </div>
+                        </>
+                      )}
                     </article>
                   ) : null}
-                    <a className="btn ghost connect-channel-link" href={apiUrl("/auth/youtube/login")}>{t(uiLang, channels.length ? "connectAnother" : "connectBtn")}</a>
+                  </div>
+                  <div className="channel-settings-column">
+                    {ch ? (
+                      <section className="channel-settings-panel">
+                        <h2>{t(uiLang, "channelSettings")}</h2>
+                        <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
+                          <select value={ch.working_language || prefs.channelLangs[channelPreferenceKey(ch)] || ""} disabled={channelLanguageSaving} onChange={(event) => saveChannelWorkingLanguage(ch, event.target.value)}>
+                            <option value="">{t(uiLang, "notSet")}</option>
+                            {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
+                          </select>
+                        </label>
+                        {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
+                        <div className="channel-link-actions">
+                          <a className="btn ghost" href={`https://www.youtube.com/channel/${ch.youtube_channel_id}`} target="_blank" rel="noreferrer" title={t(uiLang, "channelOpenHint")}>{t(uiLang, "channelOpen")}</a>
+                          <button className="btn ghost" type="button" title={t(uiLang, "channelShareHint")} onClick={() => copyChannelLink(ch)}>{channelShareNotice || t(uiLang, "channelShare")}</button>
+                        </div>
+                        <div className="channel-remove-actions"><button className="btn ghost channel-remove-button" type="button" title={t(uiLang, "removeChannelHint")} disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
+                      </section>
+                    ) : null}
                   </div>
                   {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>

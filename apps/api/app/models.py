@@ -109,6 +109,7 @@ class Channel(Base):
     thumbnail_url: Mapped[str] = mapped_column(Text, default="")
     banner_url: Mapped[str] = mapped_column(Text, default="")
     description: Mapped[str] = mapped_column(Text, default="")
+    working_language: Mapped[str] = mapped_column(String(16), default="", server_default="")
     yt_published_at: Mapped[str] = mapped_column(String(32), default="")
     subscriber_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -122,6 +122,7 @@ export function Shell({ children }) {
         return;
       }
       setWriteMode(data);
+      window.dispatchEvent(new CustomEvent("moyastudia:write-mode", { detail: data }));
     } catch {
       setWriteMode((current) => ({ ...current, error: t(uiLang, "writeModeUpdateError") }));
     } finally {
@@ -243,23 +244,6 @@ export function Shell({ children }) {
         </nav>
         <div className="spacer" />
         <div className="header-system-status">
-          {!inCabinet ? (
-            <div className="header-write-mode">
-              <span>{t(uiLang, "writeMode")}</span>
-              <button
-                className={`mode-switch ${writeMode.enabled ? "is-on" : "is-off"}`}
-                type="button"
-                role="switch"
-                aria-checked={writeMode.enabled ? "true" : "false"}
-                aria-label={t(uiLang, "writeMode")}
-                disabled={writeModeBusy}
-                onClick={toggleWriteMode}
-                title={writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}
-              >
-                <span aria-hidden="true" />
-              </button>
-            </div>
-          ) : null}
           <div className="sync-status" role="status" aria-label={t(uiLang, "syncStatus")}>
             <span>{t(uiLang, "syncStatus")}</span>
             <strong>{t(uiLang, syncStatusKey)}</strong>
@@ -270,6 +254,21 @@ export function Shell({ children }) {
               <strong>{quota.buckets.general.used} / {quota.buckets.general.limit}</strong>
             </div>
           ) : null}
+          <div className="header-write-mode">
+            <span>{t(uiLang, "writeMode")}</span>
+            <button
+              className={`mode-switch ${writeMode.enabled ? "is-on" : "is-off"}`}
+              type="button"
+              role="switch"
+              aria-checked={writeMode.enabled ? "true" : "false"}
+              aria-label={t(uiLang, "writeMode")}
+              disabled={writeModeBusy}
+              onClick={toggleWriteMode}
+              title={writeMode.enabled ? t(uiLang, "writeModeOn") : t(uiLang, "writeModeOff")}
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div className="header-interface" ref={interfaceMenuRef}>
           <button type="button" className={`btn ghost interface-trigger ${interfaceOpen ? "active" : ""}`} aria-expanded={interfaceOpen} aria-haspopup="dialog" onClick={() => setInterfaceOpen((open) => !open)}>
@@ -294,7 +293,7 @@ export function Shell({ children }) {
             </div>
           ) : null}
         </div>
-        <Link href="/cabinet" className="btn ghost cabinet-link">
+        <Link href="/cabinet" className={`btn ghost cabinet-link ${inCabinet ? "active" : ""}`}>
           {t(uiLang, "cabinet")}
         </Link>
         <LogoutControl />

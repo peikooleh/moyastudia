@@ -5,7 +5,8 @@
     "dev": "next dev",
     "lint": "next lint",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check:i18n": "node scripts/check-i18n-parity.mjs"
   },
   "dependencies": {
     "next": "15.5.27",

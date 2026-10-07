@@ -21,6 +21,7 @@ IDENTITY_SCOPES = [
 YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.force-ssl",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
 ]
@@ -96,17 +97,113 @@ def service_for(refresh_token: str):
     return build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
 
 
-def channel_analytics_summary(refresh_token: str, start_date: str, end_date: str) -> dict:
-    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
-    response = service.reports().query(
-        ids="channel==MINE",
-        startDate=start_date,
-        endDate=end_date,
-        metrics="estimatedMinutesWatched",
-    ).execute()
+ANALYTICS_METRICS = (
+    "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,"
+    "likes,comments,shares,subscribersGained,subscribersLost"
+)
+PLAYLIST_ANALYTICS_METRICS = "views,estimatedMinutesWatched,averageViewDuration"
+
+
+def _analytics_filter(video_id: str = "", playlist_id: str = "") -> str:
+    if video_id:
+        return f"video=={video_id}"
+    if playlist_id:
+        return f"playlist=={playlist_id}"
+    return ""
+
+
+def _analytics_row(response: dict) -> dict:
     rows = response.get("rows") or []
-    minutes = float(rows[0][0]) if rows and rows[0] else 0.0
-    return {"estimated_minutes_watched": minutes, "start_date": start_date, "end_date": end_date}
+    row = rows[0] if rows else []
+    values = list(row) + [0] * 9
+    return {
+        "views": int(values[0] or 0),
+        "estimated_minutes_watched": float(values[1] or 0),
+        "average_view_duration": float(values[2] or 0),
+        "average_view_percentage": float(values[3] or 0),
+        "likes": int(values[4] or 0),
+        "comments": int(values[5] or 0),
+        "shares": int(values[6] or 0),
+        "subscribers_gained": int(values[7] or 0),
+        "subscribers_lost": int(values[8] or 0),
+    }
+
+
+def channel_analytics_summary(
+    refresh_token: str,
+    start_date: str,
+    end_date: str,
+    video_id: str = "",
+    playlist_id: str = "",
+) -> dict:
+    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    kwargs = {
+        "ids": "channel==MINE",
+        "startDate": start_date,
+        "endDate": end_date,
+        "metrics": PLAYLIST_ANALYTICS_METRICS if playlist_id else ANALYTICS_METRICS,
+    }
+    analytics_filter = _analytics_filter(video_id, playlist_id)
+    if analytics_filter:
+        kwargs["filters"] = analytics_filter
+    response = service.reports().query(**kwargs).execute()
+    if playlist_id:
+        rows = response.get("rows") or []
+        row = list(rows[0]) if rows else []
+        values = row + [0] * 3
+        summary = {
+            "views": int(values[0] or 0),
+            "estimated_minutes_watched": float(values[1] or 0),
+            "average_view_duration": float(values[2] or 0),
+            "average_view_percentage": None,
+            "likes": None,
+            "comments": None,
+            "shares": None,
+            "subscribers_gained": None,
+            "subscribers_lost": None,
+        }
+    else:
+        summary = _analytics_row(response)
+    return {
+        **summary,
+        "start_date": start_date,
+        "end_date": end_date,
+        "video_id": video_id or None,
+        "playlist_id": playlist_id or None,
+    }
+
+
+def channel_analytics_timeseries(
+    refresh_token: str,
+    start_date: str,
+    end_date: str,
+    video_id: str = "",
+    playlist_id: str = "",
+    dimension: str = "day",
+) -> list[dict]:
+    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    kwargs = {
+        "ids": "channel==MINE",
+        "startDate": start_date,
+        "endDate": end_date,
+        "metrics": "views,estimatedMinutesWatched",
+        "dimensions": dimension,
+        "sort": dimension,
+    }
+    analytics_filter = _analytics_filter(video_id, playlist_id)
+    if analytics_filter:
+        kwargs["filters"] = analytics_filter
+    response = service.reports().query(**kwargs).execute()
+    result = []
+    for row in response.get("rows") or []:
+        if len(row) < 3:
+            continue
+        result.append({
+            "date": str(row[0]),
+            "views": int(row[1] or 0),
+            "estimated_minutes_watched": float(row[2] or 0),
+        })
+    return result
 
 
 QuotaRecorder = Callable[[str, str], None]
@@ -185,6 +282,7 @@ def fetch_channel(creds: Credentials, youtube_channel_id: str = "", recorder: Qu
             "thumbnail_url": "",
             "banner_url": "",
             "description": "",
+            "keywords": "",
             "yt_published_at": "",
             "subscriber_count": 0,
             "video_count": 0,
@@ -205,6 +303,7 @@ def fetch_channel(creds: Credentials, youtube_channel_id: str = "", recorder: Qu
         "thumbnail_url": _pick_thumb(snippet.get("thumbnails") or {}),
         "banner_url": _pick_banner((item.get("brandingSettings") or {}).get("image") or {}),
         "description": snippet.get("description") or "",
+        "keywords": ((item.get("brandingSettings") or {}).get("channel") or {}).get("keywords") or "",
         "yt_published_at": (snippet.get("publishedAt") or "")[:10],
         "subscriber_count": int(stats.get("subscriberCount") or 0),
         "video_count": int(stats.get("videoCount") or 0),
@@ -548,6 +647,45 @@ def _owned_playlist(service, youtube_channel_id: str, playlist_id: str, recorder
     if not items or (items[0].get("snippet") or {}).get("channelId") != youtube_channel_id:
         raise LookupError("playlist does not belong to the selected channel")
     return items[0]
+
+
+
+def update_channel_metadata(
+    refresh_token: str,
+    youtube_channel_id: str,
+    *,
+    description: str,
+    keywords: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    listed = _execute(
+        service.channels().list(part="brandingSettings", id=youtube_channel_id),
+        "channels.list",
+        recorder,
+    ).get("items") or []
+    if not listed:
+        raise LookupError("channel not found")
+    branding = listed[0].get("brandingSettings") or {}
+    channel_branding = dict(branding.get("channel") or {})
+    channel_branding["description"] = description
+    channel_branding["keywords"] = keywords
+    response = _execute(
+        service.channels().update(
+            part="brandingSettings",
+            body={
+                "id": youtube_channel_id,
+                "brandingSettings": {**branding, "channel": channel_branding},
+            },
+        ),
+        "channels.update",
+        recorder,
+    )
+    returned = ((response.get("brandingSettings") or {}).get("channel") or {})
+    return {
+        "description": returned.get("description", description),
+        "keywords": returned.get("keywords", keywords),
+    }
 
 
 def update_playlist_metadata(
