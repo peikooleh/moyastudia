@@ -183,7 +183,7 @@ def test_video_thumbnail_write_forwards_bytes_and_updates_snapshot(client, test_
     response = client.put(
         f"/channels/{channel_id}/videos/{video_id}/thumbnail",
         headers={"Origin": settings.frontend_origin, "Content-Type": "image/png"},
-        content=b"png-bytes",
+        content=b"\x89PNG\r\n\x1a\npng-bytes",
     )
     assert response.status_code == 200
     assert captured == {
