@@ -457,24 +457,43 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
     calls = []
 
     class FakeResource:
-        def __init__(self, response):
+        def __init__(self, name, response):
+            self.name = name
             self.response = response
 
         def list(self, **kwargs):
-            calls.append(kwargs)
+            calls.append((self.name, kwargs))
             return SimpleNamespace(execute=lambda: self.response)
 
     class FakeService:
-        def search(self):
+        def channels(self):
             return FakeResource(
+                "channels",
                 {
-                    "items": [{"id": {"videoId": "selected-video"}}],
+                    "items": [
+                        {
+                            "contentDetails": {
+                                "relatedPlaylists": {"uploads": "uploads-playlist"}
+                            }
+                        }
+                    ]
+                },
+            )
+
+        def playlistItems(self):
+            return FakeResource(
+                "playlistItems",
+                {
+                    "items": [
+                        {"contentDetails": {"videoId": "selected-video"}}
+                    ],
                     "nextPageToken": "next-page",
-                }
+                },
             )
 
         def videos(self):
             return FakeResource(
+                "videos",
                 {
                     "items": [
                         {
@@ -488,7 +507,7 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
                             "statistics": {},
                         }
                     ]
-                }
+                },
             )
 
     monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: SimpleNamespace())
@@ -496,14 +515,66 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
 
     result = youtube.list_videos("token", "selected-channel", limit=50)
 
-    assert calls[0]["forMine"] is True
-    assert calls[0]["type"] == "video"
-    assert calls[0]["order"] == "date"
-    assert calls[0]["maxResults"] == 50
+    assert calls[0] == (
+        "channels",
+        {"part": "contentDetails", "id": "selected-channel", "maxResults": 1},
+    )
+    assert calls[1] == (
+        "playlistItems",
+        {"part": "contentDetails", "playlistId": "uploads-playlist", "maxResults": 50},
+    )
+    assert calls[2][0] == "videos"
+    assert calls[2][1]["id"] == "selected-video"
     assert result["next_page_token"] == "next-page"
-    assert result["uploads_playlist_id"] is None
+    assert result["uploads_playlist_id"] == "uploads-playlist"
     assert result["videos"][0]["youtube_video_id"] == "selected-video"
     assert result["videos"][0]["youtube_scheduled_at"] == "2026-10-07T05:00:00Z"
+
+
+def test_list_videos_reuses_known_uploads_playlist_without_channel_lookup(monkeypatch):
+    calls = []
+
+    class FakeResource:
+        def __init__(self, name, response):
+            self.name = name
+            self.response = response
+
+        def list(self, **kwargs):
+            calls.append((self.name, kwargs))
+            return SimpleNamespace(execute=lambda: self.response)
+
+    class FakeService:
+        def channels(self):
+            raise AssertionError("known uploads playlist must avoid channels.list")
+
+        def playlistItems(self):
+            return FakeResource(
+                "playlistItems",
+                {"items": [], "nextPageToken": None},
+            )
+
+        def videos(self):
+            raise AssertionError("empty upload page must avoid videos.list")
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: SimpleNamespace())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+
+    result = youtube.list_videos(
+        "token",
+        "selected-channel",
+        uploads_playlist_id="known-uploads",
+        limit=25,
+    )
+
+    assert calls == [
+        (
+            "playlistItems",
+            {"part": "contentDetails", "playlistId": "known-uploads", "maxResults": 25},
+        )
+    ]
+    assert result["uploads_playlist_id"] == "known-uploads"
+    assert result["video_ids"] == []
+    assert result["videos"] == []
 
 
 def test_channel_playlists_are_scoped_to_selected_channel(
