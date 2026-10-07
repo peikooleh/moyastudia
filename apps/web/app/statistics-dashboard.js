@@ -236,7 +236,7 @@ export function StatisticsDashboard({
   const chartMin = Math.min(0, ...chartValues);
   const chartMax = Math.max(0, ...chartValues);
   const chartRange = Math.max(1, chartMax - chartMin);
-  const zeroPosition = ((chartMax / chartRange) * 100);
+  const positiveShare = chartMin < 0 ? (chartMax / chartRange) * 100 : 100;
 
   return (
     <main className="statistics-workspace">
@@ -324,11 +324,11 @@ export function StatisticsDashboard({
         <div className="statistics-chart-stage">
           {chartPoints.length ? (
             <div className={`statistics-bars ${chartMin < 0 ? "signed" : ""}`} aria-label={activeMetric.chartTitle}>
-              {chartMin < 0 ? <span className="statistics-zero-line" style={{ bottom: `${zeroPosition}%` }} /> : null}
+              {chartMin < 0 ? <span className="statistics-zero-line" style={{ bottom: `${positiveShare}%` }} /> : null}
               {chartPoints.map(({ point, value }) => {
                 const positive = Number(value) >= 0;
-                const size = Math.max(2, Math.round((Math.abs(Number(value)) / Math.max(1, positive ? chartMax : Math.abs(chartMin))) * (chartMin < 0 ? (positive ? zeroPosition : 100 - zeroPosition) : 100)));
-                return <i key={point.date} className={positive ? "positive" : "negative"} style={chartMin < 0 ? (positive ? { height: `${size}%`, bottom: `${100 - zeroPosition}%` } : { height: `${size}%`, top: `${zeroPosition}%` }) : { height: `${size}%` }} title={activeMetric.seriesTitle(point)} />;
+                const size = Math.max(2, Math.round((Math.abs(Number(value)) / Math.max(1, positive ? chartMax : Math.abs(chartMin))) * (chartMin < 0 ? (positive ? positiveShare : 100 - positiveShare) : 100)));
+                return <i key={point.date} className={positive ? "positive" : "negative"} style={chartMin < 0 ? (positive ? { height: `${size}%`, bottom: `${100 - positiveShare}%` } : { height: `${size}%`, top: `${positiveShare}%` }) : { height: `${size}%` }} title={activeMetric.seriesTitle(point)} />;
               })}
             </div>
           ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
