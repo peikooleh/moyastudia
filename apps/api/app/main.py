@@ -652,7 +652,7 @@ def update_channel_working_language(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    row = _channel_or_404(db, user, channel_id)
+    row = _channel_or_404(db, user, channel_id, require_token=False)
     row.working_language = payload.language
     db.commit()
     return {"id": row.id, "working_language": row.working_language}
@@ -2330,6 +2330,10 @@ def refresh_profile(
         creds = yt.creds_from_refresh(token)
         with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
             info = yt.fetch_channel(creds, row.youtube_channel_id)
+        if info.get("youtube_channel_id") != row.youtube_channel_id:
+            raise LookupError("channel not found on YouTube")
+    except LookupError as exc:
+        raise HTTPException(404, detail={"code": "channel_not_found_on_youtube"}) from exc
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -2339,7 +2343,7 @@ def refresh_profile(
         row.thumbnail_url = info["thumbnail_url"]
     if info.get("banner_url"):
         row.banner_url = info["banner_url"]
-    if info.get("description"):
+    if info.get("description") is not None:
         row.description = info["description"]
     if info.get("yt_published_at"):
         row.yt_published_at = info["yt_published_at"]

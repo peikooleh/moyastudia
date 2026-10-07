@@ -238,6 +238,19 @@ function VideoInspector({
   const titleLimit = youtubeMetadataLimit("title", effectiveTitle);
   const descriptionLimit = youtubeMetadataLimit("description", description);
   const tagsLimit = youtubeMetadataLimit("tags", tags);
+  const youtubeChanges = [
+    ["videoTitle", workingVideo?.snapshot?.title, effectiveTitle],
+    ["videoDescription", workingVideo?.snapshot?.description, description],
+    ["videoTags", workingVideo?.snapshot?.tags, tags],
+    ["videoLanguage", workingVideo?.snapshot?.language, language],
+    ["videoCategory", workingVideo?.snapshot?.category, category],
+    ["videoAudience", workingVideo?.snapshot?.madeForKids, madeForKids],
+  ]
+    .filter(([, before, after]) => workingVideo && before !== undefined && String(before ?? "") !== String(after ?? ""))
+    .map(([key, before, after]) => ({ label: t(uiLang, key), before, after }));
+  if (statusDraft && statusDraft !== currentStatus) {
+    youtubeChanges.push({ label: t(uiLang, "videoStatus"), before: statusLabel(uiLang, currentStatus), after: statusLabel(uiLang, statusDraft) });
+  }
 
   return (
     <section className="video-inspector" aria-label={t(uiLang, "selectedVideo")}>
@@ -358,6 +371,7 @@ function VideoInspector({
             onSave={publishWorkingVideo}
             saveHint="publishVideoHint"
             className="video-staged-save"
+            changes={youtubeChanges}
           />
         ) : null}
       </div>
@@ -379,10 +393,28 @@ function VideoInspector({
   );
 }
 
-function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", writeMode, onDiscard, onSave, saveHint = "calendarSaveHint", className = "" }) {
+function YoutubeChangePreview({ uiLang, changes = [] }) {
+  if (!changes.length) return null;
+  return (
+    <div className="youtube-change-preview">
+      <strong>{t(uiLang, "youtubeChangesPreview")}</strong>
+      {changes.map((change, index) => (
+        <div className="youtube-change-row" key={`${change.label}-${index}`}>
+          <span>{change.label}</span>
+          <div><small>{t(uiLang, "youtubeValueBefore")}</small><code>{String(change.before ?? "—") || "—"}</code></div>
+          <b aria-hidden="true">→</b>
+          <div><small>{t(uiLang, "youtubeValueAfter")}</small><code>{String(change.after ?? "—") || "—"}</code></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", writeMode, onDiscard, onSave, saveHint = "calendarSaveHint", className = "", changes = [] }) {
   return (
     <div className={`youtube-staged-save ${className}`.trim()} role="status">
       <span className="youtube-staged-note">{t(uiLang, "calendarStaged")}</span>
+      <YoutubeChangePreview uiLang={uiLang} changes={changes} />
       <div className="youtube-staged-actions">
         <span>{t(uiLang, "calendarPendingChanges", { count })}</span>
         <div>
@@ -511,10 +543,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   });
   const [playlistContentsRetry, setPlaylistContentsRetry] = useState(0);
   const [playlistSelectedVideo, setPlaylistSelectedVideo] = useState(null);
-  const [playlistPageSize, setPlaylistPageSize] = useState(10);
+  const [playlistPageSize, setPlaylistPageSize] = useState(() => [10, 30, 50, 100].includes(Number(prefs.playlistPageSize)) ? Number(prefs.playlistPageSize) : 10);
   const [playlistPage, setPlaylistPage] = useState(0);
   const [playlistVideoQuery, setPlaylistVideoQuery] = useState("");
-  const [playlistVideoSort, setPlaylistVideoSort] = useState("position");
+  const [playlistVideoSort, setPlaylistVideoSort] = useState(() => ["position", "date", "title"].includes(prefs.playlistVideoSort) ? prefs.playlistVideoSort : "position");
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
@@ -527,8 +559,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
   const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
-  const [filter, setFilter] = useState("all");
-  const [sort, setSort] = useState("date");
+  const [filter, setFilter] = useState(() => FILTERS.some((item) => item.id === prefs.catalogFilter) ? prefs.catalogFilter : "all");
+  const [sort, setSort] = useState(() => SORTS.some((item) => item.id === prefs.catalogSort) ? prefs.catalogSort : "date");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [err, setErr] = useState("");
@@ -616,6 +648,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
     setCalendarVideos([]);
     setCalendarCursor(null);
+    setCalendarDrafts({});
+    setCalendarSaveStatus("");
+    setCalendarContext(null);
     setLoadingCalendar(false);
     setPlaylistState({ channelId, items: [], loading: false, error: "" });
     setPlaylistContents({
@@ -624,6 +659,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedPlaylistId("");
     setPlaylistSelectedVideo(null);
     setSelectedPlaylistVideoIds(new Set());
+    setPlaylistMembershipEditor(null);
+    setPlaylistVideoPicker(null);
+    setLocalPlaylistMemberships({});
+    setLocalPlaylistVideoCache({});
     if (!channelId) return undefined;
 
     apiFetch(`/channels/${channelId}/catalog/status`)
@@ -696,6 +735,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setWorkingVideo(null);
     setWorkingDraft(null);
     setWorkingEdits({});
+    setVideoStatusDraft("");
     setWorkingError("");
     setWorkingSaveState("");
     if (
@@ -1058,7 +1098,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setPlaylistIdCopyStatus(t(uiLang, "playlistTitleRequired"));
       return;
     }
-    if (!window.confirm(t(uiLang, "playlistSaveConfirm"))) return;
     setPlaylistSaving(true);
     setPlaylistIdCopyStatus("");
     try {
@@ -1221,7 +1260,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    if (!window.confirm(t(uiLang, "playlistQuickSaveConfirm"))) return;
     setPlaylistSaving(true);
     setPlaylistIdCopyStatus("");
     let completed = 0;
@@ -1311,11 +1349,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     });
   }
 
-  function applyLocalPlaylistMemberships() {
-    if (!playlistMembershipEditor) return;
+  async function applyLocalPlaylistMemberships() {
+    if (!playlistMembershipEditor || playlistMembershipEditor.loading) return;
     const videoIds = [...selectedPlaylistVideoIds];
     const targets = playlistMembershipEditor.targets;
     const knownItems = currentPlaylistContents?.items || [];
+    const localTargets = playlists.filter((playlist) => playlist.localOnly);
+    setPlaylistMembershipEditor((current) => current ? { ...current, loading: true } : current);
+    setPlaylistIdCopyStatus("");
     setLocalPlaylistVideoCache((current) => {
       const next = { ...current };
       knownItems.forEach((item) => {
@@ -1331,33 +1372,32 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       });
       return next;
     });
-    setLocalPlaylistMemberships((current) => {
-      const next = { ...current };
-      playlists.forEach((playlist) => {
-        const membership = new Set(next[playlist.id] || []);
+    try {
+      for (const playlist of localTargets) {
+        const currentMembership = new Set(localPlaylistMemberships[playlist.id] || []);
         videoIds.forEach((videoId) => {
-          if (targets.has(playlist.id)) membership.add(videoId);
-          else membership.delete(videoId);
+          if (targets.has(playlist.id)) currentMembership.add(videoId);
+          else currentMembership.delete(videoId);
         });
-        next[playlist.id] = [...membership];
-      });
-      return next;
-    });
-    const localTargets = playlists.filter((playlist) => playlist.localOnly);
-    localTargets.forEach((playlist) => {
-      const currentMembership = new Set(localPlaylistMemberships[playlist.id] || []);
-      videoIds.forEach((videoId) => {
-        if (targets.has(playlist.id)) currentMembership.add(videoId);
-        else currentMembership.delete(videoId);
-      });
-      apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(playlist.id)}/membership`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video_ids: [...currentMembership] }),
-      }).catch(() => {});
-    });
-    setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
-    setPlaylistMembershipEditor(null);
+        const nextVideoIds = [...currentMembership];
+        const response = await apiFetch(`/channels/${channelId}/local-playlists/${encodeURIComponent(playlist.id)}/membership`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_ids: nextVideoIds }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistMembershipSaveError"));
+        setLocalPlaylistMemberships((current) => ({
+          ...current,
+          [playlist.id]: data.videoIds || nextVideoIds,
+        }));
+      }
+      setPlaylistIdCopyStatus(t(uiLang, "playlistMembershipSavedLocally"));
+      setPlaylistMembershipEditor(null);
+    } catch (error) {
+      setPlaylistMembershipEditor((current) => current ? { ...current, loading: false } : current);
+      setPlaylistIdCopyStatus(String(error.message || error));
+    }
   }
 
   async function removeSelectedFromCurrentPlaylist() {
@@ -1504,8 +1544,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
 
   async function publishWorkingVideo() {
     if (!workingVideo || workingSaving || !writeMode?.enabled || workingVideo.conflict) return;
-    if (!workingVideo.dirty && !Object.keys(workingEdits).length) return;
-    if (!window.confirm(t(uiLang, "publishMetadataConfirm"))) return;
+    const hasMetadataChanges = workingVideo.dirty || Boolean(Object.keys(workingEdits).length);
+    const hasStatusChange = Boolean(videoStatusDraft);
+    if (!hasMetadataChanges && !hasStatusChange) return;
     setWorkingSaving(true);
     setWorkingError("");
     let draft = workingVideo;
@@ -1532,27 +1573,46 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (saved.conflict) throw new Error(t(uiLang, "workingRevisionError"));
       }
 
-      const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ revision: draft.revision }),
-      });
-      const data = await response.json();
-      if (response.status === 409 && data.detail?.current) {
-        setWorkingVideo(data.detail.current);
-        setWorkingDraft(data.detail.current.effective);
-        setWorkingSaveState("conflict");
-        throw new Error(t(uiLang, "workingRevisionError"));
+      if (hasMetadataChanges) {
+        const response = await apiFetch(catalogVideoPublishUrl(channelId, draft.id), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: draft.revision }),
+        });
+        const data = await response.json();
+        if (response.status === 409 && data.detail?.current) {
+          setWorkingVideo(data.detail.current);
+          setWorkingDraft(data.detail.current.effective);
+          setWorkingSaveState("conflict");
+          throw new Error(t(uiLang, "workingRevisionError"));
+        }
+        if (!response.ok) {
+          const code = data.detail?.code;
+          if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
+          throw new Error(t(uiLang, "youtubePublishError"));
+        }
+        draft = data;
+        setWorkingVideo(data);
+        setWorkingDraft(data.effective);
+        setWorkingEdits({});
       }
-      if (!response.ok) {
-        const code = data.detail?.code;
-        if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
-        if (code === "quota_preflight_failed") throw new Error(t(uiLang, "youtubeQuotaInsufficient"));
-        throw new Error(t(uiLang, "youtubePublishError"));
+
+      if (hasStatusChange) {
+        const statusResponse = await apiFetch(`/channels/${channelId}/videos/${workingVideo.id}/calendar-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ privacy: videoStatusDraft, publishAt: null }),
+        });
+        const statusData = await statusResponse.json().catch(() => ({}));
+        if (!statusResponse.ok) {
+          const code = statusData?.detail?.code;
+          if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          throw new Error(code || statusData?.detail || t(uiLang, "youtubePublishError"));
+        }
+        setVideoStatusDraft("");
       }
-      setWorkingVideo(data);
-      setWorkingDraft(data.effective);
-      setWorkingEdits({});
+
       setWorkingSaveState("");
       setWorkingDetailReload((current) => current + 1);
       setCatalogReload((current) => current + 1);
@@ -1827,7 +1887,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setCalendarSaveStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    if (!window.confirm(t(uiLang, "calendarSaveConfirm", { count: entries.length }))) return;
     setCalendarSaving(true);
     setCalendarSaveStatus("");
     let completed = 0;
@@ -1969,12 +2028,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             </header>
             <div className="video-toolbar">
               <input className="search" title={t(uiLang, "tipSearchCatalog")} aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <select value={filter} onChange={(event) => setFilter(event.target.value)} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
+              <select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); updatePrefs({ catalogFilter: next }); }} title={t(uiLang, "tipFilterCatalog")} aria-label={t(uiLang, "tipFilterCatalog")}>
                 {FILTERS.map((item) => (
                   <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>
                 ))}
               </select>
-              <select value={sort} onChange={(event) => setSort(event.target.value)} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
+              <select value={sort} onChange={(event) => { const next = event.target.value; setSort(next); updatePrefs({ catalogSort: next }); }} title={t(uiLang, "tipSortCatalog")} aria-label={t(uiLang, "tipSortCatalog")}>
                 {SORTS.map((s) => (
                   <option key={s.id} value={s.id}>{t(uiLang, s.key)}</option>
                 ))}
@@ -2168,12 +2227,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         )}
                       </div>
                       {playlistEditing ? (
-                        <div className="playlist-metadata-actions">
+                        <>
+                          <YoutubeChangePreview uiLang={uiLang} changes={[
+                            effectivePlaylistDraft?.title !== (selectedPlaylist.title || "") ? { label: t(uiLang, "videoTitle"), before: selectedPlaylist.title || "—", after: effectivePlaylistDraft?.title || "—" } : null,
+                            effectivePlaylistDraft?.description !== (selectedPlaylist.description || "") ? { label: t(uiLang, "videoDescription"), before: selectedPlaylist.description || "—", after: effectivePlaylistDraft?.description || "—" } : null,
+                          ].filter(Boolean)} />
+                          <div className="playlist-metadata-actions">
                           <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
                           <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
                             <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
                           </span>
-                        </div>
+                          </div>
+                        </>
                       ) : null}
                     </div>
                   )}
@@ -2211,6 +2276,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           onSave={savePlaylistQuickChanges}
                           saveHint="playlistQuickSaveHint"
                           className="playlist-quick-save"
+                          changes={playlistQuickDraft.privacy ? [{
+                            label: t(uiLang, "videoVisibility"),
+                            before: statusLabel(uiLang, selectedPlaylist.privacy || "private"),
+                            after: statusLabel(uiLang, playlistQuickDraft.privacy),
+                          }] : Object.keys(playlistQuickDraft.positions || {}).length ? [{
+                            label: t(uiLang, "playlistCompositionOrder"),
+                            before: t(uiLang, "youtubeOrderCurrent"),
+                            after: t(uiLang, "youtubeOrderChanged"),
+                          }] : []}
                         />
                       ) : null}
                     </aside>
@@ -2252,7 +2326,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               />
               <label title={t(uiLang, "playlistSortVideosHint")}>
                 <span>{t(uiLang, "sortLabel")}</span>
-                <select value={playlistVideoSort} onChange={(event) => { setPlaylistVideoSort(event.target.value); setPlaylistPage(0); }}>
+                <select value={playlistVideoSort} onChange={(event) => { const next = event.target.value; setPlaylistVideoSort(next); updatePrefs({ playlistVideoSort: next }); setPlaylistPage(0); }}>
                   <option value="position">{t(uiLang, "playlistSortPosition")}</option>
                   <option value="date">{t(uiLang, "sortDate")}</option>
                   <option value="title">{t(uiLang, "sortTitle")}</option>
@@ -2283,6 +2357,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <select value={playlistPageSize} onChange={(event) => {
                   const size = Number(event.target.value);
                   setPlaylistPageSize(size);
+                  updatePrefs({ playlistPageSize: size });
                   setPlaylistPage(0);
                 }}>
                   {[10, 30, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
@@ -2444,7 +2519,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             </header>
             <div className="calendar-tools">
               <input className="search" aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label={t(uiLang, "tipFilterCatalog")}>
+              <select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); updatePrefs({ catalogFilter: next }); }} aria-label={t(uiLang, "tipFilterCatalog")}>
                 {FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}
               </select>
             </div>
@@ -2628,6 +2703,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             setQuery("");
             setFilter(status);
             setSort("date");
+            updatePrefs({ catalogFilter: status, catalogSort: "date" });
             setPlaylistSelectedVideo(null);
             setSelectedId("");
             onViewChange("videos");

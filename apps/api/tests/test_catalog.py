@@ -32,6 +32,158 @@ def create_channel(session_factory, user_id, suffix="one", active=True):
         return channel.id, channel.youtube_channel_id, connection.id
 
 
+
+
+def test_channel_metadata_write_requires_write_mode(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="channel-metadata-write-mode")
+    channel_id, _, _ = create_channel(test_database, user_id, "channel-metadata-write-mode")
+    authorized_client(client, token)
+    monkeypatch.setattr(
+        main.yt,
+        "update_channel_metadata",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")),
+    )
+
+    response = client.put(
+        f"/channels/{channel_id}/metadata",
+        headers=post_headers(),
+        json={"description": "New description", "keywords": "one two"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "write_mode_off"
+
+
+def test_channel_metadata_write_updates_youtube_and_persists_description(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="channel-metadata-owner")
+    channel_id, youtube_channel_id, _ = create_channel(test_database, user_id, "channel-metadata")
+    with test_database() as db:
+        db.get(main.User, user_id).write_mode_enabled = True
+        db.commit()
+    authorized_client(client, token)
+    captured = {}
+
+    def fake_update(refresh_token, remote_channel_id, *, description, keywords, recorder=None):
+        captured.update(
+            refresh_token=refresh_token,
+            remote_channel_id=remote_channel_id,
+            description=description,
+            keywords=keywords,
+        )
+        return {"description": description, "keywords": keywords}
+
+    monkeypatch.setattr(main.yt, "update_channel_metadata", fake_update)
+
+    response = client.put(
+        f"/channels/{channel_id}/metadata",
+        headers=post_headers(),
+        json={"description": "New description", "keywords": "one two"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "refresh_token": "refresh-token",
+        "remote_channel_id": youtube_channel_id,
+        "description": "New description",
+        "keywords": "one two",
+    }
+    assert response.json()["description"] == "New description"
+    assert response.json()["keywords"] == "one two"
+    with test_database() as db:
+        assert db.get(Channel, channel_id).description == "New description"
+
+
+def test_detach_channel_is_owner_scoped_and_removes_local_channel(client, test_database):
+    owner_id, owner_token = create_account(test_database, subject="detach-channel-owner")
+    _, other_token = create_account(test_database, subject="detach-channel-other")
+    channel_id, _, _ = create_channel(test_database, owner_id, "detach-channel")
+
+    authorized_client(client, other_token)
+    foreign = client.delete(f"/channels/{channel_id}", headers=post_headers())
+    assert foreign.status_code == 404
+
+    authorized_client(client, owner_token)
+    response = client.delete(f"/channels/{channel_id}", headers=post_headers())
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    with test_database() as db:
+        assert db.get(Channel, channel_id) is None
+
+
+def test_local_playlist_persists_membership_and_delete_without_active_google_connection(client, test_database):
+    user_id, token = create_account(test_database, subject="local-playlist-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "local-playlist", active=False)
+    authorized_client(client, token)
+
+    created = client.post(
+        f"/channels/{channel_id}/local-playlists",
+        headers=post_headers(),
+        json={"local_id": "local-test", "title": "Local test"},
+    )
+    assert created.status_code == 200
+    assert created.json()["videoIds"] == []
+
+    updated = client.put(
+        f"/channels/{channel_id}/local-playlists/local-test/membership",
+        headers=post_headers(),
+        json={"video_ids": ["YT1", "YT2", "YT1"]},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["videoIds"] == ["YT1", "YT2"]
+
+    reloaded = client.get(f"/channels/{channel_id}/local-playlists")
+    assert reloaded.status_code == 200
+    assert reloaded.json() == [{"id": "local-test", "title": "Local test", "videoIds": ["YT1", "YT2"]}]
+
+    deleted = client.delete(
+        f"/channels/{channel_id}/local-playlists/local-test",
+        headers=post_headers(),
+    )
+    assert deleted.status_code == 200
+    assert client.get(f"/channels/{channel_id}/local-playlists").json() == []
+
+
+def test_local_playlist_routes_are_owner_scoped(client, test_database):
+    owner_id, owner_token = create_account(test_database, subject="local-playlist-scope-owner")
+    _, other_token = create_account(test_database, subject="local-playlist-scope-other")
+    channel_id, _, _ = create_channel(test_database, owner_id, "local-playlist-scope")
+
+    authorized_client(client, owner_token)
+    assert client.post(
+        f"/channels/{channel_id}/local-playlists",
+        headers=post_headers(),
+        json={"local_id": "local-private", "title": "Private local"},
+    ).status_code == 200
+
+    authorized_client(client, other_token)
+    assert client.get(f"/channels/{channel_id}/local-playlists").status_code == 404
+    assert client.put(
+        f"/channels/{channel_id}/local-playlists/local-private/membership",
+        headers=post_headers(),
+        json={"video_ids": ["YT1"]},
+    ).status_code == 404
+    assert client.delete(
+        f"/channels/{channel_id}/local-playlists/local-private",
+        headers=post_headers(),
+    ).status_code == 404
+
+
+def test_channel_working_language_persists_without_active_google_connection(client, test_database):
+    user_id, token = create_account(test_database, subject="language-offline-owner")
+    channel_id, _, _ = create_channel(test_database, user_id, "language-offline", active=False)
+    authorized_client(client, token)
+
+    response = client.put(
+        f"/channels/{channel_id}/working-language",
+        headers=post_headers(),
+        json={"language": "de"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["working_language"] == "de"
+    with test_database() as db:
+        assert db.get(Channel, channel_id).working_language == "de"
+
 def remote_video(video_id, channel_id, title=None):
     return {
         "youtube_video_id": video_id,
@@ -120,6 +272,7 @@ def test_refresh_profile_returns_youtube_video_count_and_hidden_subscribers(
         main.yt,
         "fetch_channel",
         lambda credentials, youtube_channel_id: {
+            "youtube_channel_id": youtube_channel_id,
             "title": "Channel profile",
             "thumbnail_url": "",
             "banner_url": "",
@@ -140,6 +293,67 @@ def test_refresh_profile_returns_youtube_video_count_and_hidden_subscribers(
     assert response.json()["video_count"] == 37
     assert response.json()["subscriber_count"] == 0
     assert response.json()["hidden_subscribers"] is True
+
+
+def test_refresh_profile_persists_cleared_channel_description(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="refresh-cleared-description")
+    channel_id, _, _ = create_channel(test_database, user_id, "refresh-cleared-description")
+    with test_database() as db:
+        channel = db.get(Channel, channel_id)
+        channel.description = "Old description"
+        db.commit()
+    authorized_client(client, token)
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(
+        main.yt,
+        "fetch_channel",
+        lambda credentials, youtube_channel_id: {
+            "youtube_channel_id": youtube_channel_id,
+            "title": "Channel refresh-cleared-description",
+            "description": "",
+            "keywords": "",
+            "subscriber_count": 0,
+            "video_count": 0,
+            "hidden_subscribers": False,
+        },
+    )
+
+    response = client.post(
+        f"/channels/{channel_id}/refresh-profile",
+        headers=post_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] == ""
+    with test_database() as db:
+        assert db.get(Channel, channel_id).description == ""
+
+
+def test_refresh_profile_rejects_channel_missing_on_youtube(client, test_database, monkeypatch):
+    user_id, token = create_account(test_database, subject="refresh-missing-channel")
+    channel_id, _, _ = create_channel(test_database, user_id, "refresh-missing-channel")
+    authorized_client(client, token)
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(
+        main.yt,
+        "fetch_channel",
+        lambda credentials, youtube_channel_id: {
+            "youtube_channel_id": "",
+            "title": "",
+            "description": "",
+            "subscriber_count": 0,
+            "video_count": 0,
+            "hidden_subscribers": False,
+        },
+    )
+
+    response = client.post(
+        f"/channels/{channel_id}/refresh-profile",
+        headers=post_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "channel_not_found_on_youtube"
 
 
 def test_catalog_search_sort_and_cursor_use_effective_title(client, test_database):

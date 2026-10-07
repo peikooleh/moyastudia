@@ -150,3 +150,97 @@ def test_single_video_publish_requires_same_origin(client, test_database):
         json={"revision": 4},
     )
     assert response.status_code == 403
+
+
+def test_video_thumbnail_write_requires_write_mode(client, test_database, monkeypatch):
+    token, channel_id, video_id = _video_fixture(test_database, write_mode=False)
+    client.cookies.set(settings.session_cookie_name, token)
+    monkeypatch.setattr(main.yt, "set_video_thumbnail", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")))
+    response = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/thumbnail",
+        headers={"Origin": settings.frontend_origin, "Content-Type": "image/png"},
+        content=b"png-bytes",
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "write_mode_off"
+
+
+def test_video_thumbnail_write_forwards_bytes_and_updates_snapshot(client, test_database, monkeypatch):
+    token, channel_id, video_id = _video_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    captured = {}
+
+    def fake_thumbnail(refresh_token, youtube_video_id, data, content_type, recorder=None):
+        captured.update(
+            refresh_token=refresh_token,
+            youtube_video_id=youtube_video_id,
+            data=data,
+            content_type=content_type,
+        )
+        return "https://img.example/new-thumbnail.jpg"
+
+    monkeypatch.setattr(main.yt, "set_video_thumbnail", fake_thumbnail)
+    response = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/thumbnail",
+        headers={"Origin": settings.frontend_origin, "Content-Type": "image/png"},
+        content=b"png-bytes",
+    )
+    assert response.status_code == 200
+    assert captured == {
+        "refresh_token": "w4-refresh",
+        "youtube_video_id": "youtube-video",
+        "data": b"png-bytes",
+        "content_type": "image/png",
+    }
+    assert response.json()["thumbnail_url"] == "https://img.example/new-thumbnail.jpg"
+    with test_database() as db:
+        assert db.get(Video, video_id).youtube_thumbnail_url == "https://img.example/new-thumbnail.jpg"
+
+
+def test_video_captions_write_requires_write_mode(client, test_database, monkeypatch):
+    token, channel_id, video_id = _video_fixture(test_database, write_mode=False)
+    client.cookies.set(settings.session_cookie_name, token)
+    monkeypatch.setattr(main.yt, "insert_video_caption", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not call YouTube")))
+    response = client.post(
+        f"/channels/{channel_id}/videos/{video_id}/captions?language=de&name=test.srt",
+        headers={"Origin": settings.frontend_origin, "Content-Type": "application/x-subrip"},
+        content=b"caption-bytes",
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "write_mode_off"
+
+
+def test_video_captions_write_forwards_payload_and_marks_available(client, test_database, monkeypatch):
+    token, channel_id, video_id = _video_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    captured = {}
+
+    def fake_caption(refresh_token, youtube_video_id, data, content_type, language, name, recorder=None):
+        captured.update(
+            refresh_token=refresh_token,
+            youtube_video_id=youtube_video_id,
+            data=data,
+            content_type=content_type,
+            language=language,
+            name=name,
+        )
+        return {"id": "caption-id", "status": "serving"}
+
+    monkeypatch.setattr(main.yt, "insert_video_caption", fake_caption)
+    response = client.post(
+        f"/channels/{channel_id}/videos/{video_id}/captions?language=de&name=test.srt",
+        headers={"Origin": settings.frontend_origin, "Content-Type": "application/x-subrip"},
+        content=b"caption-bytes",
+    )
+    assert response.status_code == 200
+    assert captured == {
+        "refresh_token": "w4-refresh",
+        "youtube_video_id": "youtube-video",
+        "data": b"caption-bytes",
+        "content_type": "application/x-subrip",
+        "language": "de",
+        "name": "test.srt",
+    }
+    assert response.json()["id"] == "caption-id"
+    with test_database() as db:
+        assert db.get(Video, video_id).youtube_captions_available is True
