@@ -301,7 +301,7 @@ test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () =>
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
   const keys = [
     "more", "statisticsTab", "calendarToday", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
-    "writeMode", "comingLater", "landSafeWrite", "landSafeWriteHint", "readOnlySnapshot", "calendarEventDetails", "videoReadonlyMetadata",
+    "writeMode", "comingLater", "landSafeWrite", "landSafeWriteHint", "landProtectedShort", "readOnlySnapshot", "calendarEventDetails", "videoReadonlyMetadata",
     "calendarDayVideos", "playlistPageStatus", "statisticsCoverage", "statisticsMetricCount",
     "statisticsOverview", "statisticsDashboardIntro", "statisticsChannel", "statisticsScope", "statisticsScopeChannel",
     "statisticsScopePlaylist", "statisticsScopeVideo", "statisticsPeriod", "statisticsPeriodLifetime",
