@@ -1045,7 +1045,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .cabinet-tabs button:hover { background: var(--bg-hover); color: var(--text); }
 .cabinet-tabs button.on { background: var(--bg-hover); color: var(--text); font-weight: 600; }
 .cabinet-workspace > .main > .panel { padding: 22px 24px 32px; }
-.channel-management { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(260px, 300px); gap: 0; align-items: stretch; margin: 20px -24px -32px; border-top: 1px solid var(--line); min-height: calc(100vh - 245px); }
+.channel-management { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(210px, 240px); gap: 0; align-items: stretch; margin: 20px -24px -32px; border-top: 1px solid var(--line); min-height: calc(100vh - 245px); }
 .channel-management > .channel-option-list, .channel-management > .selected-channel-column { border-right: 1px solid var(--line); }
 .channel-management > .channel-option-list { padding: 12px; }
 .selected-channel-column, .channel-settings-column { min-width: 0; padding: 18px 20px 30px; }
@@ -1077,9 +1077,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-details { border-top: 1px solid var(--line); }
 .channel-details .chan-card-banner { margin: 0 0 12px; }
 .channel-details .chan-desc { max-height: 160px; margin: 12px 0; font-size: 13px; }
-.channel-remove-actions { display: flex; justify-content: flex-end; padding-top: 10px; border-top: 1px solid var(--line); }
-.channel-remove-actions .text-button { color: var(--muted); font-size: 12px; }
-.channel-remove-actions .text-button:hover:not(:disabled) { color: var(--text); }
+.channel-remove-actions { display: flex; justify-content: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.channel-remove-button { width: 100%; justify-content: center; font-size: 12px; }
 .channel-management .actions { justify-content: flex-end; }
 
 @media (max-width: 900px) {
@@ -1483,7 +1482,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max-width: none;
   }
   .channel-management {
-    grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) minmax(210px, .58fr);
+    grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) minmax(210px, 240px);
     gap: 0;
   }
 }
