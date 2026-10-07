@@ -1045,7 +1045,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .cabinet-tabs button:hover { background: var(--bg-hover); color: var(--text); }
 .cabinet-tabs button.on { background: var(--bg-hover); color: var(--text); font-weight: 600; }
 .cabinet-workspace > .main > .panel { padding: 22px 24px 32px; }
-.channel-management { display: grid; grid-template-columns: minmax(280px, 340px) minmax(320px, 1fr) minmax(280px, 360px); gap: 0; align-items: stretch; margin: 20px -24px -32px; border-top: 1px solid var(--line); min-height: calc(100vh - 245px); }
+.channel-management { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(260px, 300px); gap: 0; align-items: stretch; margin: 20px -24px -32px; border-top: 1px solid var(--line); min-height: calc(100vh - 245px); }
 .channel-management > .channel-option-list, .channel-management > .selected-channel-column { border-right: 1px solid var(--line); }
 .channel-management > .channel-option-list { padding: 12px; }
 .selected-channel-column, .channel-settings-column { min-width: 0; padding: 18px 20px 30px; }
@@ -1056,7 +1056,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-metrics dt { color: var(--muted); font-size: 11px; }
 .channel-metrics dd { margin: 5px 0 0; font-size: 24px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .channel-settings-column .channel-language-control { margin: 0; }
-.channel-settings-column .channel-details { margin-top: 14px; }
+.channel-settings-column .channel-remove-actions { margin-top: 14px; }
 .channel-option-list { display: grid; }
 .channel-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; cursor: pointer; overflow: hidden; }
 .channel-option.on { background: color-mix(in srgb, var(--accent) 10%, var(--bg-raise)); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
@@ -1064,9 +1064,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-option-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; overflow: hidden; }
 .channel-option-copy strong, .channel-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .channel-option-copy small { color: var(--muted); font-size: 11px; }
-.channel-list-footer { padding: 12px 8px 0; }
-.channel-connect-account { display: inline-flex; align-items: center; color: var(--muted); font-size: 12px; }
-.channel-connect-account:hover { color: var(--text); }
+.channel-list-footer { display: flex; justify-content: center; padding: 16px 8px 4px; }
+.channel-connect-account { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-raise); color: var(--text); font-size: 12px; font-weight: 600; text-decoration: none; }
+.channel-connect-account:hover { background: var(--bg-hover); }
 .chan-card { display: grid; align-content: start; gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-raise); }
 .channel-detail-heading { display: flex; align-items: center; gap: 12px; }
 .channel-detail-heading > img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
