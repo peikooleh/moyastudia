@@ -493,14 +493,14 @@ export default function CabinetPage() {
           }}>{t(uiLang, "retry")}</button> : null}
         </div>
       ) : (
-        <div className="cab">
-          <aside className="side" aria-label={t(uiLang, "cabinet")}>
+        <div className="cab cabinet-workspace">
+          <nav className="cabinet-tabs" aria-label={t(uiLang, "cabinet")}>
             {[["profile", "account"], ["channels", "channelsConnections"]].map(([id, key]) => (
               <button key={id} className={tab === id ? "on" : ""} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                 {t(uiLang, key)}
               </button>
             ))}
-          </aside>
+          </nav>
           <section className="main">
             {tab === "profile" ? (
               <div className="panel">
@@ -654,22 +654,32 @@ export default function CabinetPage() {
                         {ch.thumbnail_url ? <img src={ch.thumbnail_url} alt="" referrerPolicy="no-referrer" /> : null}
                         <div><div className="channel-current-badge">{t(uiLang, "activeStudioChannel")}</div><h2>{ch.title}</h2><small>{channelDisplayContext(ch)}</small></div>
                       </header>
-                      <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
-                        <select value={ch.working_language || prefs.channelLangs[channelPreferenceKey(ch)] || ""} disabled={channelLanguageSaving} onChange={(event) => saveChannelWorkingLanguage(ch, event.target.value)}>
-                          <option value="">{t(uiLang, "notSet")}</option>
-                          {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
-                        </select>
-                      </label>
-                      {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
-                      <details className="channel-details">
-                        <summary>{t(uiLang, "channelDetails")}</summary>
-                        {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
-                        <dl className="inspector-data"><div><dt>{t(uiLang, "channelCreated")}</dt><dd>{ch.yt_published_at || "—"}</dd></div></dl>
-                        <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
-                        <div className="channel-remove-actions"><button className="text-button" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
-                      </details>
+                      {ch.banner_url ? <img className="chan-card-banner" src={ch.banner_url} alt={t(uiLang, "bannerAlt")} referrerPolicy="no-referrer" /> : null}
+                      <dl className="inspector-data channel-summary-data">
+                        <div><dt>{t(uiLang, "channelCreated")}</dt><dd>{ch.yt_published_at || "—"}</dd></div>
+                        <div><dt>{t(uiLang, "channelSubscribers")}</dt><dd>{ch.hidden_subscribers ? t(uiLang, "channelSubscribersHidden") : (ch.subscriber_count ?? "—")}</dd></div>
+                      </dl>
+                      <p className="chan-desc">{ch.description || t(uiLang, "channelDescriptionEmpty")}</p>
                     </article>
                   ) : null}
+                  </div>
+                  <div className="channel-settings-column">
+                    {ch ? (
+                      <section className="channel-settings-panel">
+                        <h2>{t(uiLang, "channelSettings")}</h2>
+                        <label className="inline channel-language-control">{t(uiLang, "channelLanguage")}
+                          <select value={ch.working_language || prefs.channelLangs[channelPreferenceKey(ch)] || ""} disabled={channelLanguageSaving} onChange={(event) => saveChannelWorkingLanguage(ch, event.target.value)}>
+                            <option value="">{t(uiLang, "notSet")}</option>
+                            {CHANNEL_LANGS.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
+                          </select>
+                        </label>
+                        {channelLanguageError ? <p className="selection-error" role="alert">{channelLanguageError}</p> : null}
+                        <details className="channel-details">
+                          <summary>{t(uiLang, "channelDetails")}</summary>
+                          <div className="channel-remove-actions"><button className="text-button" type="button" disabled={Boolean(removingChannelId)} onClick={() => removeChannelFromMoya(ch)}>{removingChannelId === String(ch.id) ? t(uiLang, "removeChannelBusy") : t(uiLang, "removeChannelAction")}</button></div>
+                        </details>
+                      </section>
+                    ) : null}
                   </div>
                   {!channels.length && !connections?.length && !selectionConnectionId ? <div className="empty-state"><h2>{t(uiLang, "noConnections")}</h2><p>{t(uiLang, "channelsConnectionsHint")}</p></div> : null}
                 </div>
