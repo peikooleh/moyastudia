@@ -44,6 +44,21 @@ def test_quota_summary_tracks_moyastudia_attempts(client, test_database):
     assert body["buckets"]["video_upload"]["used"] == 0
 
 
+def test_quota_summary_is_isolated_per_user(client, test_database):
+    owner_id, owner_token = create_account(test_database, email="owner@example.test", subject="quota-owner-isolation")
+    other_id, _ = create_account(test_database, email="other@example.test", subject="quota-other-isolation")
+    with test_database() as db:
+        quota.record_usage(db, user_id=owner_id, operation="videos.list", outcome="success")
+        quota.record_usage(db, user_id=other_id, operation="videos.update", outcome="success")
+
+    client.cookies.set(settings.session_cookie_name, owner_token)
+    response = client.get("/quota/today")
+
+    assert response.status_code == 200
+    assert response.json()["buckets"]["general"]["used"] == 1
+    assert response.json()["buckets"]["general"]["requests"] == 1
+
+
 def test_quota_endpoint_requires_authentication(client):
     assert client.get("/quota/today").status_code == 401
 
