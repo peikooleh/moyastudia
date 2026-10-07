@@ -1681,9 +1681,23 @@ def update_channel_video_calendar_status(
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
-        message = str(exc).lower()
-        if "insufficient" in message or "permission" in message or "scope" in message:
+        response = getattr(exc, "resp", None)
+        status = getattr(response, "status", None)
+        reasons = {
+            detail.get("reason")
+            for detail in (getattr(exc, "error_details", None) or [])
+            if isinstance(detail, dict)
+        }
+        if status == 401 or "insufficientPermissions" in reasons:
             raise HTTPException(409, detail={"code": "youtube_reauthorization_required"}) from exc
+        if "invalidPublishAt" in reasons:
+            raise HTTPException(422, detail={"code": "youtube_invalid_publish_time"}) from exc
+        if "videoNotFound" in reasons:
+            raise HTTPException(404, detail={"code": "video_not_found_on_youtube"}) from exc
+        if status == 403:
+            raise HTTPException(403, detail={"code": "youtube_status_change_rejected"}) from exc
+        if status == 400:
+            raise HTTPException(422, detail={"code": "youtube_invalid_status_update"}) from exc
         raise HTTPException(502, detail={"code": "youtube_calendar_update_failed"}) from exc
 
     video.youtube_visibility = remote["privacy"]
