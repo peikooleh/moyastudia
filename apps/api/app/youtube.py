@@ -647,6 +647,40 @@ def _owned_playlist(service, youtube_channel_id: str, playlist_id: str, recorder
     return items[0]
 
 
+
+def update_channel_description(
+    refresh_token: str,
+    youtube_channel_id: str,
+    *,
+    description: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    service = service_for(refresh_token)
+    listed = _execute(
+        service.channels().list(part="brandingSettings", id=youtube_channel_id),
+        "channels.list",
+        recorder,
+    ).get("items") or []
+    if not listed:
+        raise LookupError("channel not found")
+    branding = listed[0].get("brandingSettings") or {}
+    channel_branding = dict(branding.get("channel") or {})
+    channel_branding["description"] = description
+    response = _execute(
+        service.channels().update(
+            part="brandingSettings",
+            body={
+                "id": youtube_channel_id,
+                "brandingSettings": {**branding, "channel": channel_branding},
+            },
+        ),
+        "channels.update",
+        recorder,
+    )
+    returned = ((response.get("brandingSettings") or {}).get("channel") or {})
+    return {"description": returned.get("description", description)}
+
+
 def update_playlist_metadata(
     refresh_token: str,
     youtube_channel_id: str,
