@@ -1,3 +1,5 @@
+import pytest
+
 from app import main, youtube
 from app.models import Channel, GoogleConnection, User
 from app.settings import settings
@@ -528,3 +530,143 @@ def test_youtube_playlist_reorder_reconciles_complete_order(monkeypatch):
     assert result["updated"] == 1
     assert updates[0]["id"] == "c"
     assert updates[0]["snippet"]["position"] == 0
+
+
+def test_youtube_playlist_add_skips_existing_membership(monkeypatch):
+    inserted = []
+
+    class Request:
+        def __init__(self, response):
+            self.response = response
+        def execute(self):
+            return self.response
+
+    class Playlists:
+        def list(self, **kwargs):
+            return Request({"items": [{"snippet": {"channelId": "playlist-channel"}}]})
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            return Request({"items": [
+                {"id": "existing", "snippet": {"playlistId": "playlist-one", "resourceId": {"kind": "youtube#video", "videoId": "v1"}}}
+            ]})
+        def insert(self, **kwargs):
+            video_id = kwargs["body"]["snippet"]["resourceId"]["videoId"]
+            inserted.append(video_id)
+            return Request({"id": f"item-{video_id}"})
+
+    class Service:
+        def playlists(self):
+            return Playlists()
+        def playlistItems(self):
+            return PlaylistItems()
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+    result = youtube.add_videos_to_playlist(
+        "refresh", "playlist-channel", "playlist-one", ["v1", "v2", "v2"]
+    )
+
+    assert inserted == ["v2"]
+    assert result["alreadyPresent"] == ["v1"]
+    assert result["presentVideoIds"] == ["v1", "v2"]
+    assert result["items"] == [{"playlistItemId": "item-v2", "videoId": "v2"}]
+
+
+def test_youtube_playlist_add_reconciles_after_partial_failure(monkeypatch):
+    state = [
+        {"id": "existing", "snippet": {"playlistId": "playlist-one", "position": 0, "resourceId": {"kind": "youtube#video", "videoId": "v1"}}}
+    ]
+
+    class Request:
+        def __init__(self, callback):
+            self.callback = callback
+        def execute(self):
+            return self.callback()
+
+    class Playlists:
+        def list(self, **kwargs):
+            return Request(lambda: {"items": [{"snippet": {"channelId": "playlist-channel"}}]})
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            return Request(lambda: {"items": list(state)})
+        def insert(self, **kwargs):
+            video_id = kwargs["body"]["snippet"]["resourceId"]["videoId"]
+            if video_id == "v3":
+                return Request(lambda: (_ for _ in ()).throw(RuntimeError("provider failed")))
+            def apply():
+                state.append({
+                    "id": f"item-{video_id}",
+                    "snippet": {
+                        "playlistId": "playlist-one",
+                        "position": len(state),
+                        "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                    },
+                })
+                return {"id": f"item-{video_id}"}
+            return Request(apply)
+
+    class Service:
+        def playlists(self):
+            return Playlists()
+        def playlistItems(self):
+            return PlaylistItems()
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+
+    with pytest.raises(youtube.PartialMutationError) as raised:
+        youtube.add_videos_to_playlist(
+            "refresh", "playlist-channel", "playlist-one", ["v1", "v2", "v3"]
+        )
+
+    assert raised.value.code == "playlist_add_partial"
+    assert raised.value.result["presentVideoIds"] == ["v1", "v2"]
+    assert raised.value.result["failedVideoId"] == "v3"
+
+
+def test_playlist_partial_mutation_is_structured_for_client(client, test_database, monkeypatch):
+    token, channel_id = _playlist_fixture(test_database)
+    _authorize(client, token)
+
+    def fake_add(*args, **kwargs):
+        raise main.yt.PartialMutationError(
+            "playlist_add_partial",
+            {"presentVideoIds": ["v1"], "failedVideoId": "v2"},
+        )
+
+    monkeypatch.setattr(main.yt, "add_videos_to_playlist", fake_add)
+    response = client.post(
+        f"/channels/{channel_id}/playlists/playlist-one/videos",
+        headers=_headers(),
+        json={"video_ids": ["v1", "v2"]},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "youtube_partial_write"
+    assert detail["operation"] == "playlist_add_partial"
+    assert detail["result"]["presentVideoIds"] == ["v1"]
+
+
+def test_playlist_reorder_partial_mutation_is_structured_for_client(client, test_database, monkeypatch):
+    token, channel_id = _playlist_fixture(test_database)
+    _authorize(client, token)
+
+    def fake_order(*args, **kwargs):
+        raise main.yt.PartialMutationError(
+            "playlist_reorder_partial",
+            {"playlistItemIds": ["b", "a"], "failedPlaylistItemId": "a"},
+        )
+
+    monkeypatch.setattr(main.yt, "reorder_playlist_items", fake_order)
+    response = client.put(
+        f"/channels/{channel_id}/playlists/playlist-one/order",
+        headers=_headers(),
+        json={"playlist_item_ids": ["b", "a"]},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "youtube_partial_write"
+    assert detail["operation"] == "playlist_reorder_partial"
+    assert detail["result"]["playlistItemIds"] == ["b", "a"]
