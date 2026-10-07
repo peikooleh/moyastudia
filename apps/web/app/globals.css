@@ -414,6 +414,7 @@ html, body, .onb-card, .top, .shell, .card, .btn, .choice {
 .chan-desc { color: var(--text); font-size: 16px; line-height: 1.65; white-space: pre-wrap; flex: 1; overflow: auto; min-height: 0; opacity: 0.82; }
 .channel-description-editor { display: grid; gap: 6px; margin-top: 14px; }
 .channel-description-editor label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.channel-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .channel-description-editor textarea { width: 100%; min-height: 220px; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; outline: 0; background: var(--bg-raise); color: var(--text); font: inherit; line-height: 1.55; resize: vertical; }
 .channel-description-editor textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .channel-description-editor > small { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1085,6 +1086,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-current-badge { width: fit-content; margin-bottom: 3px; color: var(--good); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .channel-detail-heading small { display: block; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
 .channel-language-control select { width: 100%; max-width: 100%; }
+.channel-link-setting { display: grid; gap: 6px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; }
+.channel-link-setting > span { color: var(--muted); font-size: 11px; }
+.channel-link-setting a { color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel-link-setting a:hover { text-decoration: underline; }
+.channel-link-setting .text-button { width: fit-content; padding: 0; color: var(--muted); font-size: 11px; }
+.channel-link-setting .text-button:hover { color: var(--text); }
 .channel-details { border-top: 1px solid var(--line); }
 .channel-details .chan-card-banner { margin: 0 0 12px; }
 .channel-details .chan-desc { max-height: 160px; margin: 12px 0; font-size: 13px; }
