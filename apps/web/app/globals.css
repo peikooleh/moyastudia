@@ -1027,14 +1027,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .connection-channels { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 0; padding: 0; color: var(--muted); font-size: 12px; list-style: none; }
 .connection-row .actions { margin-top: 10px; }
 .channel-group { padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
-.channel-group > header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 0 8px 6px; font-size: 12px; }
+.channel-group > header { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 6px; font-size: 12px; }
 .channel-group > header span { color: var(--muted); }
-.channel-group-account { display: grid; min-width: 0; gap: 2px; }
+.channel-group-account { display: grid; flex: 1 1 auto; min-width: 0; gap: 2px; overflow: hidden; }
 .channel-group-email { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .channel-group-type, .channel-group-list-label { color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 .channel-group-list-label { padding: 5px 8px 2px; }
 .channel-group > header .btn { flex: 0 0 auto; }
-.channel-group-actions { display: flex; align-items: center; gap: 6px; }
+.channel-group-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
 .channel-add-button { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
 .channel-add-button:hover { color: var(--text); background: var(--bg-hover); }
 .channel-group .channel-option-list { border-top: 0; }
@@ -1055,12 +1055,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-settings-column .channel-details { margin-top: 14px; }
 .channel-option-list { display: grid; }
 .channel-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; cursor: pointer; overflow: hidden; }
-.channel-option.on { background: var(--bg-hover); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
+.channel-option.on { background: color-mix(in srgb, var(--accent) 10%, var(--bg-raise)); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
 .channel-option > img, .channel-option > .avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 .channel-option-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; overflow: hidden; }
 .channel-option-copy strong, .channel-option-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .channel-option-copy small, .channel-option-status { color: var(--muted); font-size: 11px; }
-.channel-option-status { flex: 0 0 auto; white-space: nowrap; }
+.channel-option-status { flex: 0 1 92px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.channel-option.on .channel-option-status { color: var(--good); font-weight: 600; }
 .channel-list-footer { padding: 12px 8px 0; }
 .channel-connect-account { display: inline-flex; align-items: center; color: var(--muted); font-size: 12px; }
 .channel-connect-account:hover { color: var(--text); }
