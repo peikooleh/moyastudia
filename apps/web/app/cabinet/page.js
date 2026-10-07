@@ -587,25 +587,24 @@ export default function CabinetPage() {
                     </div>
                   </aside>
                   <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
-                  <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
-                  <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
-                  <div className="ai-connection-grid">
-                    <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
-                    <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
-                    <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
-                    <button className={`btn ghost ai-settings-button ${aiSettingsOpen ? "active" : ""}`} type="button" title={t(uiLang, "aiSettings")} onClick={() => (aiSettingsOpen ? cancelAiSettings() : setAiSettingsOpen(true))} aria-expanded={aiSettingsOpen}>⚙ {t(uiLang, "aiSettings")}</button>
-                  </div>
-                  {aiSettingsOpen ? (
+                    <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
+                    <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
+                    <div className="ai-connection-grid">
+                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
+                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
+                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
+                    </div>
+                    {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
+                    {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
+                    <div className="ai-connection-actions"><button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
+                  </section>
+                  <aside className="ai-model-settings-column" aria-labelledby="ai-model-settings-title">
+                    <h2 id="ai-model-settings-title">{t(uiLang, "aiModelSettings")}</h2>
                     <div className="ai-model-settings">
-                      <h3>{t(uiLang, "aiModelSettings")}</h3>
                       <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /></label>
                       <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /></label>
                     </div>
-                  ) : null}
-                  {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
-                  {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
-                  <div className="ai-connection-actions">{aiSettingsOpen ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={cancelAiSettings}>{t(uiLang, "actionCancel")}</button> : null}<button className="btn" type="button" disabled={aiSaving} onClick={saveAiConnection}>{aiSaving ? t(uiLang, "aiSaving") : t(uiLang, "aiSave")}</button></div>
-                  </section>
+                  </aside>
                 </div>
               </div>
             ) : null}
