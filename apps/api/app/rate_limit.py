@@ -82,6 +82,12 @@ def request_key(request: Request, session_cookie_name: str) -> str:
     session = request.cookies.get(session_cookie_name, "")
     if session:
         return "session:" + hashlib.sha256(session.encode("utf-8")).hexdigest()
+    oauth_binding = next(
+        (value for name, value in request.cookies.items() if name.startswith("moya_oauth_")),
+        "",
+    )
+    if oauth_binding:
+        return "oauth:" + hashlib.sha256(oauth_binding.encode("utf-8")).hexdigest()
     host = request.client.host if request.client else "unknown"
     return "client:" + host
 
