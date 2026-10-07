@@ -5,7 +5,7 @@ class _Request:
     def __init__(self, response):
         self.response = response
 
-    def execute(self):
+    def execute(self, **_kwargs):
         return self.response
 
 
@@ -127,3 +127,52 @@ def test_calendar_visibility_change_drops_existing_schedule(monkeypatch):
     assert call["part"] == "status"
     assert call["body"]["status"]["privacyStatus"] == "public"
     assert "publishAt" not in call["body"]["status"]
+
+
+class _FlakyRequest:
+    def __init__(self, failures, response=None):
+        self.failures = list(failures)
+        self.response = response or {"ok": True}
+        self.calls = 0
+
+    def execute(self, **_kwargs):
+        self.calls += 1
+        if self.failures:
+            raise self.failures.pop(0)
+        return self.response
+
+
+def test_safe_read_retries_transient_provider_failure(monkeypatch):
+    monkeypatch.setattr(yt.settings, "provider_read_retries", 2)
+    request = _FlakyRequest([TimeoutError("temporary")])
+
+    assert yt._execute(request, "videos.list") == {"ok": True}
+    assert request.calls == 2
+
+
+def test_write_operation_never_retries_unknown_outcome(monkeypatch):
+    monkeypatch.setattr(yt.settings, "provider_read_retries", 2)
+    request = _FlakyRequest([TimeoutError("unknown outcome")])
+
+    try:
+        yt._execute(request, "videos.update")
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("write failure must propagate")
+
+    assert request.calls == 1
+
+
+def test_non_transient_read_failure_is_not_retried(monkeypatch):
+    monkeypatch.setattr(yt.settings, "provider_read_retries", 2)
+    request = _FlakyRequest([ValueError("bad request")])
+
+    try:
+        yt._execute(request, "videos.list")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-transient failure must propagate")
+
+    assert request.calls == 1
