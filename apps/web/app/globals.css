@@ -1029,7 +1029,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-group { padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
 .channel-group > header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 0 8px 6px; font-size: 12px; }
 .channel-group > header span { color: var(--muted); }
-.channel-group-account { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.channel-group-account { display: grid; min-width: 0; gap: 2px; }
+.channel-group-type, .channel-group-list-label { color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+.channel-group-list-label { padding: 5px 8px 2px; }
 .channel-group > header .btn { flex: 0 0 auto; }
 .channel-group-actions { display: flex; align-items: center; gap: 6px; }
 .channel-add-button { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
