@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     session_cookie_name: str = "moyastudia_session"
     session_ttl_seconds: int = 604800
     oauth_state_ttl_seconds: int = 600
+    provider_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias="PROVIDER_TIMEOUT_SECONDS")
+    provider_read_retries: int = Field(default=2, ge=0, le=5, validation_alias="PROVIDER_READ_RETRIES")
 
     @property
     def is_production(self) -> bool:
