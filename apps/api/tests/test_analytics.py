@@ -112,6 +112,7 @@ def test_channel_analytics_summary_supports_video_scope(client, test_database, m
 
     monkeypatch.setattr(main.yt, "channel_analytics_summary", fake_summary)
     monkeypatch.setattr(main.yt, "channel_analytics_timeseries", fake_timeseries)
+    monkeypatch.setattr(main.yt, "video_current_statistics", lambda token, youtube_video_id: {"views": 11, "likes": 2, "comments": 1})
     client.cookies.set(settings.session_cookie_name, owner_token)
 
     response = client.get(f"/channels/{channel_id}/analytics/summary?days=28&video_id={video_id}")
@@ -120,6 +121,7 @@ def test_channel_analytics_summary_supports_video_scope(client, test_database, m
     assert response.json()["local_video_id"] == video_id
     assert called["video_id"] == "YT123"
     assert called["series_video_id"] == "YT123"
+    assert response.json()["current_statistics"] == {"views": 11, "likes": 2, "comments": 1}
 
 
 def test_channel_analytics_summary_supports_playlist_scope(client, test_database, monkeypatch):
