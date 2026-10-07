@@ -1823,8 +1823,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     saving: "workingSaving",
     error: "workingSaveError",
   };
+  function normalizedCalendarPublishAt(value) {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
+  }
+
   function calendarBaseline(video) {
-    return { privacy: video.privacy || "private", publishAt: video.slot || null };
+    return { privacy: video.privacy || "private", publishAt: normalizedCalendarPublishAt(video.slot) };
   }
 
   function stageCalendarChange(video, changes) {
@@ -1833,7 +1839,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCalendarDrafts((current) => {
       const previous = current[video.id] || baseline;
       const next = { ...previous, ...changes };
-      const clean = next.privacy === baseline.privacy && (next.publishAt || null) === (baseline.publishAt || null);
+      const clean = next.privacy === baseline.privacy
+        && normalizedCalendarPublishAt(next.publishAt) === baseline.publishAt;
       if (clean) {
         const copy = { ...current };
         delete copy[video.id];
