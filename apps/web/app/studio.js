@@ -616,6 +616,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
     setCalendarVideos([]);
     setCalendarCursor(null);
+    setCalendarDrafts({});
+    setCalendarSaveStatus("");
+    setCalendarContext(null);
     setLoadingCalendar(false);
     setPlaylistState({ channelId, items: [], loading: false, error: "" });
     setPlaylistContents({
