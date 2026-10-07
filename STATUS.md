@@ -14,6 +14,12 @@
 - Последний PR CI на точном source tree текущего `main` прошёл успешно до merge (API pytest и frontend tests/lint/build). Сам merge commit не получил отдельного run, потому что текущий workflow запускается только на `pull_request`; это отмечено как finding и подлежит исправлению.
 - Housekeeping после source-аудита влит в `main`: Landing приведён к текущей модели защищённых YouTube writes вместо устаревшего read-only позиционирования; удалены подтверждённо неиспользуемые browser prefs `dailyEdits/dailyUploads`, stale Statistics copy и дублирующий `comingLater`; существующий MoyaStudia `logo.svg` назначен site icon/favicon; landing-header выровнен по вертикали. Auto theme намеренно не менялась: код и локализованные подсказки согласованно определяют её как переключение по локальному времени суток.
 
+## Remediation progress — audit-remediation-2026-10-07
+
+- **Checkpoint 0 — release gates baseline:** CI теперь запускается для PR и после push в `main`; EN/RU/UK parity включена в CI; checker дополнительно запрещает duplicate locale keys. Draft PR #11 используется как непрерывный validation gate.
+- **Phase 1 — YouTube write integrity:** remote playlist add/reorder теперь возвращают структурированный partial outcome после reconciliation; повторное добавление уже существующего видео не создаёт новый playlist item; Studio перечитывает remote state после partial playlist mutation; combined video metadata + visibility save явно различает partial success и оставляет подготовленным только неудавшийся status step. Добавлены backend regression tests.
+- Следующий этап: Phase 2 — catalog transport через uploads playlist вместо обычного `search.list`, затем freshness-driven Statistics refresh.
+
 ## Реально доступные функции
 
 - Google identity и отдельное Google/YouTube connection OAuth, server-side sessions, owner scoping и зашифрованные refresh tokens.
