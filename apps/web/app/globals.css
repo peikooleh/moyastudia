@@ -3676,30 +3676,6 @@ body {
 
 
 /* Page-audit refinements: smooth calendar paging and staged playlist bulk status. */
-.calendar-scroll-shell {
-  min-width: 0;
-  overflow: hidden;
-}
-.calendar-month-strip {
-  display: flex;
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
-  scroll-behavior: smooth;
-  scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
-}
-.calendar-month-page {
-  flex: 0 0 100%;
-  min-width: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-.calendar-month-page > .cal {
-  width: 100%;
-}
 .playlist-summary-media {
   justify-self: center;
   width: 100%;
@@ -3725,9 +3701,6 @@ body {
   .playlist-bulk-status-control select {
     flex: 1 1 auto;
     max-width: none;
-  }
-  .calendar-month-page {
-    overflow-x: auto;
   }
 }
 
