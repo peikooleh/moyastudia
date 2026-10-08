@@ -1,46 +1,64 @@
-# Current Status — 2026-10-07
+# Current Status — 2026-10-08
 
-> **Источник истины для текущего состояния проекта.** Разделы ниже сохранены как исторический журнал разработки и могут описывать более ранние ограничения, ветки и незавершённые этапы. При расхождении с ними ориентироваться на этот раздел и текущий код в `main`.
+> **Источник истины для текущего состояния проекта.** Исторический журнал ниже сохраняется для контекста и может описывать уже superseded ветки, ограничения и validation counts. При расхождении ориентироваться на этот раздел и текущий код указанной ветки.
 
 ## Текущая база
 
-- Текущий release baseline — `main` на merge commit `cd791c321f5d738beecc2ace8b892d66ce788d61` (`Merge security hardening and YouTube write fixes`). Для нового полного аудита и поэтапного устранения найденного создана ветка `audit-remediation-2026-10-07`; `main` до завершения remediation не изменяется.
-- Полный функциональный аудит приложения завершён: проверены и исправлены цепочки video visibility/write, локальный язык канала, Cabinet channel writes/state reset, playlist local persistence/ownership, Calendar/channel transient state, refresh-profile missing-channel handling, Studio preference persistence и визуальный preview обратимых YouTube writes. AI execution по-прежнему намеренно исключён.
-- Statistics v4: период 365 дней удалён; выбранный период сохраняется после reload. Videos filter/sort и playlist video sort/page size также сохраняются. Для video scope используются только доступные public YouTube videos.
-- Statistics автоматически доводит локальный каталог до актуального состояния: initial для нового каталога, incremental/resume для существующего, затем читает все страницы локального каталога. Ошибка refresh показывается только при реальном сбое; успешная сверка не оставляет stale warning.
-- Четыре KPI Statistics интерактивны и управляют общей trend-панелью: views, watch time, average view duration и subscribers. Для channel scope Subscribers показывает актуальный total из Data API и gained/lost за выбранный Analytics period; для video scope — net gained/lost за период. Analytics timeseries расширен соответствующими метриками; playlist scope сохраняет ограничения доступности метрик.
-- Последняя завершённая validation-база (2026-10-07): backend `pytest` — **146 passed, 3 warnings**; frontend Node tests — **32/32 passed**; i18n parity — **669 unique keys EN/RU/UK**; frontend lint — **0 errors** с известными неблокирующими `<img>`/font warnings; Next.js 15.5.27 production build — **успешно**, static generation **7/7**.
-- Полный повторный аудит 2026-10-07 зафиксирован в [`AUDIT_2026-10-07.md`](AUDIT_2026-10-07.md). Основные P1: неоднозначные partial outcomes многозапросных YouTube writes, catalog sync через `search.list`, неполные release gates/branch protection и устаревшие security-sensitive Python pins. Source-level visual audit завершён; runtime browser/pixel QA оставлен обязательным release gate.
-- Последний PR CI на точном source tree текущего `main` прошёл успешно до merge (API pytest и frontend tests/lint/build). Сам merge commit не получил отдельного run, потому что текущий workflow запускается только на `pull_request`; это отмечено как finding и подлежит исправлению.
-- Housekeeping после source-аудита влит в `main`: Landing приведён к текущей модели защищённых YouTube writes вместо устаревшего read-only позиционирования; удалены подтверждённо неиспользуемые browser prefs `dailyEdits/dailyUploads`, stale Statistics copy и дублирующий `comingLater`; существующий MoyaStudia `logo.svg` назначен site icon/favicon; landing-header выровнен по вертикали. Auto theme намеренно не менялась: код и локализованные подсказки согласованно определяют её как переключение по локальному времени суток.
+- `main`: `e3c4b8d` — merge audit remediation + visual polish.
+- Текущая рабочая ветка: `page-audit-refinement-2026-10-08`, HEAD перед этой записью — `e0f29f2`. Изменения этой ветки ещё не слиты в `main`.
+- Полный CI на `e0f29f2` завершён успешно 2026-10-08: backend `pytest` — **178 passed, 3 warnings**; `pip-audit` — **No known vulnerabilities found**; frontend Node tests — **36/36 passed**; i18n parity — **684 unique keys EN/RU/UK, no duplicates**; ESLint — **без ошибок** (остаются известные неблокирующие Next.js warnings по `<img>`); Next.js production build — **успешно**, static generation **7/7**.
+- CI включает backend tests + pip-audit и frontend tests + i18n parity + lint + production build.
 
-## Remediation progress — audit-remediation-2026-10-07
+## Фактическое состояние интерфейса и логики
 
-- **Checkpoint 0 — release gates baseline:** CI теперь запускается для PR и после push в `main`; EN/RU/UK parity включена в CI; checker дополнительно запрещает duplicate locale keys. Draft PR #11 используется как непрерывный validation gate.
-- **Phase 1 — YouTube write integrity:** remote playlist add/reorder теперь возвращают структурированный partial outcome после reconciliation; повторное добавление уже существующего видео не создаёт новый playlist item; Studio перечитывает remote state после partial playlist mutation; combined video metadata + visibility save явно различает partial success и оставляет подготовленным только неудавшийся status step. Добавлены backend regression tests.
-- Следующий этап: Phase 2 — catalog transport через uploads playlist вместо обычного `search.list`, затем freshness-driven Statistics refresh.
+- Videos: page-specific preferences изолированы; сортировка дат по умолчанию newest-first, подписи сокращены до **Новые / Старые**; status/availability semantics разделены; строки списка увеличены до 96 px, чтобы дата/время не обрезались.
+- Catalog sync: пользовательские состояния синхронизации уточнены; обычное обновление и полная сверка YouTube разведены; полная сверка находится во вторичных действиях; каталог старше 24 часов визуально отмечается и получает подсказку на обновление; активный sync-state стабилен при переходах между страницами.
+- Playlists: page-specific preferences изолированы; bulk visibility/status staging реализован отдельно от membership actions; toolbar выровнен и уплотнён; page-size selector корректно показывает трёхзначные значения; structured API errors больше не рендерятся как `[object Object]`.
+- Calendar: сетка фиксирована на **6 строк × 7 дней (42 дня)**; соседние даты месяца приглушены; стрелки двигают окно на **1 неделю**; wheel/scroll-навигация полностью удалена после эксперимента; preloaded data остаётся видимой при переходе; верх preview/details выровнен с поиском.
+- Statistics: video scope сортируется по фактической publication date; фильтры/состояния страниц не протекают в другие разделы.
+- Cabinet: channel list получил hover без изменения геометрии; light/dark danger states используют theme token `var(--danger)`.
+- EN/RU/UK локализации синхронны: 684 уникальных ключа в каждом locale, duplicate keys отсутствуют.
+
+## Каналы — открытая проверка
+
+- Реальный сценарий 2026-10-08: после удаления всех каналов Google account и YouTube channel обнаруживаются, но при повторном сохранении выбранного канала UI показал «Не удалось сохранить выбор».
+- Добавлен regression test на цепочку **удалить последний managed channel → сохранить Google connection → обнаружить тот же YouTube channel → добавить его снова**. Тест проходит в CI.
+- Наблюдавшийся реальный сбой пока **не считается закрытым**: тестовый backend-path корректен, но нужно снять фактический HTTP status/detail неудачного POST/refresh и устранить расхождение PostgreSQL/runtime-сценария с тестовой средой.
+- UI сейчас объединяет ошибку POST сохранения и ошибку последующего refresh списка каналов в близкое сообщение; при диагностике это нужно разделить, чтобы видеть точный этап сбоя.
 
 ## Реально доступные функции
 
-- Google identity и отдельное Google/YouTube connection OAuth, server-side sessions, owner scoping и зашифрованные refresh tokens.
-- Локальный каталог YouTube-видео с initial/full sync, continuation, snapshot/working state, revision/conflict handling, search/filter/sort и локальными drafts.
-- Server-authoritative Write Mode: включение само по себе ничего не отправляет, но обязательно проверяется backend перед поддерживаемыми YouTube mutations.
-- Видео: публикация working metadata в YouTube включает title, description, tags, language, category и made-for-kids; отдельно реализованы privacy/scheduling через Calendar, thumbnail upload и captions upload.
-- Playlists: чтение remote playlists/items, persistent local playlist drafts, изменение metadata/privacy, thumbnail, добавление видео, изменение порядка/позиции и удаление playlist item. Эти remote mutations требуют Write Mode.
-- Channels/Cabinet: выбор и подключение каналов, refresh profile, постоянный язык канала, изменение description/keywords через YouTube при включённом Write Mode, копирование/открытие ссылки и удаление выбранного канала из MoyaStudia через `DELETE /channels/{id}`. Последнее удаляет локальную managed-channel запись, а не YouTube-канал.
-- Statistics: channel/playlist/public-video scopes, автоматический refresh полного каталога, YouTube Analytics summary/timeseries, интерактивные KPI views/watch-time/average-duration/subscribers и переходы по status counters в отфильтрованный Videos.
-- Quota: server-side MoyaStudia ledger для YouTube Data API и `GET /quota/today`; это отслеживаемая оценка MoyaStudia, а не authoritative Google project balance.
-- AI connections: provider/model/API key/prompts сохраняются server-side; API key шифруется и не возвращается plaintext. **Реальных вызовов OpenAI/Gemini/Anthropic и AI Improve execution пока нет.**
+- Google identity + отдельный Google/YouTube OAuth, server-side sessions, owner scoping и encrypted refresh tokens.
+- Локальный YouTube catalog с initial/incremental/full reconciliation, working state, conflict/revision handling, filters/sorts и local drafts.
+- Server-authoritative Write Mode для поддерживаемых YouTube mutations.
+- Видео: working metadata (title/description/tags/language/category/made-for-kids), visibility/scheduling, thumbnail и captions paths.
+- Playlists: remote/local playlist flows, metadata/privacy, thumbnail, membership, reorder и удаление playlist item; поддерживаемые remote mutations защищены Write Mode.
+- Channels/Cabinet: выбор каналов, refresh profile, persistent working language, description/keywords write, share/open link и локальное удаление managed channel.
+- Statistics: channel/playlist/public-video scopes, catalog refresh, YouTube Analytics summary/timeseries и интерактивные KPI.
+- Quota: server-side MoyaStudia ledger для YouTube Data API.
+- AI connections: provider/model/API key/prompts сохраняются server-side; API key encrypted at rest и не возвращается plaintext. **Реального AI provider execution пока нет.**
 
-## Текущие ограничения и долг
+## План на 2026-10-09 — реализация AI-функционала
 
+1. Зафиксировать контракт AI Improve без изменения принятого интерфейса: входные поля, результат, лимиты и ошибки.
+2. Реализовать server-side provider execution поверх существующих AI connections. Ключи используются только backend; plaintext key никогда не передаётся в browser и не логируется.
+3. Начать с уже подготовленных сценариев **улучшения title и description**; использовать сохранённые provider/model/prompts и текущий текст как вход. AI-result попадает только в local draft/preview — **никакой автоматической отправки на YouTube**.
+4. Сохранить текущую модель безопасности: AI action отдельно от Write Mode/YouTube write; применение AI-result пользователем само не выполняет YouTube mutation.
+5. Добавить timeout, provider/network error mapping, response validation, input/output limits и защиту от пустого/невалидного результата.
+6. Подключить существующие AI Improve controls к реальному endpoint, добавить loading/cancel/error/result states и возможность принять либо отклонить предложение.
+7. Покрыть backend tests: owner scope, missing key, provider failure, timeout, malformed response, encrypted-key boundary, prompt/model selection; frontend tests — request/result/error/cancel и EN/RU/UK parity.
+8. После реализации — ручная проверка UI light/dark, затем полный gate: pytest, pip-audit, frontend tests, i18n parity, lint, production build.
+
+## Текущие ограничения / долг
+
+- AI provider execution ещё не реализован; это главный функциональный план на 2026-10-09.
+- Реальный сбой повторного подключения канала после удаления всех каналов остаётся открытым до runtime-диагностики, несмотря на зелёный regression test.
 - MoyaStudia не хранит и не загружает большие исходные видеофайлы; полноценного video upload pipeline нет.
-- Нет destructive удаления YouTube video/channel. `DELETE /channels/{id}` означает только убрать канал из MoyaStudia.
-- Google connection lifecycle всё ещё не равен полноценному revoke/disconnect flow на стороне Google; reauthorization поддерживается отдельно.
-- Legal pages остаются launch placeholders и требуют отдельной legal/localization проверки перед публичным запуском.
-- `studio.js`, `globals.css` и `i18n.js` остаются крупными; делить их следует только по реальным feature boundaries, без широкого рефакторинга ради рефакторинга.
-- Endpoint-level regression coverage есть для основных metadata/calendar/playlist/security flows, включая video thumbnail/captions write paths. AI provider execution намеренно не реализован и не входит в текущий функциональный gate.
-- CI выполняет backend pytest и frontend tests/lint/build. `npm run check:i18n` является обязательной локальной/final validation проверкой, но пока не включён отдельным шагом в CI.
+- Нет destructive удаления YouTube video/channel. `DELETE /channels/{id}` удаляет только managed-channel запись MoyaStudia.
+- Google connection lifecycle не является полноценным Google revoke/disconnect flow.
+- Legal pages остаются launch placeholders.
+- `studio.js`, `globals.css` и `i18n.js` остаются крупными; делить только по реальным feature boundaries.
+- Известные CI warnings: FastAPI/Starlette deprecations, Next.js `<img>` optimization warnings и GitHub Actions Node runtime deprecation notices; они не блокируют текущий gate.
 
 ---
 

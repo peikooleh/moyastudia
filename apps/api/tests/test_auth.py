@@ -889,6 +889,48 @@ def test_channel_selection_saves_only_selected_and_is_idempotent(
         } == {"channel-one", "channel-three"}
 
 
+def test_detached_last_channel_can_be_selected_again(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    connection_id = _add_google_connection(test_database, user_id, "reselect-account")
+    available = [_available_channel("channel-reselect", "Reselect")]
+    with test_database() as db:
+        channel = Channel(
+            google_connection_id=connection_id,
+            youtube_channel_id="channel-reselect",
+            title="Reselect",
+        )
+        db.add(channel)
+        db.commit()
+        channel_id = channel.id
+
+    client.cookies.set(settings.session_cookie_name, token)
+    headers = {"Origin": settings.frontend_origin}
+    removed = client.delete(f"/channels/{channel_id}", headers=headers)
+    assert removed.status_code == 200
+    with test_database() as db:
+        assert db.query(Channel).count() == 0
+        assert db.query(GoogleConnection).filter_by(id=connection_id).count() == 1
+
+    monkeypatch.setattr(main.yt, "creds_from_refresh", lambda value: SimpleNamespace())
+    monkeypatch.setattr(main.yt, "list_available_channels", lambda creds: available)
+    discovery = client.get(f"/google-connections/{connection_id}/available-channels")
+    selected = client.post(
+        f"/google-connections/{connection_id}/channels",
+        json={"youtube_channel_ids": ["channel-reselect"]},
+        headers=headers,
+    )
+
+    assert discovery.status_code == 200
+    assert selected.status_code == 200
+    assert selected.json()["channels"][0]["youtube_channel_id"] == "channel-reselect"
+    with test_database() as db:
+        channels = db.query(Channel).all()
+        assert len(channels) == 1
+        assert channels[0].google_connection_id == connection_id
+
+
 def test_channel_selection_rejects_empty_and_unavailable_ids(
     client, test_database, monkeypatch
 ):

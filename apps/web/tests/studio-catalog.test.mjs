@@ -12,6 +12,7 @@ import {
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import { t } from "../lib/i18n.js";
+import { calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -105,6 +106,13 @@ test("Studio catalog pages use the selected channel's local API route", () => {
   assert.equal(url.includes("youtube.googleapis.com"), false);
 });
 
+test("catalog defaults to explicit newest-first date sorting", () => {
+  assert.equal(
+    catalogVideosUrl("channel-7"),
+    "/channels/channel-7/videos?limit=50&sort=date_desc",
+  );
+});
+
 test("late catalog responses from another channel or request are ignored", () => {
   assert.equal(isCurrentCatalogRequest("channel-old", "channel-new", 3, 4), false);
   assert.equal(isCurrentCatalogRequest("channel-new", "channel-new", 3, 4), false);
@@ -180,14 +188,16 @@ test("Studio sorting preferences survive a preferences reload", () => {
       statisticsPeriod: "90",
       catalogFilter: "private",
       catalogSort: "title",
-      playlistVideoSort: "date",
+      playlistVideoSort: "date_asc",
+      calendarFilter: "scheduled",
       playlistPageSize: 50,
     });
     const reloaded = loadPrefs();
     assert.equal(reloaded.statisticsPeriod, "90");
     assert.equal(reloaded.catalogFilter, "private");
     assert.equal(reloaded.catalogSort, "title");
-    assert.equal(reloaded.playlistVideoSort, "date");
+    assert.equal(reloaded.playlistVideoSort, "date_asc");
+    assert.equal(reloaded.calendarFilter, "scheduled");
     assert.equal(reloaded.playlistPageSize, 50);
   } finally {
     if (previousLocalStorage === undefined) delete globalThis.localStorage;
@@ -315,6 +325,9 @@ test("new Studio labels are localized in English, Russian, and Ukrainian", () =>
     "playlistDateLabel", "playlistVisibilityUnknown", "playlistIdLabel", "playlistIdCopied", "playlistIdCopyFailed",
     "openPlaylistOnYoutube", "openInStudio", "playlistBulkActions", "playlistAddToPlaylist", "playlistMoveToPlaylist",
     "playlistRemoveFromPlaylist", "playlistBulkHelp", "playlistWritesWithWriteMode",
+    "sortDateNewest", "sortDateOldest", "catalogCheckedCount", "playlistBulkStatus",
+    "playlistBulkStatusHint", "playlistBulkStatusSaveHint", "playlistBulkStatusMixed",
+    "playlistBulkStatusUnavailable", "playlistBulkStatusSaved", "playlistBulkStatusPartial",
   ];
   for (const lang of ["en", "ru", "uk"]) {
     for (const key of keys) assert.notEqual(t(lang, key), key, `${lang}:${key}`);
@@ -430,4 +443,33 @@ test("catalog sync lock rejects a second simultaneous action", () => {
   assert.equal(tryStartCatalogSync(lock), false);
   finishCatalogSync(lock);
   assert.equal(tryStartCatalogSync(lock), true);
+});
+
+test("calendar always shows 42 dates and weekly navigation moves exactly seven days", () => {
+  const october = new Date(2026, 9, 1);
+  const first = calendarWeekCells(october);
+  assert.equal(first.length, 42);
+  assert.equal(first[0].getDay(), 1);
+  assert.equal(first[0].getDate(), 28);
+  assert.equal(first[0].getMonth(), 8);
+  assert.equal(first[41].getDate(), 8);
+  assert.equal(first[41].getMonth(), 10);
+
+  const followingWeek = calendarWeekCells(shiftCalendarWeek(october, 1));
+  assert.equal(followingWeek.length, 42);
+  assert.equal(followingWeek[0].getDate(), 5);
+  assert.equal(followingWeek[0].getMonth(), 9);
+  assert.equal(shiftCalendarWeek(shiftCalendarWeek(october, 1), -1).getTime(), october.getTime());
+});
+
+test("calendar week shift crosses month and year boundaries without skipping days", () => {
+  const yearEnd = new Date(2026, 11, 30);
+  const next = shiftCalendarWeek(yearEnd, 1);
+  assert.equal(next.getFullYear(), 2027);
+  assert.equal(next.getMonth(), 0);
+  assert.equal(next.getDate(), 6);
+
+  const range = calendarWindowRange(yearEnd);
+  assert.equal(new Date(range.start).getTime(), calendarWeekStart(yearEnd).getTime());
+  assert.equal((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000, 42);
 });

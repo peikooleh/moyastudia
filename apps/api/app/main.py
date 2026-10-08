@@ -1018,12 +1018,6 @@ def _catalog_status(db: Session, channel: Channel) -> dict:
         }
 
     state = sync.state
-    if state in ("COMPLETE", "EMPTY") and sync.last_success_at is not None:
-        last_success = sync.last_success_at
-        if last_success.tzinfo is None:
-            last_success = last_success.replace(tzinfo=timezone.utc)
-        if _utcnow() - last_success > timedelta(minutes=15):
-            state = "STALE"
     if state == "EMPTY" and video_count > 0:
         state = "COMPLETE"
     if state == "ERROR" and video_count > 0:
@@ -1049,7 +1043,7 @@ def _encode_video_cursor(
     date_to: datetime | None,
     video: Video,
 ) -> str:
-    if sort == "date":
+    if sort in ("date", "date_desc", "date_asc"):
         displayed_date = video.youtube_scheduled_at or video.youtube_published_at
         value = displayed_date.isoformat() if displayed_date else None
     elif sort == "title":
@@ -1328,7 +1322,7 @@ def channel_videos(
     visibility: Literal[
         "public", "private", "unlisted", "scheduled", "unavailable", "remote_missing"
     ] | None = None,
-    sort: Literal["date", "title", "status"] = "date",
+    sort: Literal["date", "date_desc", "date_asc", "title", "status"] = "date_desc",
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     user: User = Depends(get_current_user),
@@ -1414,7 +1408,12 @@ def channel_videos(
     elif sort == "status":
         sort_expression = func.lower(status_expression)
         query = query.order_by(sort_expression.asc(), Video.id.asc())
+    elif sort == "date_asc":
+        sort_expression = displayed_date
+        query = query.order_by(displayed_date.is_(None).asc())
+        query = query.order_by(displayed_date.asc(), Video.id.asc())
     else:
+        # "date" remains a backwards-compatible alias for newest first.
         sort_expression = displayed_date
         query = query.order_by(displayed_date.is_(None).asc())
         query = query.order_by(displayed_date.desc(), Video.id.desc())
@@ -1425,22 +1424,32 @@ def channel_videos(
         )
         last_id = payload["id"]
         value = payload.get("value")
-        if sort == "date":
+        if sort in ("date", "date_desc", "date_asc"):
             if value is None:
                 query = query.filter(
-                    displayed_date.is_(None), Video.id < last_id
+                    displayed_date.is_(None),
+                    Video.id > last_id if sort == "date_asc" else Video.id < last_id,
                 )
             else:
                 last_date = _parse_youtube_datetime(value)
                 if last_date is None:
                     raise HTTPException(400, "invalid catalog cursor")
-                query = query.filter(
-                    or_(
-                        displayed_date < last_date,
-                        and_(displayed_date == last_date, Video.id < last_id),
-                        displayed_date.is_(None),
+                if sort == "date_asc":
+                    query = query.filter(
+                        or_(
+                            displayed_date > last_date,
+                            and_(displayed_date == last_date, Video.id > last_id),
+                            displayed_date.is_(None),
+                        )
                     )
-                )
+                else:
+                    query = query.filter(
+                        or_(
+                            displayed_date < last_date,
+                            and_(displayed_date == last_date, Video.id < last_id),
+                            displayed_date.is_(None),
+                        )
+                    )
         else:
             query = query.filter(
                 or_(

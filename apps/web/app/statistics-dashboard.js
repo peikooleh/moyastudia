@@ -16,7 +16,7 @@ function formatNullableNumber(value, locale) {
   return value == null ? "—" : Number(value).toLocaleString(locale);
 }
 
-function ChannelAvatar({ channel }) {
+function ChannelAvatar({ channel, onImageError }) {
   const [failed, setFailed] = useState(false);
   const source = channel?.thumbnail_url || "";
 
@@ -25,7 +25,16 @@ function ChannelAvatar({ channel }) {
   return (
     <span className="statistics-channel-avatar" aria-hidden="true">
       <span>{(channel?.title || "?").trim().slice(0, 1).toUpperCase()}</span>
-      {source && !failed ? <img src={source} alt="" onError={() => setFailed(true)} /> : null}
+      {source && !failed ? (
+        <img
+          src={source}
+          alt=""
+          onError={() => {
+            setFailed(true);
+            onImageError?.(channel);
+          }}
+        />
+      ) : null}
     </span>
   );
 }
@@ -65,6 +74,7 @@ export function StatisticsDashboard({
   const requestId = useRef(0);
   const channelMenuRef = useRef(null);
   const channelTriggerRef = useRef(null);
+  const profileRefreshAttempts = useRef(new Set());
   const locale = t(uiLang, "calendarLocale");
 
   useEffect(() => {
@@ -80,6 +90,23 @@ export function StatisticsDashboard({
     return () => { document.removeEventListener("pointerdown", closeOnPointerDown); document.removeEventListener("keydown", closeOnEscape); };
   }, [channelMenuOpen]);
 
+  async function refreshChannelProfile(channel, signal) {
+    if (!channel?.id || profileRefreshAttempts.current.has(String(channel.id))) return;
+    profileRefreshAttempts.current.add(String(channel.id));
+    try {
+      const response = await apiFetch(`/channels/${channel.id}/refresh-profile`, { method: "POST", signal });
+      const refreshed = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      setChannels((current) => current.map((item) => (
+        String(item.id) === String(channel.id)
+          ? { ...item, ...refreshed, thumbnail_url: refreshed.thumbnail_url || item.thumbnail_url || "" }
+          : item
+      )));
+    } catch (error) {
+      if (error.name === "AbortError") return;
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     apiFetch("/channels", { signal: controller.signal })
@@ -87,7 +114,13 @@ export function StatisticsDashboard({
         if (!response.ok) throw new Error("channels unavailable");
         return response.json();
       })
-      .then((rows) => setChannels(rows || []))
+      .then((rows) => {
+        const next = rows || [];
+        setChannels(next);
+        next.filter((channel) => !channel.thumbnail_url).forEach((channel) => {
+          refreshChannelProfile(channel, controller.signal);
+        });
+      })
       .catch((error) => {
         if (error.name !== "AbortError") setChannels([]);
       });
@@ -148,7 +181,7 @@ export function StatisticsDashboard({
       let cursor = "";
       let firstPage = true;
       do {
-        const response = await apiFetch(catalogVideosUrl(selectedChannelId, { sort: "date", cursor }), { signal: controller.signal });
+        const response = await apiFetch(catalogVideosUrl(selectedChannelId, { sort: "date_desc", cursor }), { signal: controller.signal });
         const data = await response.json();
         if (!response.ok) throw new Error(data?.detail || "catalog unavailable");
         if (cancelled) return;
@@ -183,7 +216,16 @@ export function StatisticsDashboard({
     [playlists],
   );
   const analyticsVideos = useMemo(
-    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public" && video.availability !== "unavailable"),
+    () => catalogVideos
+      .filter((video) => video.youtubeId && video.status === "public" && video.availability === "available")
+      .sort((a, b) => {
+        const aTime = Date.parse(a.publishedAt || "");
+        const bTime = Date.parse(b.publishedAt || "");
+        if (!Number.isFinite(aTime) && !Number.isFinite(bTime)) return Number(b.id || 0) - Number(a.id || 0);
+        if (!Number.isFinite(aTime)) return 1;
+        if (!Number.isFinite(bTime)) return -1;
+        return bTime - aTime || Number(b.id || 0) - Number(a.id || 0);
+      }),
     [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
@@ -305,7 +347,7 @@ export function StatisticsDashboard({
         <div className="statistics-control">
           <span>{t(uiLang, "statisticsChannel")}</span>
           <button ref={channelTriggerRef} className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen} aria-haspopup="menu" title={t(uiLang, "statisticsChannelHint")}>
-            <ChannelAvatar channel={currentChannel} />
+            <ChannelAvatar channel={currentChannel} onImageError={(channel) => refreshChannelProfile(channel)} />
             <span><strong>{currentChannel?.title || "—"}</strong><small>{currentChannel?.youtube_channel_id || ""}</small></span>
 
           </button>
@@ -313,7 +355,7 @@ export function StatisticsDashboard({
             <div ref={channelMenuRef} className="statistics-channel-menu" role="menu">
               {channels.map((channel) => (
                 <button key={channel.id} type="button" role="menuitemradio" aria-checked={String(channel.id) === String(selectedChannelId)} className={String(channel.id) === String(selectedChannelId) ? "active" : ""} onClick={() => { setChannelMenuOpen(false); onChannelChange(String(channel.id)); channelTriggerRef.current?.focus(); }}>
-                  <ChannelAvatar channel={channel} />
+                  <ChannelAvatar channel={channel} onImageError={(item) => refreshChannelProfile(item)} />
                   <span><strong>{channel.title}</strong><small>{channel.youtube_channel_id}</small></span>
                 </button>
               ))}

@@ -1670,6 +1670,34 @@ def test_video_cache_endpoint_paginates_and_never_calls_youtube(
     assert "foreign-video" not in str(first.json())
 
 
+def test_completed_catalog_does_not_become_stale_only_because_time_passed(client, test_database):
+    user_id, token = create_account(test_database)
+    channel_id, _, _ = create_channel(test_database, user_id)
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add(Video(
+            channel_id=channel_id,
+            youtube_video_id="cached-video",
+            internal_status=None,
+            youtube_title="Cached",
+            youtube_visibility="public",
+            availability_status="available",
+        ))
+        db.add(ChannelCatalogSync(
+            channel_id=channel_id,
+            state="COMPLETE",
+            mode="incremental",
+            scanned_count=1,
+            last_success_at=datetime.now(timezone.utc) - timedelta(days=2),
+        ))
+        db.commit()
+
+    response = client.get(f"/channels/{channel_id}/catalog/status")
+    assert response.status_code == 200
+    assert response.json()["state"] == "COMPLETE"
+    assert response.json()["video_count"] == 1
+
+
 def test_video_cache_filters_and_sorts_on_server(client, test_database):
     user_id, token = create_account(test_database)
     channel_id, _, _ = create_channel(test_database, user_id)
@@ -1699,6 +1727,15 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
                 ),
                 Video(
                     channel_id=channel_id,
+                    youtube_video_id="unlisted-video",
+                    internal_status=None,
+                    youtube_title="Link only",
+                    youtube_visibility="unlisted",
+                    availability_status="available",
+                    youtube_published_at=datetime(2026, 9, 3, tzinfo=timezone.utc),
+                ),
+                Video(
+                    channel_id=channel_id,
                     youtube_video_id="unavailable-video",
                     internal_status=None,
                     youtube_title="Unavailable",
@@ -1720,7 +1757,13 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
     public = client.get(f"/channels/{channel_id}/videos?visibility=public")
     private = client.get(f"/channels/{channel_id}/videos?visibility=private")
     scheduled = client.get(f"/channels/{channel_id}/videos?visibility=scheduled")
+    unlisted = client.get(f"/channels/{channel_id}/videos?visibility=unlisted")
     unavailable = client.get(f"/channels/{channel_id}/videos?visibility=unavailable")
+    newest_first = client.get(f"/channels/{channel_id}/videos?sort=date_desc&limit=2")
+    oldest_page_one = client.get(f"/channels/{channel_id}/videos?sort=date_asc&limit=1")
+    oldest_page_two = client.get(
+        f"/channels/{channel_id}/videos?sort=date_asc&limit=1&cursor={oldest_page_one.json()['next_cursor']}"
+    )
 
     assert [item["title"] for item in first.json()["items"]] == ["Alpha"]
     assert [item["title"] for item in second.json()["items"]] == ["Beta"]
@@ -1729,4 +1772,10 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
     assert [item["youtubeId"] for item in public.json()["items"]] == ["title-b"]
     assert private.json()["items"] == []
     assert [item["youtubeId"] for item in scheduled.json()["items"]] == ["title-a"]
+    assert [item["youtubeId"] for item in unlisted.json()["items"]] == ["unlisted-video"]
     assert unavailable.json()["items"][0]["status"] == "unavailable"
+    assert unlisted.json()["status_counts"]["unlisted"] == 1
+    assert unlisted.json()["status_counts"]["unavailable"] == 1
+    assert [item["youtubeId"] for item in newest_first.json()["items"]] == ["title-a", "unlisted-video"]
+    assert [item["youtubeId"] for item in oldest_page_one.json()["items"]] == ["title-b"]
+    assert [item["youtubeId"] for item in oldest_page_two.json()["items"]] == ["unlisted-video"]

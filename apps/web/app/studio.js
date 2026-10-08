@@ -26,6 +26,7 @@ import {
   youtubeMetadataLimit,
   unicodeCharacterCount,
 } from "../lib/catalog-state.mjs";
+import { calendarWeekCells, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 import { StatisticsDashboard } from "./statistics-dashboard";
@@ -40,7 +41,8 @@ const FILTERS = [
   { id: "remote_missing", key: "filterRemoteMissing" },
 ];
 const SORTS = [
-  { id: "date", key: "sortDate" },
+  { id: "date_desc", key: "sortDateNewest" },
+  { id: "date_asc", key: "sortDateOldest" },
   { id: "title", key: "sortTitle" },
   { id: "status", key: "sortStatus" },
 ];
@@ -60,6 +62,19 @@ const VIDEO_LANGUAGES = [
 ];
 
 const WEEKDAY_KEYS = ["dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat", "daySun"];
+
+function apiErrorMessage(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => item?.msg || item?.message || (typeof item === "string" ? item : ""))
+      .filter(Boolean);
+    return messages.length ? messages.join("; ") : fallback;
+  }
+  if (typeof detail === "object") return detail.msg || detail.message || fallback;
+  return String(detail);
+}
 
 function formatStudioDate(value, uiLang) {
   if (!value) return "";
@@ -105,19 +120,6 @@ function statusLabel(uiLang, status) {
     remote_missing: "filterRemoteMissing",
   }[status];
   return key ? t(uiLang, key) : status || "—";
-}
-
-function monthMatrix(anchor) {
-  const y = anchor.getFullYear();
-  const m = anchor.getMonth();
-  const first = new Date(y, m, 1);
-  const start = (first.getDay() + 6) % 7;
-  const days = new Date(y, m + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < start; i += 1) cells.push(null);
-  for (let d = 1; d <= days; d += 1) cells.push(new Date(y, m, d));
-  while (cells.length % 7) cells.push(null);
-  return cells;
 }
 
 function localDateKey(date) {
@@ -336,7 +338,7 @@ function VideoInspector({
           </div>
           <button className="btn ghost captions-upload" type="button" disabled={mediaBusy} title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "captionsUploadHint")} onClick={() => document.getElementById(`captions-file-${selected.id}`)?.click()}>+ {t(uiLang, "captionsAddFile")}</button><input id={`captions-file-${selected.id}`} className="visually-hidden" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; uploadCaptions(file); }} />
         </fieldset>
-        <label>{t(uiLang, "videoStatus")}<select title={t(uiLang, "videoStatusHint")} value={effectiveStatus} disabled={!workingVideo || workingLoading || workingSaving || selected.availability !== "available"} onChange={(event) => onStageStatus(event.target.value)}>{currentStatus === "scheduled" ? <option value="scheduled">{statusLabel(uiLang, "scheduled")}</option> : null}<option value="public">{statusLabel(uiLang, "public")}</option><option value="unlisted">{statusLabel(uiLang, "unlisted")}</option><option value="private">{statusLabel(uiLang, "private")}</option></select></label>
+        <label>{t(uiLang, "videoStatus")}<select title={t(uiLang, "videoStatusHint")} value={effectiveStatus} disabled={workingSaving || selected.availability !== "available"} onChange={(event) => onStageStatus(event.target.value)}>{currentStatus === "scheduled" ? <option value="scheduled">{statusLabel(uiLang, "scheduled")}</option> : null}<option value="public">{statusLabel(uiLang, "public")}</option><option value="unlisted">{statusLabel(uiLang, "unlisted")}</option><option value="private">{statusLabel(uiLang, "private")}</option></select></label>
       </section>
 
       <div className="working-controls" aria-live="polite">
@@ -546,8 +548,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistPageSize, setPlaylistPageSize] = useState(() => [10, 30, 50, 100].includes(Number(prefs.playlistPageSize)) ? Number(prefs.playlistPageSize) : 10);
   const [playlistPage, setPlaylistPage] = useState(0);
   const [playlistVideoQuery, setPlaylistVideoQuery] = useState("");
-  const [playlistVideoSort, setPlaylistVideoSort] = useState(() => ["position", "date", "title"].includes(prefs.playlistVideoSort) ? prefs.playlistVideoSort : "position");
+  const [playlistVideoSort, setPlaylistVideoSort] = useState(() => {
+    if (prefs.playlistVideoSort === "date") return "date_desc";
+    return ["position", "date_desc", "date_asc", "title"].includes(prefs.playlistVideoSort) ? prefs.playlistVideoSort : "position";
+  });
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
+  const [playlistBulkVisibility, setPlaylistBulkVisibility] = useState("");
+  const [playlistBulkStatusDraft, setPlaylistBulkStatusDraft] = useState(null);
+  const [playlistCatalogVideos, setPlaylistCatalogVideos] = useState([]);
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
   const [playlistMembershipEditor, setPlaylistMembershipEditor] = useState(null);
   const [playlistVideoPicker, setPlaylistVideoPicker] = useState(null);
@@ -560,8 +568,13 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
   const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
   const [filter, setFilter] = useState(() => FILTERS.some((item) => item.id === prefs.catalogFilter) ? prefs.catalogFilter : "all");
-  const [sort, setSort] = useState(() => SORTS.some((item) => item.id === prefs.catalogSort) ? prefs.catalogSort : "date");
+  const [sort, setSort] = useState(() => {
+    if (prefs.catalogSort === "date") return "date_desc";
+    return SORTS.some((item) => item.id === prefs.catalogSort) ? prefs.catalogSort : "date_desc";
+  });
   const [query, setQuery] = useState("");
+  const [calendarFilter, setCalendarFilter] = useState(() => FILTERS.some((item) => item.id === prefs.calendarFilter) ? prefs.calendarFilter : "all");
+  const [calendarQuery, setCalendarQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [err, setErr] = useState("");
   const [catalogStatus, setCatalogStatus] = useState({ state: "NOT_IMPORTED", video_count: 0 });
@@ -586,7 +599,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const videoListRef = useRef(null);
   const inspectorEditRef = useRef(null);
-  const [month, setMonth] = useState(() => new Date());
+  const [month, setMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
   const [calendarDrafts, setCalendarDrafts] = useState({});
   const [calendarSaving, setCalendarSaving] = useState(false);
@@ -671,6 +687,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedPlaylistId("");
     setPlaylistSelectedVideo(null);
     setSelectedPlaylistVideoIds(new Set());
+    setPlaylistBulkStatusDraft(null);
+    setPlaylistCatalogVideos([]);
     setPlaylistMembershipEditor(null);
     setPlaylistVideoPicker(null);
     setLocalPlaylistMemberships({});
@@ -709,7 +727,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedId("");
     setErr("");
     setLoadingMore(false);
-    if (!channelId) {
+    if (!channelId || view !== "videos") {
       setLoadingVideos(false);
       return () => controller.abort();
     }
@@ -718,7 +736,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     apiFetch(catalogVideosUrl(channelId, { filter, query, sort }), { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCatalogLoadError"));
+        if (!response.ok) throw new Error(apiErrorMessage(data.detail, t(uiLangRef.current, "studioCatalogLoadError")));
         return data;
       })
       .then((data) => {
@@ -739,7 +757,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (requestId === catalogRequestId.current) setLoadingVideos(false);
       });
     return () => controller.abort();
-  }, [channelId, filter, query, sort]);
+  }, [channelId, filter, query, sort, catalogDataVersion, view]);
 
   useEffect(() => {
     const requestId = ++workingRequestId.current;
@@ -828,6 +846,31 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }, [channelId, view, playlistRetry]);
 
   useEffect(() => {
+    if (view !== "playlists" || !channelId) {
+      setPlaylistCatalogVideos([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const items = [];
+        let cursor = "";
+        do {
+          const response = await apiFetch(catalogVideosUrl(channelId, { sort: "date_desc", cursor }), { signal: controller.signal });
+          const data = await response.json();
+          if (!response.ok) throw new Error(apiErrorMessage(data.detail, t(uiLangRef.current, "studioCatalogLoadError")));
+          items.push(...(data.items || []));
+          cursor = data.next_cursor || "";
+        } while (cursor && !controller.signal.aborted);
+        if (!controller.signal.aborted) setPlaylistCatalogVideos(items);
+      } catch (error) {
+        if (!controller.signal.aborted) setPlaylistIdCopyStatus(String(error.message || error));
+      }
+    })();
+    return () => controller.abort();
+  }, [channelId, view, catalogDataVersion]);
+
+  useEffect(() => {
     if (view !== "playlists") return;
     if (playlists.some((playlist) => playlist.id === selectedPlaylistId)) return;
     setSelectedPlaylistId(playlists[0]?.id || "");
@@ -844,7 +887,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (localPlaylist) {
       const memberIds = new Set(localPlaylistMemberships[selectedPlaylistId] || []);
       const knownVideos = new Map();
-      videos.forEach((video) => {
+      playlistCatalogVideos.forEach((video) => {
         if (video.youtubeId) knownVideos.set(video.youtubeId, video);
       });
       Object.entries(localPlaylistVideoCache).forEach(([videoId, video]) => {
@@ -909,24 +952,25 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       }
     })();
     return () => controller.abort();
-  }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, localPlaylistVideoCache, videos]);
+  }, [channelId, selectedPlaylistId, playlistContentsRetry, view, playlists, localPlaylistMemberships, localPlaylistVideoCache, playlistCatalogVideos]);
 
   useEffect(() => {
     setPlaylistPage(0);
     setSelectedPlaylistVideoIds(new Set());
     setPlaylistMetadataEditing(false);
+    setPlaylistBulkStatusDraft(null);
     setPlaylistQuickDraft({ playlistId: selectedPlaylistId, privacy: "", positions: {}, basePositions: {} });
   }, [selectedPlaylistId]);
 
   useEffect(() => {
     if (view !== "calendar" || !channelId) return undefined;
     const controller = new AbortController();
-    const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    const { start, end } = calendarWindowRange(month);
     setCalendarVideos([]);
     setCalendarCursor(null);
     setSelectedId("");
     setCalendarDetailDay("");
+    setErr("");
     setLoadingCalendar(true);
     (async () => {
       try {
@@ -934,11 +978,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         let cursor = null;
         do {
           const response = await apiFetch(
-            catalogVideosUrl(channelId, { cursor, dateFrom: start, dateTo: end, sort: "date", filter, query }),
+            catalogVideosUrl(channelId, { cursor, dateFrom: start, dateTo: end, sort: "date_desc", filter: calendarFilter, query: calendarQuery }),
             { signal: controller.signal },
           );
           const data = await response.json();
-          if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
+          if (!response.ok) throw new Error(apiErrorMessage(data.detail, t(uiLangRef.current, "studioCalendarLoadError")));
           if (controller.signal.aborted) return;
           items.push(...(data.items || []));
           cursor = data.next_cursor || null;
@@ -953,7 +997,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       }
     })();
     return () => controller.abort();
-  }, [channelId, filter, month, query, view, catalogDataVersion]);
+  }, [channelId, calendarFilter, calendarQuery, month, view, catalogDataVersion]);
 
   useEffect(() => {
     const activeVideos = view === "calendar" ? calendarVideos : videos;
@@ -991,8 +1035,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   async function loadMoreCalendar() {
     if (!calendarCursor || !channelId || loadingCalendar) return;
     const requestId = channelRequestId.current;
-    const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    const { start, end } = calendarWindowRange(month);
     setLoadingCalendar(true);
     try {
       const response = await apiFetch(
@@ -1000,9 +1043,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           cursor: calendarCursor,
           dateFrom: start,
           dateTo: end,
-          sort: "date",
-          filter,
-          query,
+          sort: "date_desc",
+          filter: calendarFilter,
+          query: calendarQuery,
         }),
       );
       const data = await response.json();
@@ -1478,6 +1521,76 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
+  function stageSelectedPlaylistVisibility(nextPrivacy) {
+    if (!selectedPlaylistVideoIds.size) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
+      return;
+    }
+    const targets = (currentPlaylistContents?.items || [])
+      .filter((item) => selectedPlaylistVideoIds.has(item.videoId))
+      .map((item) => item.catalogVideo || item.videoSnapshot)
+      .filter((video) => video?.id && video?.youtubeId && video?.availability !== "unavailable" && video?.availability !== "remote_missing");
+    if (!targets.length) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistBulkStatusUnavailable"));
+      return;
+    }
+    setPlaylistBulkStatusDraft({
+      privacy: nextPrivacy,
+      videos: targets.map((video) => ({
+        id: video.id,
+        youtubeId: video.youtubeId,
+        title: catalogVideoDisplayTitle(video),
+        privacy: video.privacy || "",
+      })),
+    });
+    setPlaylistIdCopyStatus("");
+  }
+
+  async function savePlaylistBulkVisibility() {
+    if (!playlistBulkStatusDraft?.videos?.length || playlistSaving) return;
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    setPlaylistSaving(true);
+    setPlaylistIdCopyStatus("");
+    let completed = 0;
+    try {
+      for (const video of playlistBulkStatusDraft.videos) {
+        if (video.privacy === playlistBulkStatusDraft.privacy) {
+          completed += 1;
+          continue;
+        }
+        const response = await apiFetch(`/channels/${channelId}/videos/${video.id}/calendar-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ privacy: playlistBulkStatusDraft.privacy, publishAt: null }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "youtubePublishError"));
+        completed += 1;
+      }
+      setPlaylistBulkStatusDraft(null);
+      setPlaylistBulkVisibility("");
+      setSelectedPlaylistVideoIds(new Set());
+      setPlaylistContentsRetry((current) => current + 1);
+      setCatalogDataVersion((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistBulkStatusSaved", { count: completed }));
+    } catch (error) {
+      setPlaylistContentsRetry((current) => current + 1);
+      setCatalogDataVersion((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistBulkStatusPartial", { count: completed, error: String(error.message || error) }));
+    } finally {
+      setPlaylistSaving(false);
+    }
+  }
+
+  function discardPlaylistBulkVisibility() {
+    setPlaylistBulkVisibility("");
+    setPlaylistBulkStatusDraft(null);
+    setPlaylistIdCopyStatus("");
+  }
+
   async function deleteLocalPlaylist() {
     if (!selectedPlaylist?.localOnly) return;
     if (!window.confirm(t(uiLang, "playlistDeleteLocalConfirm"))) return;
@@ -1645,11 +1758,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
 
       setWorkingSaveState("");
       setWorkingDetailReload((current) => current + 1);
-      setCatalogReload((current) => current + 1);
+      setCatalogDataVersion((current) => current + 1);
     } catch (error) {
       if (metadataPublished) {
         setWorkingDetailReload((current) => current + 1);
-        setCatalogReload((current) => current + 1);
+        setCatalogDataVersion((current) => current + 1);
       }
       setWorkingSaveState((current) => current === "conflict" ? current : "error");
       setWorkingError(String(error.message || error));
@@ -1732,21 +1845,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         );
         if (runId !== syncRunId.current || channelIdRef.current !== channelId) return;
 
-        const pageRequestId = catalogRequestId.current;
-        const pageResponse = await apiFetch(catalogVideosUrl(channelId, { filter, query, sort }));
-        const data = await pageResponse.json();
-        if (!pageResponse.ok) throw new Error(data.detail || t(uiLang, "studioPageReadError"));
-        if (
-          !isCurrentCatalogRequest(channelId, channelIdRef.current, runId, syncRunId.current)
-          || pageRequestId !== catalogRequestId.current
-        ) return;
-        setVideos(data.items || []);
-        setNextCursor(data.next_cursor || null);
-        setCatalogTotal(data.total || 0);
-        setStatusCounts(data.status_counts || {});
-        setCatalogSummary(data.summary || {});
-        setSelectedId(data.items?.[0]?.id || "");
-        setWorkingDetailReload((current) => current + 1);
       }
 
       if (runId === syncRunId.current && channelIdRef.current === channelId) {
@@ -1812,13 +1910,13 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         const bTitle = b.catalogVideo ? catalogVideoDisplayTitle(b.catalogVideo) : b.videoSnapshot?.title || b.title || "";
         return aTitle.localeCompare(bTitle, t(uiLang, "calendarLocale"));
       }
-      if (playlistVideoSort === "date") {
+      if (playlistVideoSort === "date_desc" || playlistVideoSort === "date_asc") {
         const av = Date.parse(playlistItemDate(a));
         const bv = Date.parse(playlistItemDate(b));
         if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
         if (!Number.isFinite(av)) return 1;
         if (!Number.isFinite(bv)) return -1;
-        return bv - av;
+        return playlistVideoSort === "date_asc" ? av - bv : bv - av;
       }
       return Number(a.position ?? 0) - Number(b.position ?? 0);
     });
@@ -1956,7 +2054,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  const cells = monthMatrix(month);
+  const cells = calendarWeekCells(month);
   const byDay = {};
   effectiveCalendarVideos.forEach((v) => {
     const key = (v.slot || (v.privacy !== "private" ? v.publishedAt : "") || "").slice(0, 10);
@@ -1966,28 +2064,34 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   });
   const calendarDayItems = byDay[calendarDetailDay] || [];
   const todayKey = localDateKey(new Date());
-  const monthHasToday = month.getFullYear() === new Date().getFullYear() && month.getMonth() === new Date().getMonth();
 
   function showCalendarToday() {
     const today = new Date();
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setCalendarDetailDay(localDateKey(today));
   }
+
+  const catalogLastSuccessMs = catalogStatus.last_success_at ? Date.parse(catalogStatus.last_success_at) : NaN;
+  const catalogOlderThan24Hours = Number.isFinite(catalogLastSuccessMs)
+    && Date.now() - catalogLastSuccessMs >= 24 * 60 * 60 * 1000;
+  const catalogCanResume = shouldShowCatalogContinue(catalogStatus);
+
+  function refreshCatalogFromToolbar() {
+    if (catalogCanResume) {
+      runCatalogSync(catalogStatus.mode || "initial", shouldResumeCatalogSync(catalogStatus));
+      return;
+    }
+    runCatalogSync("incremental");
+  }
+
   return (
     <div className="studio-wrap">
       <section className="catalog-state" aria-live="polite">
           <div>
             <strong>
-              {{
-                NOT_IMPORTED: "catalogNotImported",
-                LOADING: "catalogLoading",
-                PARTIAL: "catalogPartial",
-                COMPLETE: "catalogComplete",
-                STALE: "catalogStale",
-                ERROR: "catalogError",
-                EMPTY: "catalogEmpty",
-              }[catalogStatus.state]
-                ? t(uiLang, {
+              {syncBusy
+                ? t(uiLang, "catalogBusy")
+                : ({
                     NOT_IMPORTED: "catalogNotImported",
                     LOADING: "catalogLoading",
                     PARTIAL: "catalogPartial",
@@ -1995,58 +2099,46 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     STALE: "catalogStale",
                     ERROR: "catalogError",
                     EMPTY: "catalogEmpty",
-                  }[catalogStatus.state])
-                : t(uiLang, "catalogUnknown")}
+                  }[catalogStatus.state]
+                    ? t(uiLang, {
+                        NOT_IMPORTED: "catalogNotImported",
+                        LOADING: "catalogLoading",
+                        PARTIAL: "catalogPartial",
+                        COMPLETE: "catalogComplete",
+                        STALE: "catalogStale",
+                        ERROR: "catalogError",
+                        EMPTY: "catalogEmpty",
+                      }[catalogStatus.state])
+                    : t(uiLang, "catalogUnknown"))}
             </strong>
-            {catalogStatus.video_count > 0 ? (
-              <span className="catalog-progress">{Math.min(catalogStatus.scanned_count || catalogStatus.video_count, catalogStatus.video_count)}/{catalogStatus.video_count}</span>
-            ) : null}
-            {catalogStatus.last_success_at ? (
-              <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
+            {["LOADING", "PARTIAL"].includes(catalogStatus.state) ? (
+              <span className="catalog-progress">{t(uiLang, "catalogCheckedCount", { count: catalogStatus.scanned_count || 0 })}</span>
+            ) : catalogStatus.video_count > 0 ? (
+              <span className="catalog-progress">{catalogStatus.video_count}</span>
             ) : null}
           </div>
-          {catalogStatus.state === "NOT_IMPORTED" ? (
-            <button className="btn" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
-              {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
-            </button>
-          ) : null}
-          {shouldShowCatalogContinue(catalogStatus) ? (
-            <button
-              className="btn"
-              type="button"
-              disabled={syncBusy}
-              onClick={() => runCatalogSync(
-                catalogStatus.mode || "initial",
-                shouldResumeCatalogSync(catalogStatus),
-              )}
-            >
-              {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogContinue")}
-            </button>
-          ) : null}
-          {["COMPLETE", "STALE", "EMPTY"].includes(catalogStatus.state) ? (
-            catalogStatus.state === "STALE" && catalogStatus.last_error_code ? (
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={syncBusy}
-                onClick={() => runCatalogSync(catalogStatus.mode || "reconcile")}
-              >
-                {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogResume")}
+          <div className="catalog-action-slot">
+            {catalogStatus.last_success_at ? (
+              <span className={catalogOlderThan24Hours ? "catalog-last-updated overdue" : "catalog-last-updated"}>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
+            ) : null}
+            {catalogStatus.state === "NOT_IMPORTED" ? (
+              <button className="btn" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
+                {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
               </button>
             ) : (
               <div className="catalog-actions">
                 <button
-                  className="btn catalog-refresh-icon"
+                  className={`btn catalog-refresh-icon ${catalogOlderThan24Hours ? "catalog-refresh-overdue" : ""}`}
                   type="button"
-                  title={t(uiLang, "tipRefreshCatalog")}
-                  aria-label={t(uiLang, "catalogRefresh")}
+                  title={catalogOlderThan24Hours ? t(uiLang, "catalogRefreshOverdueHint") : t(uiLang, "tipRefreshCatalog")}
+                  aria-label={catalogCanResume ? t(uiLang, "catalogContinue") : t(uiLang, "catalogRefresh")}
                   disabled={syncBusy}
-                  onClick={() => runCatalogSync("incremental")}
+                  onClick={refreshCatalogFromToolbar}
                 >
                   <span aria-hidden="true">↻</span>
                 </button>
                 <button
-                  className="catalog-reconcile-action"
+                  className="text-button catalog-reconcile-action"
                   type="button"
                   title={t(uiLang, "tipReconcileCatalog")}
                   disabled={syncBusy}
@@ -2055,9 +2147,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   {t(uiLang, "catalogReconcile")}
                 </button>
               </div>
-            )
-          ) : null}
-          {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
+            )}
+          </div>
       </section>
 
       {view === "videos" ? (
@@ -2226,7 +2317,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               <header className="playlist-summary">
                 <div className="playlist-summary-media">
                   {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
-                  {!selectedPlaylist.localOnly ? (
+                  {!selectedPlaylist.localOnly && playlistEditing ? (
                     <label className="btn ghost playlist-thumbnail-action" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistThumbnailHint")}>
                       {t(uiLang, "changeThumbnail")}
                       <input className="visually-hidden" type="file" accept="image/jpeg,image/png" disabled={playlistMediaBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) uploadPlaylistThumbnail(file); }} />
@@ -2301,11 +2392,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                         <span>YouTube</span>
                         <a href={`https://www.youtube.com/playlist?list=${encodeURIComponent(selectedPlaylist.id)}`} target="_blank" rel="noreferrer" title={t(uiLang, "openPlaylistYoutubeHint")}>{t(uiLang, "openPlaylistOnYoutube")}</a>
                       </div>
-                      <div className="playlist-setting playlist-order-setting">
-                        <span>{t(uiLang, "playlistCompositionOrder")}</span>
-                        <strong>{t(uiLang, "playlistVideosCount", { count: selectedPlaylist.itemCount ?? currentPlaylistContents?.items?.length ?? 0 })}</strong>
-                        <small>{t(uiLang, "playlistOrderHint")}</small>
-                      </div>
                       {playlistQuickDirty ? (
                         <YoutubeStagedSave
                           uiLang={uiLang}
@@ -2368,7 +2454,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <span>{t(uiLang, "sortLabel")}</span>
                 <select value={playlistVideoSort} onChange={(event) => { const next = event.target.value; setPlaylistVideoSort(next); updatePrefs({ playlistVideoSort: next }); setPlaylistPage(0); }}>
                   <option value="position">{t(uiLang, "playlistSortPosition")}</option>
-                  <option value="date">{t(uiLang, "sortDate")}</option>
+                  <option value="date_desc">{t(uiLang, "sortDateNewest")}</option>
+                  <option value="date_asc">{t(uiLang, "sortDateOldest")}</option>
                   <option value="title">{t(uiLang, "sortTitle")}</option>
                 </select>
               </label>
@@ -2385,13 +2472,48 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   {t(uiLang, "playlistSelectPage")}
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
-                <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
+              </div>
+              <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
                   <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylistHint")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={!selectedPlaylist?.localOnly && !writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistRemoveFromPlaylistHint")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
-                </div>
               </div>
+              <span className="playlist-bulk-status-control">
+                <select
+                  value={playlistBulkVisibility}
+                  disabled={!selectedPlaylistVideoIds.size || playlistSaving}
+                  onChange={(event) => {
+                    const nextPrivacy = event.target.value;
+                    setPlaylistBulkVisibility(nextPrivacy);
+                    stageSelectedPlaylistVisibility(nextPrivacy);
+                  }}
+                  aria-label={t(uiLang, "playlistBulkStatus")}
+                  title={t(uiLang, "playlistBulkStatusHint")}
+                >
+                  <option value="" disabled>{t(uiLang, "playlistBulkStatus")}</option>
+                  <option value="public">{t(uiLang, "filterPublic")}</option>
+                  <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+                  <option value="private">{t(uiLang, "filterPrivate")}</option>
+                </select>
+              </span>
+              {playlistBulkStatusDraft ? (
+                <YoutubeStagedSave
+                  uiLang={uiLang}
+                  count={playlistBulkStatusDraft.videos.length}
+                  saving={playlistSaving}
+                  writeMode={writeMode}
+                  onDiscard={discardPlaylistBulkVisibility}
+                  onSave={savePlaylistBulkVisibility}
+                  saveHint="playlistBulkStatusSaveHint"
+                  className="playlist-bulk-status-save"
+                  changes={[{
+                    label: t(uiLang, "playlistBulkStatus"),
+                    before: t(uiLang, "playlistBulkStatusMixed"),
+                    after: statusLabel(uiLang, playlistBulkStatusDraft.privacy),
+                  }]}
+                />
+              ) : null}
               <label className="playlist-page-size" title={t(uiLang, "playlistPageSizeHint")}>
                 {t(uiLang, "playlistPageSize")}
                 <select value={playlistPageSize} onChange={(event) => {
@@ -2410,7 +2532,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} aria-label={t(uiLang, "playlistVideoPickerSearchHint")} title={t(uiLang, "playlistVideoPickerSearchHint")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
                   </div>
                   <div className="playlist-video-picker-list">
-                    {videos.filter((video) => {
+                    {playlistCatalogVideos.filter((video) => {
                       const needle = playlistVideoPicker.query.trim().toLocaleLowerCase();
                       return !needle || (catalogVideoDisplayTitle(video) || "").toLocaleLowerCase().includes(needle);
                     }).map((video) => {
@@ -2551,15 +2673,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </button>
               </div>
               <div className="cal-nav">
-                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousWeek")} aria-label={t(uiLang, "tipPreviousWeek")} onClick={() => setMonth((current) => shiftCalendarWeek(current, -1))}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
-                <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipNextWeek")} aria-label={t(uiLang, "tipNextWeek")} onClick={() => setMonth((current) => shiftCalendarWeek(current, 1))}>→</button>
                 <button type="button" className="btn ghost calendar-today" onClick={showCalendarToday}>{t(uiLang, "calendarToday")}</button>
               </div>
             </header>
             <div className="calendar-tools">
-              <input className="search" aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); updatePrefs({ catalogFilter: next }); }} aria-label={t(uiLang, "tipFilterCatalog")}>
+              <input className="search" aria-label={t(uiLang, "searchVideos")} placeholder={t(uiLang, "searchVideos")} value={calendarQuery} onChange={(event) => setCalendarQuery(event.target.value)} />
+              <select value={calendarFilter} onChange={(event) => { const next = event.target.value; setCalendarFilter(next); updatePrefs({ calendarFilter: next }); }} aria-label={t(uiLang, "tipFilterCatalog")}>
                 {FILTERS.map((item) => <option key={item.id} value={item.id}>{t(uiLang, item.key)}</option>)}
               </select>
             </div>
@@ -2574,23 +2696,24 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             <div className="cal" role="grid" aria-label={t(uiLang, "calendarTab")}>
               {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
               {cells.map((day, index) => {
-                const key = day ? localDateKey(day) : `empty-${index}`;
-                const items = day ? byDay[key] || [] : [];
+                const key = localDateKey(day);
+                const items = byDay[key] || [];
+                const outsideMonth = day.getMonth() !== month.getMonth() || day.getFullYear() !== month.getFullYear();
                 return (
                   <div
                     key={key}
-                    className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`}
+                    className={`cal-cell ${outsideMonth ? "off-month" : ""} ${key === todayKey ? "today" : ""}`}
                     role="gridcell"
-                    title={day && items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
-                    onDragOver={day ? (event) => event.preventDefault() : undefined}
-                    onDrop={day ? (event) => {
+                    title={items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
                       event.preventDefault();
                       const videoId = Number(event.dataTransfer.getData("text/calendar-video"));
                       const video = effectiveCalendarVideos.find((item) => item.id === videoId);
                       if (video) stageCalendarDay(video, key);
-                    } : undefined}
+                    }}
                   >
-                    {day ? <b aria-current={monthHasToday && localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
+                    <b aria-current={key === todayKey ? "date" : undefined}>{day.getDate()}</b>
                     {items.slice(0, 2).map((video) => (
                       <button
                         key={video.id}
@@ -2742,8 +2865,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           onOpenStatus={(status) => {
             setQuery("");
             setFilter(status);
-            setSort("date");
-            updatePrefs({ catalogFilter: status, catalogSort: "date" });
+            setSort("date_desc");
+            updatePrefs({ catalogFilter: status, catalogSort: "date_desc" });
             setPlaylistSelectedVideo(null);
             setSelectedId("");
             onViewChange("videos");

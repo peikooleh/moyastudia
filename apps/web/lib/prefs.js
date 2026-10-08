@@ -57,7 +57,8 @@ const defaults = {
   selectedChannelId: "",
   statisticsPeriod: "28",
   catalogFilter: "all",
-  catalogSort: "date",
+  catalogSort: "date_desc",
+  calendarFilter: "all",
   playlistVideoSort: "position",
   playlistPageSize: 10,
 };
