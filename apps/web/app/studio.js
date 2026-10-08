@@ -992,7 +992,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (view !== "calendar" || !channelId) return undefined;
     const controller = new AbortController();
     const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 3, 1).toISOString();
     setCalendarCursor(null);
     setCalendarDetailDay("");
     setErr("");
@@ -1061,7 +1061,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (!calendarCursor || !channelId || loadingCalendar) return;
     const requestId = channelRequestId.current;
     const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 3, 1).toISOString();
     setLoadingCalendar(true);
     try {
       const response = await apiFetch(
