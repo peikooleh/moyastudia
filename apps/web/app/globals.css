@@ -3762,3 +3762,49 @@ body {
     min-width: 0;
   }
 }
+
+
+/* Keep video membership operations together; status changes form a separate right-side group. */
+.playlist-list-controls {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 16px;
+}
+.playlist-bulk-status-control {
+  grid-column: 2;
+  grid-row: 1;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+}
+.playlist-page-size {
+  grid-column: 3;
+  grid-row: 1;
+}
+@media (max-width: 900px) {
+  .playlist-list-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .playlist-bulk-status-control {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .playlist-page-size {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+@media (max-width: 720px) {
+  .playlist-list-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .playlist-bulk-status-control,
+  .playlist-page-size {
+    grid-column: 1;
+    grid-row: auto;
+    margin-left: 0;
+  }
+  .playlist-bulk-status-control {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
