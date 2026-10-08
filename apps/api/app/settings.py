@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
     session_cookie_name: str = "moyastudia_session"
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    deployment_access_mode: Literal["private_test", "public"] = "private_test"
+    allowed_login_emails: str = ""
     session_ttl_seconds: int = 604800
     oauth_state_ttl_seconds: int = 600
     provider_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias="PROVIDER_TIMEOUT_SECONDS")
@@ -27,6 +29,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_environment.lower() == "production"
+
+    @property
+    def allowed_login_email_set(self) -> set[str]:
+        return {email.strip().casefold() for email in self.allowed_login_emails.split(",") if email.strip()}
 
     def validate_runtime_security(self) -> None:
         if not self.is_production:
@@ -79,6 +85,8 @@ class Settings(BaseSettings):
 
         if not self.google_client_id or not self.google_client_secret:
             errors.append("Google OAuth credentials must be configured for production")
+        if self.deployment_access_mode == "private_test" and not self.allowed_login_email_set:
+            errors.append("ALLOWED_LOGIN_EMAILS is required in private_test mode")
         try:
             Fernet(self.token_encryption_key.encode("ascii"))
         except (ValueError, UnicodeError):
