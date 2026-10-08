@@ -18,7 +18,7 @@ For the first test, set `DEPLOYMENT_ACCESS_MODE=private_test` and `ALLOWED_LOGIN
 
 Set `SESSION_COOKIE_SAMESITE=none` when Vercel frontend and API are on different sites; session cookies remain `HttpOnly; Secure` in production. OAuth state cookies remain `SameSite=Lax` for the Google top-level callback. For same-site hosting, `lax` is preferable. **Cross-site cookies can be blocked by browser privacy controls**, so Safari/iOS and Chrome login must be tested before the deployment is approved. A same-site custom domain or same-origin architecture may be required for reliable support.
 
-The API startup refuses invalid production HTTPS origins, wrong OAuth callback paths, missing/invalid encryption key, remote DB without explicit PostgreSQL TLS, or an empty private-test allowlist. This is a configuration check, **not** a substitute for actual provider/network verification.
+Run `python -m app.preflight` from `apps/api` with production environment variables before starting the API. The API startup also refuses invalid production HTTPS origins, wrong OAuth callback paths, missing/invalid encryption key, remote DB without explicit PostgreSQL TLS, or an empty private-test allowlist. This is a configuration check, **not** a substitute for actual provider/network verification.
 
 ## Frontend deployment environment (Vercel)
 
@@ -33,7 +33,7 @@ The API startup refuses invalid production HTTPS origins, wrong OAuth callback p
 
 1. Confirm all repository secrets are absent from the current tree **and Git history** (use a proper secret scanner). If a secret is found, rotate it; deleting the file is insufficient.
 2. Configure separate test credentials/database where feasible; record a backup and restore path.
-3. Confirm Google OAuth consent/test-user settings, exact redirect URIs and required APIs/scopes. Never paste client secrets into chat or commits.
+3. Confirm Google OAuth consent/test-user settings, exact redirect URIs and required APIs/scopes. In Google OAuth Testing status, refresh tokens for non-basic scopes may expire after 7 days; plan reconnect testing. Never paste client secrets into chat or commits.
 4. Confirm API host uses HTTPS, single worker/instance, health monitoring, request-size limits and restricted dashboard access. **Do not horizontally scale** while the limiter is process-local.
 5. Run `alembic upgrade head` on the test database only after backup; do not point test deployment at the local/production database by accident.
 6. Check `/health` returns only `{"ok": true}` when database is reachable; verify it does not expose configuration.
