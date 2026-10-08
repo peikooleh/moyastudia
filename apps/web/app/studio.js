@@ -2517,17 +2517,17 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylistHint")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
-                  <span className="playlist-bulk-status-control">
-                    <select value={playlistBulkVisibility} onChange={(event) => setPlaylistBulkVisibility(event.target.value)} aria-label={t(uiLang, "playlistBulkStatus")} title={t(uiLang, "playlistBulkStatusHint")}>
-                      <option value="public">{t(uiLang, "filterPublic")}</option>
-                      <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
-                      <option value="private">{t(uiLang, "filterPrivate")}</option>
-                    </select>
-                    <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={t(uiLang, "playlistBulkStatusHint")} onClick={stageSelectedPlaylistVisibility}>{t(uiLang, "playlistBulkStatus")}</button>
-                  </span>
                   <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={!selectedPlaylist?.localOnly && !writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistRemoveFromPlaylistHint")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
+              <span className="playlist-bulk-status-control">
+                <select value={playlistBulkVisibility} onChange={(event) => setPlaylistBulkVisibility(event.target.value)} aria-label={t(uiLang, "playlistBulkStatus")} title={t(uiLang, "playlistBulkStatusHint")}>
+                  <option value="public">{t(uiLang, "filterPublic")}</option>
+                  <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+                  <option value="private">{t(uiLang, "filterPrivate")}</option>
+                </select>
+                <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={t(uiLang, "playlistBulkStatusHint")} onClick={stageSelectedPlaylistVisibility}>{t(uiLang, "playlistBulkStatus")}</button>
+              </span>
               {playlistBulkStatusDraft ? (
                 <YoutubeStagedSave
                   uiLang={uiLang}
