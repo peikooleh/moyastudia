@@ -930,7 +930,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .calendar-status { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px; min-height: 36px; margin-bottom: 10px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .calendar-status strong { color: var(--text); font-size: 12px; }
 .calendar-error { color: var(--danger); }
-.calendar-panel .cal { min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.calendar-panel .cal { min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: auto repeat(6, 90px); gap: 4px; }
+.calendar-panel .cal-cell.off-month { background: transparent; border-style: dashed; }
+.calendar-panel .cal-cell.off-month > b { color: var(--muted); opacity: .6; }
 .calendar-panel .cal-h { min-width: 0; padding: 4px 1px; text-align: center; font-size: 11px; font-weight: 600; }
 .calendar-panel .cal-cell {
   min-width: 0;
@@ -1222,6 +1224,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .calendar-heading .cal-nav { gap: 5px; }
   .calendar-heading .cal-nav strong { min-width: 112px; font-size: 13px; }
   .calendar-tools { grid-template-columns: minmax(0, 1fr) 112px; }
+  .calendar-panel .cal { grid-template-rows: auto repeat(6, 62px); }
   .calendar-panel .cal-cell { min-height: 62px; }
   .inspector-data { grid-template-columns: minmax(0, 1fr); }
   .calendar-event-details .inspector-data { grid-template-columns: minmax(0, 1fr); }
