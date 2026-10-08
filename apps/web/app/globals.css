@@ -457,14 +457,6 @@ html, body, .onb-card, .top, .shell, .card, .btn, .choice {
 .cal-h { font-size: 11px; color: var(--muted); text-transform: uppercase; padding: 4px; }
 .cal-cell { min-height: 88px; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: var(--bg-raise); font-size: 11px; }
 .cal-cell.off { background: transparent; border-style: dashed; }
-.cal-cell.off-month {
-  background: color-mix(in srgb, var(--bg-raise) 55%, transparent);
-  border-style: dashed;
-}
-.cal-cell.off-month > b {
-  color: var(--muted);
-  opacity: .72;
-}
 .cal-cell b { display: block; margin-bottom: 4px; }
 .cal-cell span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .studio-tools select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
