@@ -1727,6 +1727,15 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
                 ),
                 Video(
                     channel_id=channel_id,
+                    youtube_video_id="unlisted-video",
+                    internal_status=None,
+                    youtube_title="Link only",
+                    youtube_visibility="unlisted",
+                    availability_status="available",
+                    youtube_published_at=datetime(2026, 9, 3, tzinfo=timezone.utc),
+                ),
+                Video(
+                    channel_id=channel_id,
                     youtube_video_id="unavailable-video",
                     internal_status=None,
                     youtube_title="Unavailable",
@@ -1748,6 +1757,7 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
     public = client.get(f"/channels/{channel_id}/videos?visibility=public")
     private = client.get(f"/channels/{channel_id}/videos?visibility=private")
     scheduled = client.get(f"/channels/{channel_id}/videos?visibility=scheduled")
+    unlisted = client.get(f"/channels/{channel_id}/videos?visibility=unlisted")
     unavailable = client.get(f"/channels/{channel_id}/videos?visibility=unavailable")
     newest_first = client.get(f"/channels/{channel_id}/videos?sort=date_desc&limit=2")
     oldest_page_one = client.get(f"/channels/{channel_id}/videos?sort=date_asc&limit=1")
@@ -1762,7 +1772,10 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
     assert [item["youtubeId"] for item in public.json()["items"]] == ["title-b"]
     assert private.json()["items"] == []
     assert [item["youtubeId"] for item in scheduled.json()["items"]] == ["title-a"]
+    assert [item["youtubeId"] for item in unlisted.json()["items"]] == ["unlisted-video"]
     assert unavailable.json()["items"][0]["status"] == "unavailable"
-    assert [item["youtubeId"] for item in newest_first.json()["items"]] == ["title-a", "title-b"]
+    assert unlisted.json()["status_counts"]["unlisted"] == 1
+    assert unlisted.json()["status_counts"]["unavailable"] == 1
+    assert [item["youtubeId"] for item in newest_first.json()["items"]] == ["title-a", "unlisted-video"]
     assert [item["youtubeId"] for item in oldest_page_one.json()["items"]] == ["title-b"]
-    assert [item["youtubeId"] for item in oldest_page_two.json()["items"]] == ["title-a"]
+    assert [item["youtubeId"] for item in oldest_page_two.json()["items"]] == ["unlisted-video"]
