@@ -1145,7 +1145,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .inspector-edit .description-field { grid-column: auto; }
   .description-metadata-layout { grid-template-columns: minmax(0, 1fr); }
   .calendar-workspace { grid-template-columns: minmax(0, 1fr); }
-  .calendar-event-details { border-top: 1px solid var(--line); }
+  .calendar-event-details { padding-top: 18px; border-top: 1px solid var(--line); }
   .playlist-workspace { grid-template-columns: minmax(0, 1fr); }
   .playlist-pane { border-right: 0; border-bottom: 1px solid var(--line); }
   .playlist-picker-list { max-height: 30vh; }
@@ -1260,7 +1260,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .metadata-summary > div { padding-bottom: 7px; border-bottom: 1px solid var(--line); }
 .metadata-summary > div:last-child { padding-bottom: 0; border-bottom: 0; }
-.calendar-event-details { padding-top: 16px; }
+.calendar-event-details { padding-top: 64px; }
 .calendar-event-details .inspector-data { gap: 10px 16px; }
 .cal-event { border-left-color: var(--info); }
 .cal-event.active { border-left-color: var(--accent); }
