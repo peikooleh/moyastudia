@@ -1089,6 +1089,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-settings-column .channel-remove-actions { margin-top: 14px; }
 .channel-option-list { display: grid; }
 .channel-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; cursor: pointer; overflow: hidden; }
+.channel-option:not(.on):hover { background: var(--bg-hover); }
 .channel-option.on { background: color-mix(in srgb, var(--accent) 10%, var(--bg-raise)); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
 .channel-option > img, .channel-option > .avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 .channel-option-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; overflow: hidden; }
