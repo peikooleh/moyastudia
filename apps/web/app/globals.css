@@ -3764,37 +3764,50 @@ body {
 }
 
 
-/* Playlist bulk toolbar: aligned selection checkbox and one compact action row. */
+/* Playlist bulk toolbar: one-line desktop layout with responsive wrapping. */
 .playlist-list-controls {
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  gap: 10px 14px;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 10px;
+  padding: 9px 0;
 }
 .playlist-selection-controls {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  flex: none;
-  min-height: 22px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.playlist-select-all {
+  min-height: 34px;
+  padding-right: 0;
 }
 .playlist-select-all input[type="checkbox"] {
-  margin: 0 0 0 8px;
+  margin: 0;
+}
+.playlist-selected-count {
+  padding-right: 6px;
+  white-space: nowrap;
 }
 .playlist-bulk-actions {
-  grid-column: 1;
-  grid-row: 2;
-  align-items: center;
+  flex: 0 0 auto;
+  display: inline-flex;
   flex-wrap: nowrap;
-  padding-left: 0;
-  border-left: 0;
+  align-items: center;
+  gap: 5px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
 }
 .playlist-bulk-status-control {
-  grid-column: 2;
-  grid-row: 2;
-  margin-left: 64px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 54px;
   padding-left: 0;
   border-left: 0;
-  align-self: center;
+  white-space: nowrap;
 }
 .playlist-bulk-status-control select {
   min-height: 34px;
@@ -3819,63 +3832,47 @@ body {
   cursor: not-allowed;
 }
 .playlist-page-size {
-  grid-column: 4;
-  grid-row: 1 / 3;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
 }
 .playlist-page-size select {
-  width: 58px;
-  min-width: 58px;
-  padding-left: 8px;
-  padding-right: 18px;
+  width: 62px;
+  min-width: 62px;
+  padding-left: 9px;
+  padding-right: 20px;
 }
 .playlist-bulk-status-save,
 .playlist-membership-editor,
 .playlist-video-picker {
-  grid-column: 1 / -1;
+  flex: 1 0 100%;
+  width: 100%;
 }
-@media (max-width: 1100px) {
+@media (max-width: 1250px) {
   .playlist-list-controls {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .playlist-bulk-actions {
-    grid-column: 1;
     flex-wrap: wrap;
   }
   .playlist-bulk-status-control {
-    grid-column: 2;
-    margin-left: 16px;
+    margin-left: 24px;
   }
   .playlist-page-size {
-    grid-column: 2;
-    grid-row: 1 / 3;
+    margin-left: auto;
   }
 }
 @media (max-width: 720px) {
-  .playlist-list-controls {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .playlist-selection-controls,
-  .playlist-bulk-actions,
-  .playlist-bulk-status-control,
-  .playlist-page-size {
-    grid-column: 1;
-    grid-row: auto;
+  .playlist-bulk-actions {
+    flex-wrap: wrap;
   }
   .playlist-bulk-status-control {
     margin-left: 0;
-    flex: none;
-  }
-  .playlist-bulk-status-control select {
-    min-width: 170px;
   }
   .playlist-page-size {
     margin-left: 0;
-    align-items: flex-start;
   }
 }
