@@ -1349,7 +1349,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .inspector-edit #video-working-title { height: auto; min-height: 4.8rem; max-height: 9rem; resize: vertical; line-height: 1.45; }
 .video-inspector .description-metadata-layout { display: block; }
-.studio-list .item { align-items: start; min-height: 86px; }
+.studio-list .item { align-items: start; min-height: 96px; }
 .studio-list .item-content, .studio-list .item-title, .studio-list .item-meta { overflow-wrap: anywhere; }
 .studio-list .item-meta { line-height: 1.35; }
 .studio-list .item-title { min-width: 0; -webkit-line-clamp: 2; line-clamp: 2; }
