@@ -122,12 +122,16 @@ function statusLabel(uiLang, status) {
 }
 
 function monthMatrix(anchor) {
-  const focus = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-  const mondayOffset = (focus.getDay() + 6) % 7;
-  const start = new Date(focus.getFullYear(), focus.getMonth(), focus.getDate() - mondayOffset);
-  return Array.from({ length: 42 }, (_, index) => (
-    new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
-  ));
+  const y = anchor.getFullYear();
+  const m = anchor.getMonth();
+  const first = new Date(y, m, 1);
+  const start = (first.getDay() + 6) % 7;
+  const days = new Date(y, m + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < start; i += 1) cells.push(null);
+  for (let d = 1; d <= days; d += 1) cells.push(new Date(y, m, d));
+  while (cells.length % 7) cells.push(null);
+  return cells;
 }
 
 function localDateKey(date) {
@@ -609,12 +613,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const inspectorEditRef = useRef(null);
   const calendarStripRef = useRef(null);
   const calendarScrollTimerRef = useRef(null);
-  const calendarWheelLockRef = useRef(false);
-  const calendarWheelTimerRef = useRef(null);
-  const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
   const [calendarDrafts, setCalendarDrafts] = useState({});
   const [calendarSaving, setCalendarSaving] = useState(false);
@@ -679,7 +678,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
 
   useEffect(() => () => {
     if (calendarScrollTimerRef.current) clearTimeout(calendarScrollTimerRef.current);
-    if (calendarWheelTimerRef.current) clearTimeout(calendarWheelTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -992,7 +990,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (view !== "calendar" || !channelId) return undefined;
     const controller = new AbortController();
     const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 3, 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
     setCalendarCursor(null);
     setCalendarDetailDay("");
     setErr("");
@@ -1061,7 +1059,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     if (!calendarCursor || !channelId || loadingCalendar) return;
     const requestId = channelRequestId.current;
     const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 3, 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
     setLoadingCalendar(true);
     try {
       const response = await apiFetch(
@@ -2080,11 +2078,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  const calendarMonthAnchors = [
-    new Date(month.getFullYear(), month.getMonth() - 1, 1),
-    month,
-    new Date(month.getFullYear(), month.getMonth() + 1, 1),
-  ];
+  const calendarMonthAnchors = [-1, 0, 1].map((offset) => new Date(month.getFullYear(), month.getMonth() + offset, 1));
   const byDay = {};
   effectiveCalendarVideos.forEach((v) => {
     const key = (v.slot || (v.privacy !== "private" ? v.publishedAt : "") || "").slice(0, 10);
@@ -2112,26 +2106,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       return;
     }
     strip.scrollTo({ left: strip.clientWidth * (direction < 0 ? 0 : 2), behavior: "smooth" });
-  }
-
-  function handleCalendarWheel(event) {
-    const primaryDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-    if (!primaryDelta) return;
-    event.preventDefault();
-    if (calendarWheelLockRef.current) return;
-
-    calendarWheelLockRef.current = true;
-    const direction = primaryDelta > 0 ? 1 : -1;
-    setMonth((current) => new Date(
-      current.getFullYear(),
-      current.getMonth(),
-      current.getDate() + (direction * 7),
-    ));
-
-    if (calendarWheelTimerRef.current) clearTimeout(calendarWheelTimerRef.current);
-    calendarWheelTimerRef.current = setTimeout(() => {
-      calendarWheelLockRef.current = false;
-    }, 180);
   }
 
   function showCalendarToday() {
@@ -2763,11 +2737,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               {err ? <span className="calendar-error" role="alert">{err}</span> : null}
             </div>
             <div className="calendar-scroll-shell">
-              <div ref={calendarStripRef} className="calendar-month-strip" onScroll={handleCalendarStripScroll} onWheel={handleCalendarWheel}>
+              <div ref={calendarStripRef} className="calendar-month-strip" onScroll={handleCalendarStripScroll}>
                 {calendarMonthAnchors.map((displayMonth) => {
                   const monthLabel = displayMonth.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" });
                   return (
-                    <div className="calendar-month-page" key={`${displayMonth.getFullYear()}-${displayMonth.getMonth()}-${displayMonth.getDate()}`}>
+                    <div className="calendar-month-page" key={`${displayMonth.getFullYear()}-${displayMonth.getMonth()}`}>
                       <div className="cal" role="grid" aria-label={`${t(uiLang, "calendarTab")}: ${monthLabel}`}>
                         {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
                         {monthMatrix(displayMonth).map((day, index) => {
@@ -2776,18 +2750,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           return (
                             <div
                               key={key}
-                              className={`cal-cell ${day.getMonth() !== displayMonth.getMonth() ? "off-month" : ""} ${localDateKey(day) === todayKey ? "today" : ""}`}
+                              className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`}
                               role="gridcell"
-                              title={items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
-                              onDragOver={(event) => event.preventDefault()}
-                              onDrop={(event) => {
+                              title={day && items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
+                              onDragOver={day ? (event) => event.preventDefault() : undefined}
+                              onDrop={day ? (event) => {
                                 event.preventDefault();
                                 const videoId = Number(event.dataTransfer.getData("text/calendar-video"));
                                 const video = effectiveCalendarVideos.find((item) => item.id === videoId);
                                 if (video) stageCalendarDay(video, key);
-                              }}
+                              } : undefined}
                             >
-                              <b aria-current={localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b>
+                              {day ? <b aria-current={localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
                               {items.slice(0, 2).map((video) => (
                                 <button
                                   key={video.id}
