@@ -1,5 +1,5 @@
 export function catalogVideosUrl(channelId, options = {}) {
-  const params = new URLSearchParams({ limit: "50", sort: options.sort || "date" });
+  const params = new URLSearchParams({ limit: "50", sort: options.sort || "date_desc" });
   if (options.cursor) params.set("cursor", options.cursor);
   if (options.query) params.set("q", options.query);
   if (options.filter && options.filter !== "all") {
