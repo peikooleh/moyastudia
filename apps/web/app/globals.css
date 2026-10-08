@@ -3769,7 +3769,7 @@ body {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   padding: 9px 0;
 }
 .playlist-selection-controls {
@@ -3777,7 +3777,7 @@ body {
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   min-width: 0;
 }
 .playlist-select-all {
@@ -3785,10 +3785,10 @@ body {
   padding-right: 0;
 }
 .playlist-select-all input[type="checkbox"] {
-  margin: 0;
+  margin: 0 0 0 8px;
 }
 .playlist-selected-count {
-  padding-right: 6px;
+  padding-right: 0;
   white-space: nowrap;
 }
 .playlist-bulk-actions {
@@ -3796,22 +3796,22 @@ body {
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 5px;
-  padding-left: 10px;
+  gap: 4px;
+  padding-left: 7px;
   border-left: 1px solid var(--line);
 }
 .playlist-bulk-status-control {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  margin-left: 54px;
+  margin-left: 38px;
   padding-left: 0;
   border-left: 0;
   white-space: nowrap;
 }
 .playlist-bulk-status-control select {
   min-height: 34px;
-  min-width: 150px;
+  min-width: 142px;
   max-width: none;
   padding: 5px 30px 5px 11px;
   border: 1px solid var(--line);
@@ -3838,12 +3838,12 @@ body {
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 6px;
   white-space: nowrap;
 }
 .playlist-page-size select {
-  width: 62px;
-  min-width: 62px;
+  width: 58px;
+  min-width: 58px;
   padding-left: 9px;
   padding-right: 20px;
 }
@@ -3875,4 +3875,7 @@ body {
   .playlist-page-size {
     margin-left: 0;
   }
+}
+.playlist-bulk-actions button {
+  padding-inline: 7px;
 }
