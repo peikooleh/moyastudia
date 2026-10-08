@@ -3824,9 +3824,15 @@ body {
   align-self: stretch;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
+}
+.playlist-page-size select {
+  width: 48px;
+  min-width: 48px;
+  padding-left: 7px;
+  padding-right: 20px;
 }
 .playlist-bulk-status-save,
 .playlist-membership-editor,
@@ -3870,5 +3876,6 @@ body {
   }
   .playlist-page-size {
     margin-left: 0;
+    align-items: flex-start;
   }
 }
