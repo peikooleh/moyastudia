@@ -105,6 +105,13 @@ test("Studio catalog pages use the selected channel's local API route", () => {
   assert.equal(url.includes("youtube.googleapis.com"), false);
 });
 
+test("catalog defaults to explicit newest-first date sorting", () => {
+  assert.equal(
+    catalogVideosUrl("channel-7"),
+    "/channels/channel-7/videos?limit=50&sort=date_desc",
+  );
+});
+
 test("late catalog responses from another channel or request are ignored", () => {
   assert.equal(isCurrentCatalogRequest("channel-old", "channel-new", 3, 4), false);
   assert.equal(isCurrentCatalogRequest("channel-new", "channel-new", 3, 4), false);
@@ -180,14 +187,16 @@ test("Studio sorting preferences survive a preferences reload", () => {
       statisticsPeriod: "90",
       catalogFilter: "private",
       catalogSort: "title",
-      playlistVideoSort: "date",
+      playlistVideoSort: "date_asc",
+      calendarFilter: "scheduled",
       playlistPageSize: 50,
     });
     const reloaded = loadPrefs();
     assert.equal(reloaded.statisticsPeriod, "90");
     assert.equal(reloaded.catalogFilter, "private");
     assert.equal(reloaded.catalogSort, "title");
-    assert.equal(reloaded.playlistVideoSort, "date");
+    assert.equal(reloaded.playlistVideoSort, "date_asc");
+    assert.equal(reloaded.calendarFilter, "scheduled");
     assert.equal(reloaded.playlistPageSize, 50);
   } finally {
     if (previousLocalStorage === undefined) delete globalThis.localStorage;
@@ -315,6 +324,9 @@ test("new Studio labels are localized in English, Russian, and Ukrainian", () =>
     "playlistDateLabel", "playlistVisibilityUnknown", "playlistIdLabel", "playlistIdCopied", "playlistIdCopyFailed",
     "openPlaylistOnYoutube", "openInStudio", "playlistBulkActions", "playlistAddToPlaylist", "playlistMoveToPlaylist",
     "playlistRemoveFromPlaylist", "playlistBulkHelp", "playlistWritesWithWriteMode",
+    "sortDateNewest", "sortDateOldest", "catalogCheckedCount", "playlistBulkStatus",
+    "playlistBulkStatusHint", "playlistBulkStatusSaveHint", "playlistBulkStatusMixed",
+    "playlistBulkStatusUnavailable", "playlistBulkStatusSaved", "playlistBulkStatusPartial",
   ];
   for (const lang of ["en", "ru", "uk"]) {
     for (const key of keys) assert.notEqual(t(lang, key), key, `${lang}:${key}`);
