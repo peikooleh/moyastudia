@@ -3764,47 +3764,106 @@ body {
 }
 
 
-/* Keep video membership operations together; status changes form a separate right-side group. */
+/* Playlist bulk toolbar: aligned selection checkbox and one compact action row. */
 .playlist-list-controls {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  column-gap: 16px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 10px 14px;
+  align-items: center;
+}
+.playlist-selection-controls {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  flex: none;
+  min-height: 22px;
+}
+.playlist-select-all input[type="checkbox"] {
+  margin: 0 0 0 8px;
+}
+.playlist-bulk-actions {
+  grid-column: 1;
+  grid-row: 2;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding-left: 0;
+  border-left: 0;
 }
 .playlist-bulk-status-control {
   grid-column: 2;
-  grid-row: 1;
-  padding-left: 16px;
-  border-left: 1px solid var(--line);
-  white-space: nowrap;
+  grid-row: 2;
+  margin-left: 64px;
+  padding-left: 0;
+  border-left: 0;
+  align-self: center;
+}
+.playlist-bulk-status-control select {
+  min-height: 34px;
+  min-width: 150px;
+  max-width: none;
+  padding: 5px 30px 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-raise);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.playlist-bulk-status-control select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.playlist-bulk-status-control select:disabled {
+  color: var(--muted);
+  opacity: .75;
+  cursor: not-allowed;
 }
 .playlist-page-size {
-  grid-column: 3;
-  grid-row: 1;
+  grid-column: 4;
+  grid-row: 2;
+  align-self: center;
 }
-@media (max-width: 900px) {
+.playlist-bulk-status-save,
+.playlist-membership-editor,
+.playlist-video-picker {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1100px) {
   .playlist-list-controls {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+  .playlist-bulk-actions {
+    grid-column: 1;
+    flex-wrap: wrap;
+  }
   .playlist-bulk-status-control {
     grid-column: 2;
-    grid-row: 1;
+    margin-left: 16px;
   }
   .playlist-page-size {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 3;
   }
 }
 @media (max-width: 720px) {
   .playlist-list-controls {
     grid-template-columns: minmax(0, 1fr);
   }
+  .playlist-selection-controls,
+  .playlist-bulk-actions,
   .playlist-bulk-status-control,
   .playlist-page-size {
     grid-column: 1;
     grid-row: auto;
-    margin-left: 0;
   }
   .playlist-bulk-status-control {
-    padding-left: 0;
-    border-left: 0;
+    margin-left: 0;
+    flex: none;
+  }
+  .playlist-bulk-status-control select {
+    min-width: 170px;
+  }
+  .playlist-page-size {
+    margin-left: 0;
   }
 }
