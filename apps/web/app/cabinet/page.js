@@ -16,6 +16,14 @@ import {
 import { usePrefs } from "../providers";
 import { Shell } from "../shell";
 
+function connectionDisplayName(connection) {
+  const email = String(connection?.email || "").trim();
+  if (/@pages\./i.test(email)) {
+    return connection?.channels?.[0]?.title || email.split("@")[0] || email;
+  }
+  return email;
+}
+
 export default function CabinetPage() {
   const { prefs, uiLang, update } = usePrefs();
   const router = useRouter();
@@ -158,19 +166,6 @@ export default function CabinetPage() {
       .then((rows) => {
         if (cancelled) return;
         setChannels(rows);
-        rows.forEach((channel) => {
-          if (!channel.has_token) return;
-          apiFetch(`/channels/${channel.id}/refresh-profile`, { method: "POST" })
-            .then((response) => (response.ok ? response.json() : null))
-            .then((fresh) => {
-              if (fresh && !cancelled) {
-                setChannels((current) => current.map((item) => (
-                  item.id === fresh.id ? { ...item, ...fresh } : item
-                )));
-              }
-            })
-            .catch(() => {});
-        });
       })
       .catch((error) => {
         if (!cancelled && error.status === 401) {
@@ -702,7 +697,7 @@ export default function CabinetPage() {
                         <header>
                           <div className="channel-group-account">
                             <span className="channel-group-type">{t(uiLang, "googleAccountLabel")}</span>
-                            <strong className="channel-group-email" title={connection.email || t(uiLang, "connectionAccountUnknown")}>{connection.email || t(uiLang, "connectionAccountUnknown")}</strong>
+                            <strong className="channel-group-email" title={connection.email || t(uiLang, "connectionAccountUnknown")}>{connectionDisplayName(connection) || t(uiLang, "connectionAccountUnknown")}</strong>
                             {connection.status === "reauthorization_required" ? (
                               <span className={`connection-status ${connection.status}`}>
                                 {t(uiLang, "connectionStatusReauthorization")}

@@ -266,7 +266,6 @@ function VideoInspector({
           <dl className="video-summary-meta">
             <div><dt>{t(uiLang, "videoStatus")}</dt><dd className={`status-label ${selected.availability === "unavailable" || selected.remoteMissing ? "warning" : ""}`}>{statusLabel(uiLang, effectiveStatus)}</dd></div>
             <div><dt>{t(uiLang, selected.slot ? "videoScheduledAt" : selected.privacy === "private" ? "videoYoutubeDate" : "videoPublishedAt")}</dt><dd>{displayDate ? formatStudioDate(displayDate, uiLang) : "—"}</dd></div>
-            <div><dt>{t(uiLang, "videoAvailability")}</dt><dd>{t(uiLang, selected.availability === "available" ? "availabilityAvailable" : selected.availability === "unavailable" ? "availabilityUnavailable" : selected.availability === "remote_missing" ? "availabilityRemoteMissing" : "availabilityUnknown")}</dd></div>
             <div><dt>{t(uiLang, "videoDuration")}</dt><dd>{formatStudioDuration(selected.duration) || "—"}</dd></div>
             <div className="video-id-row"><dt>{t(uiLang, "videoYoutubeId")}</dt><dd><code>{selected.youtubeId || "—"}</code><button className="text-button" type="button" disabled={!selected.youtubeId} title={t(uiLang, "copyVideoIdHint")} onClick={async () => { try { await navigator.clipboard.writeText(selected.youtubeId); setCopyStatus(t(uiLang, "videoIdCopied")); } catch { setCopyStatus(t(uiLang, "videoIdCopyFailed")); } }}>{t(uiLang, "copyId")}</button></dd></div>
           </dl>
@@ -640,6 +639,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       list.style.height = "";
     };
   }, [view, selectedId, workingLoading]);
+
+  useEffect(() => {
+    if (!playlistVideoPicker && !playlistMembershipEditor && !calendarContext) return undefined;
+    const closeTransientUi = (event) => {
+      if (event.key !== "Escape") return;
+      if (calendarContext) setCalendarContext(null);
+      else if (playlistVideoPicker) setPlaylistVideoPicker(null);
+      else if (playlistMembershipEditor) setPlaylistMembershipEditor(null);
+    };
+    document.addEventListener("keydown", closeTransientUi);
+    return () => document.removeEventListener("keydown", closeTransientUi);
+  }, [playlistVideoPicker, playlistMembershipEditor, calendarContext]);
 
   useEffect(() => {
     const requestId = ++channelRequestId.current;
@@ -1200,7 +1211,15 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         body: JSON.stringify({ video_ids: videoIds }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistAddVideosError"));
+      if (!response.ok) {
+        if (data?.detail?.code === "youtube_partial_write") {
+          setPlaylistVideoPicker(null);
+          setPlaylistContentsRetry((current) => current + 1);
+          setPlaylistRetry((current) => current + 1);
+          throw new Error(t(uiLang, "playlistPartialWriteReconciled"));
+        }
+        throw new Error(data.detail || t(uiLang, "playlistAddVideosError"));
+      }
       setPlaylistVideoPicker(null);
       setPlaylistContentsRetry((current) => current + 1);
       setPlaylistRetry((current) => current + 1);
@@ -1289,7 +1308,14 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           body: JSON.stringify({ playlist_item_ids: orderedIds }),
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+        if (!response.ok) {
+          if (data?.detail?.code === "youtube_partial_write") {
+            setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, positions: {}, basePositions: {} } : current);
+            setPlaylistContentsRetry((current) => current + 1);
+            throw new Error(t(uiLang, "playlistPartialWriteReconciled"));
+          }
+          throw new Error(data.detail || t(uiLang, "playlistReorderError"));
+        }
         completed += 1;
         setPlaylistQuickDraft((current) => current.playlistId === selectedPlaylist.id ? { ...current, positions: {}, basePositions: {} } : current);
       }
@@ -1551,6 +1577,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setWorkingSaving(true);
     setWorkingError("");
     let draft = workingVideo;
+    let metadataPublished = false;
     try {
       if (Object.keys(workingEdits).length) {
         const saveResponse = await apiFetch(catalogVideoWorkingUrl(channelId, workingVideo.id), {
@@ -1594,6 +1621,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           throw new Error(t(uiLang, "youtubePublishError"));
         }
         draft = data;
+        metadataPublished = true;
         setWorkingVideo(data);
         setWorkingDraft(data.effective);
         setWorkingEdits({});
@@ -1609,6 +1637,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (!statusResponse.ok) {
           const code = statusData?.detail?.code;
           if (code === "youtube_reauthorization_required") throw new Error(t(uiLang, "youtubeReauthorizationRequired"));
+          if (metadataPublished) throw new Error(t(uiLang, "videoPartialWriteError"));
           throw new Error(code || statusData?.detail || t(uiLang, "youtubePublishError"));
         }
         setVideoStatusDraft("");
@@ -1618,6 +1647,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setWorkingDetailReload((current) => current + 1);
       setCatalogReload((current) => current + 1);
     } catch (error) {
+      if (metadataPublished) {
+        setWorkingDetailReload((current) => current + 1);
+        setCatalogReload((current) => current + 1);
+      }
       setWorkingSaveState((current) => current === "conflict" ? current : "error");
       setWorkingError(String(error.message || error));
     } finally {
@@ -2078,7 +2111,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     <strong className="item-title">{catalogVideoDisplayTitle(v) || t(uiLang, "untitledVideo")}</strong>
                     <span className="item-meta">
                       <span>{statusLabel(uiLang, v.status)}</span>
-                      {v.availability === "available" ? <span>{t(uiLang, "availabilityAvailable")}</span> : null}
                       <time dateTime={v.slot || v.publishedAt || undefined}>{t(uiLang, v.slot ? "videoScheduledAtShort" : v.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: {formatStudioDate(v.slot || v.publishedAt || "", uiLang)}</time>
                     </span>
                     {v.dirty ? (
@@ -2375,7 +2407,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 <div className="playlist-video-picker" role="dialog" aria-label={t(uiLang, "playlistAddVideos")}>
                   <div className="playlist-video-picker-head">
                     <strong>{t(uiLang, "playlistChooseVideos")}</strong>
-                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} title={t(uiLang, "playlistVideoPickerSearchHint")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
+                    <input className="search" type="search" value={playlistVideoPicker.query} placeholder={t(uiLang, "searchVideos")} aria-label={t(uiLang, "playlistVideoPickerSearchHint")} title={t(uiLang, "playlistVideoPickerSearchHint")} onChange={(event) => setPlaylistVideoPicker((current) => current ? { ...current, query: event.target.value } : current)} />
                   </div>
                   <div className="playlist-video-picker-list">
                     {videos.filter((video) => {
@@ -2446,7 +2478,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <span className="playlist-thumb-placeholder" />}
                       <span className="playlist-video-copy">
                         <strong>{title || t(uiLang, "untitledVideo")}</strong>
-                        {playlistItemDate(item) ? <small><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time>{cached?.slot ? ` · ${statusLabel(uiLang, "scheduled")}` : ""}</small> : <small>—</small>}
+                        {playlistItemDate(item) ? <small><span>{t(uiLang, cached?.slot ? "videoScheduledAtShort" : cached?.privacy === "private" ? "videoYoutubeDateShort" : "videoPublishedAtShort")}: </span><time dateTime={playlistItemDate(item)}>{formatPlaylistDate(playlistItemDate(item), uiLang) || "—"}</time></small> : <small>—</small>}
                         {!cached ? <small>{t(uiLang, selectable ? "playlistReadOnlyVideo" : "playlistVideoNotCached")}</small> : null}
                       </span>
                       {selectable ? <span className="playlist-open-video" title={t(uiLang, "playlistOpenVideoHint")}>{t(uiLang, "openInStudio")}</span> : null}
@@ -2605,7 +2637,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               const date = new Date(video.slot || Date.now());
               const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
               return (
-                <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu">
+                <div className="calendar-context-menu" style={{ left: calendarContext.x, top: calendarContext.y }} role="menu" aria-label={t(uiLang, "calendarChangeVisibility")}>
                   {video.slot ? (
                     <label className="calendar-context-time">
                       <span className="calendar-context-icon" aria-hidden="true">◷</span>

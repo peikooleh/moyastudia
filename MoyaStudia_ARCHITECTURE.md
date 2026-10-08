@@ -8,6 +8,12 @@ Purpose: product/domain reference for implementation agents.
 >
 > Детальный baseline следующей фазы (Write Mode, quota ledger, AI secrets, mutation safety и порядок реализации W1–W9) находится в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md). Он дополняет этот документ и также не означает, что функции уже реализованы.
 
+## Current implementation note — 2026-10-07
+
+This document is the long-form product/architecture specification and contains historical staged plans. The current implementation is more advanced than several of those stage descriptions: Google identity/YouTube OAuth, encrypted tokens, server-authoritative Write Mode, video metadata/status/thumbnail/caption writes, remote playlist mutations, channel metadata writes, catalog snapshot/working state, Statistics/Analytics, quota telemetry and server-side AI connection settings are implemented. Full source-video upload, destructive YouTube video/channel deletion and live AI provider execution are not implemented.
+
+For the exact audited code baseline, current risks and remediation order, use [STATUS.md](STATUS.md) and [AUDIT_2026-10-07.md](AUDIT_2026-10-07.md). When a historical stage description conflicts with current code, those two current-state documents take precedence.
+
 ## 1. Product goal
 
 MoyaStudia is a SaaS interface for managing YouTube channels and content. The long-term goal is to minimize the need to use YouTube Studio while keeping storage, API usage, and infrastructure costs low.

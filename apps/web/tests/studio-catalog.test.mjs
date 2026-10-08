@@ -29,6 +29,7 @@ import {
   resetWorkingVideoPatch,
   shouldResumeCatalogSync,
   shouldShowCatalogContinue,
+  statisticsCatalogSyncAction,
   tryStartCatalogSync,
   unicodeCharacterCount,
   workingVideoPatch,
@@ -380,6 +381,15 @@ test("reset working patch clears only active overrides with null", () => {
     resetWorkingVideoPatch({ working: { title: "", description: null, tags: "local" } }),
     { title: null, tags: null },
   );
+});
+
+test("Statistics reuses a ready catalog and syncs only incomplete or stale states", () => {
+  assert.equal(statisticsCatalogSyncAction({ state: "READY" }), null);
+  assert.equal(statisticsCatalogSyncAction({ state: "NOT_IMPORTED" }), "initial");
+  assert.equal(statisticsCatalogSyncAction({ state: "LOADING" }), "continue");
+  assert.equal(statisticsCatalogSyncAction({ state: "PARTIAL" }), "continue");
+  assert.equal(statisticsCatalogSyncAction({ state: "STALE" }), "incremental");
+  assert.equal(statisticsCatalogSyncAction({ state: "ERROR" }), "incremental");
 });
 
 test("Continue is available for resumable loading and existing partial/error states", () => {

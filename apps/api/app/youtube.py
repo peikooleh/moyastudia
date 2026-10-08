@@ -10,8 +10,25 @@ from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.errors import HttpError
 
 from .settings import settings
+
+_READ_OPERATION_SUFFIXES = (".list", ".query")
+_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
+
+
+def _is_safe_read_operation(operation: str) -> bool:
+    return operation.endswith(_READ_OPERATION_SUFFIXES)
+
+
+def _is_transient_provider_error(exc: Exception) -> bool:
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    if isinstance(exc, HttpError):
+        return getattr(exc.resp, "status", None) in _TRANSIENT_HTTP_STATUSES
+    return False
+
 
 IDENTITY_SCOPES = [
     "openid",
@@ -81,6 +98,22 @@ def verify_identity_token(token: str) -> dict:
     )
 
 
+class _TimeoutRequest(Request):
+    def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        return super().__call__(
+            url,
+            method=method,
+            body=body,
+            headers=headers,
+            timeout=settings.provider_timeout_seconds,
+            **kwargs,
+        )
+
+
+def _provider_auth_request() -> Request:
+    return _TimeoutRequest()
+
+
 def creds_from_refresh(refresh_token: str) -> Credentials:
     creds = Credentials(
         token=None,
@@ -89,7 +122,7 @@ def creds_from_refresh(refresh_token: str) -> Credentials:
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
     )
-    creds.refresh(Request())
+    creds.refresh(_provider_auth_request())
     return creds
 
 
@@ -163,7 +196,7 @@ def channel_analytics_summary(
     analytics_filter = _analytics_filter(video_id, playlist_id)
     if analytics_filter:
         kwargs["filters"] = analytics_filter
-    response = service.reports().query(**kwargs).execute()
+    response = _execute(service.reports().query(**kwargs), "reports.query")
     if playlist_id:
         rows = response.get("rows") or []
         row = list(rows[0]) if rows else []
@@ -215,7 +248,7 @@ def channel_analytics_timeseries(
     analytics_filter = _analytics_filter(video_id, playlist_id)
     if analytics_filter:
         kwargs["filters"] = analytics_filter
-    response = service.reports().query(**kwargs).execute()
+    response = _execute(service.reports().query(**kwargs), "reports.query")
     result = []
     for row in response.get("rows") or []:
         if len(row) < 3:
@@ -256,14 +289,29 @@ def quota_recording(recorder: QuotaRecorder):
         _current_quota_recorder.reset(token)
 
 
+class PartialMutationError(RuntimeError):
+    """A multi-request YouTube mutation changed remote state before a later step failed."""
+
+    def __init__(self, code: str, result: dict):
+        super().__init__(code)
+        self.code = code
+        self.result = result
+
+
 def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
     recorder = recorder or _current_quota_recorder.get()
-    try:
-        response = request.execute()
-    except Exception:
-        if recorder:
-            recorder(operation, "youtube_error")
-        raise
+    max_retries = settings.provider_read_retries if _is_safe_read_operation(operation) else 0
+    attempt = 0
+    while True:
+        try:
+            response = request.execute()
+            break
+        except Exception as exc:
+            if attempt >= max_retries or not _is_transient_provider_error(exc):
+                if recorder:
+                    recorder(operation, "youtube_error")
+                raise
+            attempt += 1
     if recorder:
         recorder(operation, "success")
     return response
@@ -571,25 +619,46 @@ def list_videos(
     credentials = creds_from_refresh(refresh_token)
     service = build("youtube", "v3", credentials=credentials)
 
-    search_kwargs = {
-        "part": "id",
-        "forMine": True,
-        "type": "video",
-        "order": "date",
+    uploads_id = uploads_playlist_id
+    if not uploads_id:
+        channel_response = _execute(
+            service.channels().list(
+                part="contentDetails",
+                id=youtube_channel_id,
+                maxResults=1,
+            ),
+            "channels.list",
+            recorder,
+        )
+        channel_items = channel_response.get("items") or []
+        if not channel_items:
+            raise LookupError("YouTube channel is unavailable")
+        uploads_id = (
+            (channel_items[0].get("contentDetails") or {})
+            .get("relatedPlaylists", {})
+            .get("uploads")
+            or ""
+        )
+        if not uploads_id:
+            raise RuntimeError("YouTube uploads playlist is unavailable")
+
+    page_kwargs = {
+        "part": "contentDetails",
+        "playlistId": uploads_id,
         "maxResults": page_size,
     }
     if page_token:
-        search_kwargs["pageToken"] = page_token
-    search_response = _execute(
-        service.search().list(**search_kwargs),
-        "search.list",
+        page_kwargs["pageToken"] = page_token
+    playlist_response = _execute(
+        service.playlistItems().list(**page_kwargs),
+        "playlistItems.list",
         recorder,
     )
     video_ids = list(
         dict.fromkeys(
-            item.get("id", {}).get("videoId")
-            for item in search_response.get("items") or []
-            if item.get("id", {}).get("videoId")
+            (item.get("contentDetails") or {}).get("videoId")
+            for item in playlist_response.get("items") or []
+            if (item.get("contentDetails") or {}).get("videoId")
         )
     )
 
@@ -603,7 +672,15 @@ def list_videos(
             "videos.list",
             recorder,
         )
-        for item in video_response.get("items") or []:
+        video_by_id = {
+            item.get("id"): item
+            for item in video_response.get("items") or []
+            if item.get("id")
+        }
+        for youtube_video_id in video_ids:
+            item = video_by_id.get(youtube_video_id)
+            if not item:
+                continue
             snippet = item.get("snippet") or {}
             status = item.get("status") or {}
             content = item.get("contentDetails") or {}
@@ -637,12 +714,11 @@ def list_videos(
             )
 
     return {
-        "uploads_playlist_id": None,
+        "uploads_playlist_id": uploads_id,
         "video_ids": video_ids,
         "videos": videos,
-        "next_page_token": search_response.get("nextPageToken"),
+        "next_page_token": playlist_response.get("nextPageToken"),
     }
-
 
 def create_playlist(
     refresh_token: str,
@@ -837,17 +913,7 @@ def reorder_playlist_items(
     service = service_for(refresh_token)
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
     wanted = list(dict.fromkeys(value for value in playlist_item_ids if value))
-    current = []
-    token = None
-    while True:
-        kwargs = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
-        if token:
-            kwargs["pageToken"] = token
-        response = _execute(service.playlistItems().list(**kwargs), "playlistItems.list", recorder)
-        current.extend(response.get("items") or [])
-        token = response.get("nextPageToken")
-        if not token:
-            break
+    current = _all_playlist_items(service, playlist_id, recorder)
     current_ids = [item.get("id") or "" for item in current]
     if len(wanted) != len(current_ids) or set(wanted) != set(current_ids):
         raise ValueError("playlist order must contain every current playlist item exactly once")
@@ -860,24 +926,43 @@ def reorder_playlist_items(
             continue
         snippet = (by_id[playlist_item_id].get("snippet") or {})
         resource = snippet.get("resourceId") or {}
-        _execute(
-            service.playlistItems().update(
-                part="snippet",
-                body={
-                    "id": playlist_item_id,
-                    "snippet": {
-                        "playlistId": playlist_id,
-                        "resourceId": {
-                            "kind": resource.get("kind") or "youtube#video",
-                            "videoId": resource.get("videoId"),
+        try:
+            _execute(
+                service.playlistItems().update(
+                    part="snippet",
+                    body={
+                        "id": playlist_item_id,
+                        "snippet": {
+                            "playlistId": playlist_id,
+                            "resourceId": {
+                                "kind": resource.get("kind") or "youtube#video",
+                                "videoId": resource.get("videoId"),
+                            },
+                            "position": target_position,
                         },
-                        "position": target_position,
                     },
+                ),
+                "playlistItems.update",
+                recorder,
+            )
+        except Exception as exc:
+            reconciled = _all_playlist_items(service, playlist_id, recorder)
+            actual_order = [
+                item.get("id") or ""
+                for item in sorted(
+                    reconciled,
+                    key=lambda item: int((item.get("snippet") or {}).get("position") or 0),
+                )
+            ]
+            raise PartialMutationError(
+                "playlist_reorder_partial",
+                {
+                    "playlistId": playlist_id,
+                    "updated": updated,
+                    "playlistItemIds": actual_order,
+                    "failedPlaylistItemId": playlist_item_id,
                 },
-            ),
-            "playlistItems.update",
-            recorder,
-        )
+            ) from exc
         working.pop(current_position)
         working.insert(target_position, playlist_item_id)
         updated += 1
@@ -905,27 +990,83 @@ def delete_playlist_item(
 
 
 
+def _all_playlist_items(service, playlist_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
+    items = []
+    token = None
+    seen_tokens = set()
+    while True:
+        kwargs = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
+        if token:
+            if token in seen_tokens:
+                raise RuntimeError("YouTube playlist pagination token repeated")
+            seen_tokens.add(token)
+            kwargs["pageToken"] = token
+        response = _execute(service.playlistItems().list(**kwargs), "playlistItems.list", recorder)
+        items.extend(response.get("items") or [])
+        next_token = response.get("nextPageToken")
+        if next_token and next_token in seen_tokens:
+            raise RuntimeError("YouTube playlist pagination token repeated")
+        token = next_token
+        if not token:
+            break
+    return items
+
+
+def _playlist_video_ids(items: list[dict]) -> set[str]:
+    return {
+        ((item.get("snippet") or {}).get("resourceId") or {}).get("videoId")
+        for item in items
+        if ((item.get("snippet") or {}).get("resourceId") or {}).get("videoId")
+    }
+
+
 def add_videos_to_playlist(
     refresh_token: str,
     youtube_channel_id: str,
     playlist_id: str,
     video_ids: list[str],
     recorder: QuotaRecorder | None = None,
-) -> list[dict]:
+) -> dict:
     service = service_for(refresh_token)
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
-    out = []
-    for video_id in dict.fromkeys(video_id for video_id in video_ids if video_id):
-        response = _execute(
-            service.playlistItems().insert(
-                part="snippet",
-                body={"snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
-            ),
-            "playlistItems.insert",
-            recorder,
-        )
-        out.append({"playlistItemId": response.get("id") or "", "videoId": video_id})
-    return out
+    wanted = list(dict.fromkeys(video_id for video_id in video_ids if video_id))
+    current_items = _all_playlist_items(service, playlist_id, recorder)
+    present = _playlist_video_ids(current_items)
+    inserted = []
+    already_present = [video_id for video_id in wanted if video_id in present]
+
+    for video_id in wanted:
+        if video_id in present:
+            continue
+        try:
+            response = _execute(
+                service.playlistItems().insert(
+                    part="snippet",
+                    body={"snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
+                ),
+                "playlistItems.insert",
+                recorder,
+            )
+        except Exception as exc:
+            reconciled_items = _all_playlist_items(service, playlist_id, recorder)
+            reconciled_present = _playlist_video_ids(reconciled_items)
+            raise PartialMutationError(
+                "playlist_add_partial",
+                {
+                    "items": inserted,
+                    "alreadyPresent": already_present,
+                    "presentVideoIds": [value for value in wanted if value in reconciled_present],
+                    "failedVideoId": video_id,
+                },
+            ) from exc
+        inserted.append({"playlistItemId": response.get("id") or "", "videoId": video_id})
+        present.add(video_id)
+
+    return {
+        "items": inserted,
+        "alreadyPresent": already_present,
+        "presentVideoIds": [value for value in wanted if value in present],
+    }
 
 
 def add_video_to_playlist(

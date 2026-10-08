@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
-import { catalogVideosUrl, continueCatalogSyncPage } from "../lib/catalog-state.mjs";
+import { catalogVideosUrl, continueCatalogSyncPage, statisticsCatalogSyncAction } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
 
@@ -63,7 +63,22 @@ export function StatisticsDashboard({
   const [catalogSyncing, setCatalogSyncing] = useState(false);
   const [catalogSyncError, setCatalogSyncError] = useState("");
   const requestId = useRef(0);
+  const channelMenuRef = useRef(null);
+  const channelTriggerRef = useRef(null);
   const locale = t(uiLang, "calendarLocale");
+
+  useEffect(() => {
+    if (!channelMenuOpen) return undefined;
+    const closeOnPointerDown = (event) => {
+      if (!channelMenuRef.current?.contains(event.target) && !channelTriggerRef.current?.contains(event.target)) setChannelMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") { setChannelMenuOpen(false); channelTriggerRef.current?.focus(); }
+    };
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("pointerdown", closeOnPointerDown); document.removeEventListener("keydown", closeOnEscape); };
+  }, [channelMenuOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,27 +112,19 @@ export function StatisticsDashboard({
         let status = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(status?.detail || "catalog status unavailable");
 
-        if (status.state === "NOT_IMPORTED") {
+        const syncAction = statisticsCatalogSyncAction(status);
+        if (syncAction === "initial" || syncAction === "incremental") {
           const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "initial" }),
-            signal: controller.signal,
-          });
-          status = await startResponse.json();
-          if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
-        } else {
-          const startResponse = await apiFetch(`/channels/${selectedChannelId}/catalog/sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "incremental" }),
+            body: JSON.stringify({ mode: syncAction }),
             signal: controller.signal,
           });
           status = await startResponse.json();
           if (!startResponse.ok) throw new Error(status?.detail || "catalog sync unavailable");
         }
 
-        while (["LOADING", "PARTIAL", "STALE", "ERROR"].includes(status.state)) {
+        while (["LOADING", "PARTIAL"].includes(status.state)) {
           if (cancelled) return;
           status = await continueCatalogSyncPage(
             selectedChannelId,
@@ -297,15 +304,15 @@ export function StatisticsDashboard({
       <section className="statistics-controls" aria-label={t(uiLang, "statisticsControls")}>
         <div className="statistics-control">
           <span>{t(uiLang, "statisticsChannel")}</span>
-          <button className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen} aria-haspopup="listbox" title={t(uiLang, "statisticsChannelHint")}>
+          <button ref={channelTriggerRef} className="statistics-channel-trigger" type="button" onClick={() => setChannelMenuOpen((value) => !value)} aria-expanded={channelMenuOpen} aria-haspopup="menu" title={t(uiLang, "statisticsChannelHint")}>
             <ChannelAvatar channel={currentChannel} />
             <span><strong>{currentChannel?.title || "—"}</strong><small>{currentChannel?.youtube_channel_id || ""}</small></span>
 
           </button>
           {channelMenuOpen ? (
-            <div className="statistics-channel-menu">
+            <div ref={channelMenuRef} className="statistics-channel-menu" role="menu">
               {channels.map((channel) => (
-                <button key={channel.id} type="button" className={String(channel.id) === String(selectedChannelId) ? "active" : ""} onClick={() => { setChannelMenuOpen(false); onChannelChange(String(channel.id)); }}>
+                <button key={channel.id} type="button" role="menuitemradio" aria-checked={String(channel.id) === String(selectedChannelId)} className={String(channel.id) === String(selectedChannelId) ? "active" : ""} onClick={() => { setChannelMenuOpen(false); onChannelChange(String(channel.id)); channelTriggerRef.current?.focus(); }}>
                   <ChannelAvatar channel={channel} />
                   <span><strong>{channel.title}</strong><small>{channel.youtube_channel_id}</small></span>
                 </button>
@@ -375,7 +382,7 @@ export function StatisticsDashboard({
         <header><div><small>{t(uiLang, "statisticsTrend")}</small><h2>{activeMetric.chartTitle}</h2></div><span>{scopeLabel} · {periodLabel}</span></header>
         <div className="statistics-chart-stage">
           {chartPoints.length ? (
-            <div className={`statistics-bars ${chartMin < 0 ? "signed" : ""}`} aria-label={activeMetric.chartTitle}>
+            <div className={`statistics-bars ${chartMin < 0 ? "signed" : ""}`} aria-hidden="true">
               {chartMin < 0 ? <span className="statistics-zero-line" style={{ bottom: `${positiveShare}%` }} /> : null}
               {chartPoints.map(({ point, value }) => {
                 const positive = Number(value) >= 0;
@@ -385,6 +392,7 @@ export function StatisticsDashboard({
             </div>
           ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
         </div>
+        {chartPoints.length ? <ul className="visually-hidden" aria-label={activeMetric.chartTitle}>{chartPoints.map(({ point }) => <li key={point.date}>{activeMetric.seriesTitle(point)}</li>)}</ul> : null}
         <p>{t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
       </section>
 

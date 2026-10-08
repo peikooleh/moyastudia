@@ -212,6 +212,13 @@ export function shouldResumeCatalogSync(status) {
   return status?.state === "LOADING";
 }
 
+export function statisticsCatalogSyncAction(status) {
+  if (!status || status.state === "NOT_IMPORTED") return "initial";
+  if (["LOADING", "PARTIAL"].includes(status.state)) return "continue";
+  if (["STALE", "ERROR"].includes(status.state)) return "incremental";
+  return null;
+}
+
 export function catalogSyncContinueUrl(channelId) {
   return `/channels/${channelId}/catalog/sync/continue`;
 }
