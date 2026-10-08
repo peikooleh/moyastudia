@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
+from typing import Literal
+
+from cryptography.fernet import Fernet
 
 
 class Settings(BaseSettings):
@@ -15,6 +18,7 @@ class Settings(BaseSettings):
     app_environment: str = Field(default="development", validation_alias="APP_ENV")
     frontend_origin: str = "http://localhost:3000"
     session_cookie_name: str = "moyastudia_session"
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     session_ttl_seconds: int = 604800
     oauth_state_ttl_seconds: int = 600
     provider_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias="PROVIDER_TIMEOUT_SECONDS")
@@ -28,22 +32,56 @@ class Settings(BaseSettings):
         if not self.is_production:
             return
         errors = []
-        for name, value in (
-            ("FRONTEND_ORIGIN", self.frontend_origin),
-            ("GOOGLE_IDENTITY_REDIRECT_URI", self.google_identity_redirect_uri),
-            ("GOOGLE_YOUTUBE_REDIRECT_URI", self.google_youtube_redirect_uri),
+
+        frontend = urlparse(self.frontend_origin)
+        if (
+            frontend.scheme != "https"
+            or not frontend.hostname
+            or frontend.hostname in {"localhost", "127.0.0.1"}
+            or frontend.username is not None
+            or frontend.password is not None
+            or frontend.path not in {"", "/"}
+            or frontend.params or frontend.query or frontend.fragment
+        ):
+            errors.append("FRONTEND_ORIGIN must be a public HTTPS origin without a path or query")
+
+        callback_origins = []
+        for name, value, expected_path in (
+            ("GOOGLE_IDENTITY_REDIRECT_URI", self.google_identity_redirect_uri, "/auth/google/callback"),
+            ("GOOGLE_YOUTUBE_REDIRECT_URI", self.google_youtube_redirect_uri, "/auth/youtube/callback"),
         ):
             parsed = urlparse(value)
-            if parsed.scheme != "https" or not parsed.netloc or parsed.hostname in {"localhost", "127.0.0.1"}:
-                errors.append(f"{name} must be a public HTTPS URL")
-        if not self.database_url or "localhost" in self.database_url.lower():
-            errors.append("DATABASE_URL must be configured for production")
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or parsed.hostname in {"localhost", "127.0.0.1"}
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path != expected_path
+                or parsed.params or parsed.query or parsed.fragment
+            ):
+                errors.append(f"{name} must be a public HTTPS URL with path {expected_path}")
+            else:
+                callback_origins.append((parsed.scheme, parsed.netloc))
+        if len(callback_origins) == 2 and callback_origins[0] != callback_origins[1]:
+            errors.append("Google OAuth callbacks must use the same API origin")
+
+        database = urlparse(self.database_url)
+        ssl_modes = parse_qs(database.query).get("sslmode", [])
+        if (
+            database.scheme not in {"postgresql", "postgresql+psycopg"}
+            or not database.hostname
+            or database.hostname in {"localhost", "127.0.0.1"}
+        ):
+            errors.append("DATABASE_URL must point to a remote PostgreSQL server")
+        if len(ssl_modes) != 1 or ssl_modes[0] not in {"require", "verify-ca", "verify-full"}:
+            errors.append("DATABASE_URL must enforce PostgreSQL TLS (sslmode=require or stronger)")
+
         if not self.google_client_id or not self.google_client_secret:
             errors.append("Google OAuth credentials must be configured for production")
-        if not self.token_encryption_key:
-            errors.append("TOKEN_ENCRYPTION_KEY must be configured for production")
+        try:
+            Fernet(self.token_encryption_key.encode("ascii"))
+        except (ValueError, UnicodeError):
+            errors.append("TOKEN_ENCRYPTION_KEY must be a valid Fernet key")
         if errors:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
-
-
-settings = Settings()
