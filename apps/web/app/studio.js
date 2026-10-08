@@ -2117,16 +2117,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       <section className="catalog-state" aria-live="polite">
           <div>
             <strong>
-              {{
-                NOT_IMPORTED: "catalogNotImported",
-                LOADING: "catalogLoading",
-                PARTIAL: "catalogPartial",
-                COMPLETE: "catalogComplete",
-                STALE: "catalogStale",
-                ERROR: "catalogError",
-                EMPTY: "catalogEmpty",
-              }[catalogStatus.state]
-                ? t(uiLang, {
+              {syncBusy
+                ? t(uiLang, "catalogBusy")
+                : ({
                     NOT_IMPORTED: "catalogNotImported",
                     LOADING: "catalogLoading",
                     PARTIAL: "catalogPartial",
@@ -2134,8 +2127,17 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                     STALE: "catalogStale",
                     ERROR: "catalogError",
                     EMPTY: "catalogEmpty",
-                  }[catalogStatus.state])
-                : t(uiLang, "catalogUnknown")}
+                  }[catalogStatus.state]
+                    ? t(uiLang, {
+                        NOT_IMPORTED: "catalogNotImported",
+                        LOADING: "catalogLoading",
+                        PARTIAL: "catalogPartial",
+                        COMPLETE: "catalogComplete",
+                        STALE: "catalogStale",
+                        ERROR: "catalogError",
+                        EMPTY: "catalogEmpty",
+                      }[catalogStatus.state])
+                    : t(uiLang, "catalogUnknown"))}
             </strong>
             {["LOADING", "PARTIAL"].includes(catalogStatus.state) ? (
               <span className="catalog-progress">{t(uiLang, "catalogCheckedCount", { count: catalogStatus.scanned_count || 0 })}</span>
