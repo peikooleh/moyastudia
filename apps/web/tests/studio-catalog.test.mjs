@@ -12,6 +12,7 @@ import {
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import { t } from "../lib/i18n.js";
+import { calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -442,4 +443,33 @@ test("catalog sync lock rejects a second simultaneous action", () => {
   assert.equal(tryStartCatalogSync(lock), false);
   finishCatalogSync(lock);
   assert.equal(tryStartCatalogSync(lock), true);
+});
+
+test("calendar always shows 42 dates and weekly navigation moves exactly seven days", () => {
+  const october = new Date(2026, 9, 1);
+  const first = calendarWeekCells(october);
+  assert.equal(first.length, 42);
+  assert.equal(first[0].getDay(), 1);
+  assert.equal(first[0].getDate(), 28);
+  assert.equal(first[0].getMonth(), 8);
+  assert.equal(first[41].getDate(), 8);
+  assert.equal(first[41].getMonth(), 10);
+
+  const followingWeek = calendarWeekCells(shiftCalendarWeek(october, 1));
+  assert.equal(followingWeek.length, 42);
+  assert.equal(followingWeek[0].getDate(), 5);
+  assert.equal(followingWeek[0].getMonth(), 9);
+  assert.equal(shiftCalendarWeek(shiftCalendarWeek(october, 1), -1).getTime(), october.getTime());
+});
+
+test("calendar week shift crosses month and year boundaries without skipping days", () => {
+  const yearEnd = new Date(2026, 11, 30);
+  const next = shiftCalendarWeek(yearEnd, 1);
+  assert.equal(next.getFullYear(), 2027);
+  assert.equal(next.getMonth(), 0);
+  assert.equal(next.getDate(), 6);
+
+  const range = calendarWindowRange(yearEnd);
+  assert.equal(new Date(range.start).getTime(), calendarWeekStart(yearEnd).getTime());
+  assert.equal((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000, 42);
 });
