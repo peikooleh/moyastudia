@@ -565,7 +565,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     return ["position", "date_desc", "date_asc", "title"].includes(prefs.playlistVideoSort) ? prefs.playlistVideoSort : "position";
   });
   const [selectedPlaylistVideoIds, setSelectedPlaylistVideoIds] = useState(() => new Set());
-  const [playlistBulkVisibility, setPlaylistBulkVisibility] = useState("private");
+  const [playlistBulkVisibility, setPlaylistBulkVisibility] = useState("");
   const [playlistBulkStatusDraft, setPlaylistBulkStatusDraft] = useState(null);
   const [playlistCatalogVideos, setPlaylistCatalogVideos] = useState([]);
   const [playlistIdCopyStatus, setPlaylistIdCopyStatus] = useState("");
@@ -1545,7 +1545,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  function stageSelectedPlaylistVisibility() {
+  function stageSelectedPlaylistVisibility(nextPrivacy) {
     if (!selectedPlaylistVideoIds.size) {
       setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
       return;
@@ -1559,7 +1559,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       return;
     }
     setPlaylistBulkStatusDraft({
-      privacy: playlistBulkVisibility,
+      privacy: nextPrivacy,
       videos: targets.map((video) => ({
         id: video.id,
         youtubeId: video.youtubeId,
@@ -1595,6 +1595,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         completed += 1;
       }
       setPlaylistBulkStatusDraft(null);
+      setPlaylistBulkVisibility("");
       setSelectedPlaylistVideoIds(new Set());
       setPlaylistContentsRetry((current) => current + 1);
       setCatalogDataVersion((current) => current + 1);
@@ -1609,6 +1610,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }
 
   function discardPlaylistBulkVisibility() {
+    setPlaylistBulkVisibility("");
     setPlaylistBulkStatusDraft(null);
     setPlaylistIdCopyStatus("");
   }
@@ -2513,20 +2515,30 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   {t(uiLang, "playlistSelectPage")}
                 </label>
                 <span className="playlist-selected-count">{t(uiLang, "playlistSelectedCount", { count: selectedPlaylistVideoIds.size })}</span>
-                <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
+              </div>
+              <div className="playlist-bulk-actions" aria-label={t(uiLang, "playlistBulkActions")}>
                   <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylistHint")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={!selectedPlaylist?.localOnly && !writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistRemoveFromPlaylistHint")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
-                </div>
               </div>
               <span className="playlist-bulk-status-control">
-                <select value={playlistBulkVisibility} onChange={(event) => setPlaylistBulkVisibility(event.target.value)} aria-label={t(uiLang, "playlistBulkStatus")} title={t(uiLang, "playlistBulkStatusHint")}>
+                <select
+                  value={playlistBulkVisibility}
+                  disabled={!selectedPlaylistVideoIds.size || playlistSaving}
+                  onChange={(event) => {
+                    const nextPrivacy = event.target.value;
+                    setPlaylistBulkVisibility(nextPrivacy);
+                    stageSelectedPlaylistVisibility(nextPrivacy);
+                  }}
+                  aria-label={t(uiLang, "playlistBulkStatus")}
+                  title={t(uiLang, "playlistBulkStatusHint")}
+                >
+                  <option value="" disabled>{t(uiLang, "playlistBulkStatus")}</option>
                   <option value="public">{t(uiLang, "filterPublic")}</option>
                   <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
                   <option value="private">{t(uiLang, "filterPrivate")}</option>
                 </select>
-                <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={t(uiLang, "playlistBulkStatusHint")} onClick={stageSelectedPlaylistVisibility}>{t(uiLang, "playlistBulkStatus")}</button>
               </span>
               {playlistBulkStatusDraft ? (
                 <YoutubeStagedSave
