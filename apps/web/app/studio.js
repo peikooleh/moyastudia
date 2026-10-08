@@ -2144,11 +2144,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             ) : catalogStatus.video_count > 0 ? (
               <span className="catalog-progress">{catalogStatus.video_count}</span>
             ) : null}
+          </div>
+          <div className="catalog-action-slot">
             {catalogStatus.last_success_at ? (
               <span className={catalogOlderThan24Hours ? "catalog-last-updated overdue" : "catalog-last-updated"}>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
             ) : null}
-          </div>
-          <div className="catalog-action-slot">
             {catalogStatus.state === "NOT_IMPORTED" ? (
               <button className="btn" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
                 {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
