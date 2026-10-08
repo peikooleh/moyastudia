@@ -598,6 +598,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const videoListRef = useRef(null);
   const inspectorEditRef = useRef(null);
+  const calendarStripRef = useRef(null);
+  const calendarScrollTimerRef = useRef(null);
   const [month, setMonth] = useState(() => new Date());
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
   const [calendarDrafts, setCalendarDrafts] = useState({});
@@ -651,6 +653,19 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       list.style.height = "";
     };
   }, [view, selectedId, workingLoading]);
+
+  useEffect(() => {
+    if (view !== "calendar") return undefined;
+    const frame = requestAnimationFrame(() => {
+      const strip = calendarStripRef.current;
+      if (strip?.clientWidth) strip.scrollTo({ left: strip.clientWidth, behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [month, view]);
+
+  useEffect(() => () => {
+    if (calendarScrollTimerRef.current) clearTimeout(calendarScrollTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!playlistVideoPicker && !playlistMembershipEditor && !calendarContext) return undefined;
@@ -2049,7 +2064,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  const cells = monthMatrix(month);
+  const calendarMonthAnchors = [-1, 0, 1].map((offset) => new Date(month.getFullYear(), month.getMonth() + offset, 1));
   const byDay = {};
   effectiveCalendarVideos.forEach((v) => {
     const key = (v.slot || (v.privacy !== "private" ? v.publishedAt : "") || "").slice(0, 10);
@@ -2059,7 +2074,25 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   });
   const calendarDayItems = byDay[calendarDetailDay] || [];
   const todayKey = localDateKey(new Date());
-  const monthHasToday = month.getFullYear() === new Date().getFullYear() && month.getMonth() === new Date().getMonth();
+  function handleCalendarStripScroll() {
+    if (calendarScrollTimerRef.current) clearTimeout(calendarScrollTimerRef.current);
+    calendarScrollTimerRef.current = setTimeout(() => {
+      const strip = calendarStripRef.current;
+      if (!strip?.clientWidth) return;
+      const page = Math.round(strip.scrollLeft / strip.clientWidth);
+      if (page === 0) setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
+      if (page === 2) setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1));
+    }, 140);
+  }
+
+  function scrollCalendarMonth(direction) {
+    const strip = calendarStripRef.current;
+    if (!strip?.clientWidth) {
+      setMonth((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
+      return;
+    }
+    strip.scrollTo({ left: strip.clientWidth * (direction < 0 ? 0 : 2), behavior: "smooth" });
+  }
 
   function showCalendarToday() {
     const today = new Date();
@@ -2667,9 +2700,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </button>
               </div>
               <div className="cal-nav">
-                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => scrollCalendarMonth(-1)}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
-                <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => scrollCalendarMonth(1)}>→</button>
                 <button type="button" className="btn ghost calendar-today" onClick={showCalendarToday}>{t(uiLang, "calendarToday")}</button>
               </div>
             </header>
@@ -2687,65 +2720,76 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               {catalogStatus.video_count > 0 ? <span>{t(uiLang, "catalogCacheCount", { count: catalogStatus.video_count })}</span> : null}
               {err ? <span className="calendar-error" role="alert">{err}</span> : null}
             </div>
-            <div className="cal" role="grid" aria-label={t(uiLang, "calendarTab")}>
-              {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
-              {cells.map((day, index) => {
-                const key = day ? localDateKey(day) : `empty-${index}`;
-                const items = day ? byDay[key] || [] : [];
-                return (
-                  <div
-                    key={key}
-                    className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`}
-                    role="gridcell"
-                    title={day && items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
-                    onDragOver={day ? (event) => event.preventDefault() : undefined}
-                    onDrop={day ? (event) => {
-                      event.preventDefault();
-                      const videoId = Number(event.dataTransfer.getData("text/calendar-video"));
-                      const video = effectiveCalendarVideos.find((item) => item.id === videoId);
-                      if (video) stageCalendarDay(video, key);
-                    } : undefined}
-                  >
-                    {day ? <b aria-current={monthHasToday && localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
-                    {items.slice(0, 2).map((video) => (
-                      <button
-                        key={video.id}
-                        type="button"
-                        draggable={Boolean(video.slot)}
-                        title={!video.slot ? t(uiLang, "calendarPublishedDragLockedHint") : t(uiLang, "calendarDragScheduledHint")}
-                        className={`cal-event status-${video.status || video.privacy || "unknown"} ${video.calendarStaged ? "staged" : ""} ${video.id === selectedId ? "active" : ""}`}
-                        onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          setPlaylistSelectedVideo(null);
-                          setSelectedId(video.id);
-                          setCalendarContext({ videoId: video.id, x: event.clientX, y: event.clientY });
-                        }}
-                        onClick={() => {
-                          setPlaylistSelectedVideo(null);
-                          setSelectedId(video.id);
-                          setCalendarContext(null);
-                        }}
-                      >
-                        <span className="cal-event-title">{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
-                        <span className="calendar-hover-card" aria-hidden="true">
-                          {video.thumb ? <img src={video.thumb} alt="" /> : null}
-                          <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
-                          <small>{t(uiLang, video.slot ? "videoScheduledAtShort" : "videoPublishedAtShort")}: {formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
-                          <small>{statusLabel(uiLang, video.status || video.privacy)}</small>
-                          <small>{t(uiLang, "videoDuration")}: {formatStudioDuration(video.duration) || "—"}</small>
-                          <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
-                        </span>
-                      </button>
-                    ))}
-                    {items.length > 2 ? (
-                      <button className="calendar-more-events" type="button" onClick={() => setCalendarDetailDay((current) => current === key ? "" : key)}>
-                        {t(uiLang, "calendarShowMore", { count: items.length - 2 })}
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
+            <div className="calendar-scroll-shell">
+              <div ref={calendarStripRef} className="calendar-month-strip" onScroll={handleCalendarStripScroll}>
+                {calendarMonthAnchors.map((displayMonth) => {
+                  const monthLabel = displayMonth.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" });
+                  return (
+                    <div className="calendar-month-page" key={`${displayMonth.getFullYear()}-${displayMonth.getMonth()}`}>
+                      <div className="cal" role="grid" aria-label={`${t(uiLang, "calendarTab")}: ${monthLabel}`}>
+                        {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
+                        {monthMatrix(displayMonth).map((day, index) => {
+                          const key = day ? localDateKey(day) : `empty-${displayMonth.getFullYear()}-${displayMonth.getMonth()}-${index}`;
+                          const items = day ? byDay[key] || [] : [];
+                          return (
+                            <div
+                              key={key}
+                              className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`}
+                              role="gridcell"
+                              title={day && items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
+                              onDragOver={day ? (event) => event.preventDefault() : undefined}
+                              onDrop={day ? (event) => {
+                                event.preventDefault();
+                                const videoId = Number(event.dataTransfer.getData("text/calendar-video"));
+                                const video = effectiveCalendarVideos.find((item) => item.id === videoId);
+                                if (video) stageCalendarDay(video, key);
+                              } : undefined}
+                            >
+                              {day ? <b aria-current={localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
+                              {items.slice(0, 2).map((video) => (
+                                <button
+                                  key={video.id}
+                                  type="button"
+                                  draggable={Boolean(video.slot)}
+                                  title={!video.slot ? t(uiLang, "calendarPublishedDragLockedHint") : t(uiLang, "calendarDragScheduledHint")}
+                                  className={`cal-event status-${video.status || video.privacy || "unknown"} ${video.calendarStaged ? "staged" : ""} ${video.id === selectedId ? "active" : ""}`}
+                                  onDragStart={(event) => event.dataTransfer.setData("text/calendar-video", String(video.id))}
+                                  onContextMenu={(event) => {
+                                    event.preventDefault();
+                                    setPlaylistSelectedVideo(null);
+                                    setSelectedId(video.id);
+                                    setCalendarContext({ videoId: video.id, x: event.clientX, y: event.clientY });
+                                  }}
+                                  onClick={() => {
+                                    setPlaylistSelectedVideo(null);
+                                    setSelectedId(video.id);
+                                    setCalendarContext(null);
+                                  }}
+                                >
+                                  <span className="cal-event-title">{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
+                                  <span className="calendar-hover-card" aria-hidden="true">
+                                    {video.thumb ? <img src={video.thumb} alt="" /> : null}
+                                    <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
+                                    <small>{t(uiLang, video.slot ? "videoScheduledAtShort" : "videoPublishedAtShort")}: {formatStudioDate(video.slot || video.publishedAt || "", uiLang) || "—"}</small>
+                                    <small>{statusLabel(uiLang, video.status || video.privacy)}</small>
+                                    <small>{t(uiLang, "videoDuration")}: {formatStudioDuration(video.duration) || "—"}</small>
+                                    <small>{t(uiLang, "videoViews")}: {video.views ?? "—"} · {t(uiLang, "videoLikes")}: {video.likes ?? "—"} · {t(uiLang, "videoComments")}: {video.comments ?? "—"}</small>
+                                  </span>
+                                </button>
+                              ))}
+                              {items.length > 2 ? (
+                                <button className="calendar-more-events" type="button" onClick={() => setCalendarDetailDay((current) => current === key ? "" : key)}>
+                                  {t(uiLang, "calendarShowMore", { count: items.length - 2 })}
+                                </button>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             {calendarContext ? (() => {
               const video = effectiveCalendarVideos.find((item) => item.id === calendarContext.videoId);
