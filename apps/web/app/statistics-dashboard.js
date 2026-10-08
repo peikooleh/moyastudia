@@ -148,7 +148,7 @@ export function StatisticsDashboard({
       let cursor = "";
       let firstPage = true;
       do {
-        const response = await apiFetch(catalogVideosUrl(selectedChannelId, { sort: "date", cursor }), { signal: controller.signal });
+        const response = await apiFetch(catalogVideosUrl(selectedChannelId, { sort: "date_desc", cursor }), { signal: controller.signal });
         const data = await response.json();
         if (!response.ok) throw new Error(data?.detail || "catalog unavailable");
         if (cancelled) return;
@@ -183,7 +183,16 @@ export function StatisticsDashboard({
     [playlists],
   );
   const analyticsVideos = useMemo(
-    () => catalogVideos.filter((video) => video.youtubeId && video.status === "public" && video.availability !== "unavailable"),
+    () => catalogVideos
+      .filter((video) => video.youtubeId && video.status === "public" && video.availability === "available")
+      .sort((a, b) => {
+        const aTime = Date.parse(a.publishedAt || "");
+        const bTime = Date.parse(b.publishedAt || "");
+        if (!Number.isFinite(aTime) && !Number.isFinite(bTime)) return Number(b.id || 0) - Number(a.id || 0);
+        if (!Number.isFinite(aTime)) return 1;
+        if (!Number.isFinite(bTime)) return -1;
+        return bTime - aTime || Number(b.id || 0) - Number(a.id || 0);
+      }),
     [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
