@@ -2143,7 +2143,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               <span className="catalog-progress">{catalogStatus.video_count}</span>
             ) : null}
             {catalogStatus.last_success_at ? (
-              <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
+              <span className={catalogOlderThan24Hours ? "catalog-last-updated overdue" : "catalog-last-updated"}>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
             ) : null}
           </div>
           <div className="catalog-action-slot">
