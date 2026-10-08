@@ -1518,6 +1518,74 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
+  function stageSelectedPlaylistVisibility() {
+    if (!selectedPlaylistVideoIds.size) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistSelectVideosFirst"));
+      return;
+    }
+    const targets = (currentPlaylistContents?.items || [])
+      .filter((item) => selectedPlaylistVideoIds.has(item.videoId))
+      .map((item) => item.catalogVideo || item.videoSnapshot)
+      .filter((video) => video?.id && video?.youtubeId && video?.availability !== "unavailable" && video?.availability !== "remote_missing");
+    if (!targets.length) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistBulkStatusUnavailable"));
+      return;
+    }
+    setPlaylistBulkStatusDraft({
+      privacy: playlistBulkVisibility,
+      videos: targets.map((video) => ({
+        id: video.id,
+        youtubeId: video.youtubeId,
+        title: catalogVideoDisplayTitle(video),
+        privacy: video.privacy || "",
+      })),
+    });
+    setPlaylistIdCopyStatus("");
+  }
+
+  async function savePlaylistBulkVisibility() {
+    if (!playlistBulkStatusDraft?.videos?.length || playlistSaving) return;
+    if (!writeMode?.enabled) {
+      setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
+      return;
+    }
+    setPlaylistSaving(true);
+    setPlaylistIdCopyStatus("");
+    let completed = 0;
+    try {
+      for (const video of playlistBulkStatusDraft.videos) {
+        if (video.privacy === playlistBulkStatusDraft.privacy) {
+          completed += 1;
+          continue;
+        }
+        const response = await apiFetch(`/channels/${channelId}/videos/${video.id}/calendar-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ privacy: playlistBulkStatusDraft.privacy, publishAt: null }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "youtubePublishError"));
+        completed += 1;
+      }
+      setPlaylistBulkStatusDraft(null);
+      setSelectedPlaylistVideoIds(new Set());
+      setPlaylistContentsRetry((current) => current + 1);
+      setCatalogDataVersion((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistBulkStatusSaved", { count: completed }));
+    } catch (error) {
+      setPlaylistContentsRetry((current) => current + 1);
+      setCatalogDataVersion((current) => current + 1);
+      setPlaylistIdCopyStatus(t(uiLang, "playlistBulkStatusPartial", { count: completed, error: String(error.message || error) }));
+    } finally {
+      setPlaylistSaving(false);
+    }
+  }
+
+  function discardPlaylistBulkVisibility() {
+    setPlaylistBulkStatusDraft(null);
+    setPlaylistIdCopyStatus("");
+  }
+
   async function deleteLocalPlaylist() {
     if (!selectedPlaylist?.localOnly) return;
     if (!window.confirm(t(uiLang, "playlistDeleteLocalConfirm"))) return;
@@ -2412,9 +2480,34 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                   <button type="button" title={t(uiLang, "playlistAddToOtherPlaylistHint")} onClick={() => openPlaylistMembershipEditor("add")}>+ {t(uiLang, "playlistAddToOtherPlaylist")}</button>
                   <button type="button" disabled={!selectedPlaylist} title={t(uiLang, "playlistAddVideosHint")} onClick={openCurrentPlaylistVideoPicker}>+ {t(uiLang, "playlistAddVideos")}</button>
                   <button type="button" title={t(uiLang, "playlistMoveToPlaylistHint")} onClick={() => openPlaylistMembershipEditor("move")}>→ {t(uiLang, "playlistMoveToPlaylist")}</button>
+                  <span className="playlist-bulk-status-control">
+                    <select value={playlistBulkVisibility} onChange={(event) => setPlaylistBulkVisibility(event.target.value)} aria-label={t(uiLang, "playlistBulkStatus")} title={t(uiLang, "playlistBulkStatusHint")}>
+                      <option value="public">{t(uiLang, "filterPublic")}</option>
+                      <option value="unlisted">{t(uiLang, "filterUnlisted")}</option>
+                      <option value="private">{t(uiLang, "filterPrivate")}</option>
+                    </select>
+                    <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={t(uiLang, "playlistBulkStatusHint")} onClick={stageSelectedPlaylistVisibility}>{t(uiLang, "playlistBulkStatus")}</button>
+                  </span>
                   <button type="button" disabled={!selectedPlaylistVideoIds.size || playlistSaving} title={!selectedPlaylist?.localOnly && !writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistRemoveFromPlaylistHint")} onClick={removeSelectedFromCurrentPlaylist}>− {t(uiLang, "playlistRemoveFromPlaylist")}</button>
                 </div>
               </div>
+              {playlistBulkStatusDraft ? (
+                <YoutubeStagedSave
+                  uiLang={uiLang}
+                  count={playlistBulkStatusDraft.videos.length}
+                  saving={playlistSaving}
+                  writeMode={writeMode}
+                  onDiscard={discardPlaylistBulkVisibility}
+                  onSave={savePlaylistBulkVisibility}
+                  saveHint="playlistBulkStatusSaveHint"
+                  className="playlist-bulk-status-save"
+                  changes={[{
+                    label: t(uiLang, "playlistBulkStatus"),
+                    before: t(uiLang, "playlistBulkStatusMixed"),
+                    after: statusLabel(uiLang, playlistBulkStatusDraft.privacy),
+                  }]}
+                />
+              ) : null}
               <label className="playlist-page-size" title={t(uiLang, "playlistPageSizeHint")}>
                 {t(uiLang, "playlistPageSize")}
                 <select value={playlistPageSize} onChange={(event) => {
