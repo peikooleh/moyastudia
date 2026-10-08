@@ -3730,3 +3730,33 @@ body {
     overflow-x: auto;
   }
 }
+
+
+/* Stable catalog action area: controls keep their footprint while synchronization runs. */
+.catalog-action-slot {
+  min-width: 238px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+.catalog-action-slot .catalog-actions {
+  min-width: 238px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+.catalog-reconcile-action {
+  white-space: nowrap;
+}
+.catalog-refresh-overdue,
+.catalog-last-updated.overdue {
+  color: var(--danger);
+}
+.catalog-refresh-overdue {
+  border-color: var(--danger);
+}
+@media (max-width: 720px) {
+  .catalog-action-slot,
+  .catalog-action-slot .catalog-actions {
+    min-width: 0;
+  }
+}
