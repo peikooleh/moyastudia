@@ -3820,8 +3820,13 @@ body {
 }
 .playlist-page-size {
   grid-column: 4;
-  grid-row: 2;
-  align-self: center;
+  grid-row: 1 / 3;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 .playlist-bulk-status-save,
 .playlist-membership-editor,
@@ -3842,7 +3847,7 @@ body {
   }
   .playlist-page-size {
     grid-column: 2;
-    grid-row: 3;
+    grid-row: 1 / 3;
   }
 }
 @media (max-width: 720px) {
