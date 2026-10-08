@@ -978,9 +978,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     const controller = new AbortController();
     const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
     const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
-    setCalendarVideos([]);
     setCalendarCursor(null);
-    setSelectedId("");
     setCalendarDetailDay("");
     setErr("");
     setLoadingCalendar(true);
