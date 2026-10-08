@@ -956,7 +956,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .metadata-summary { grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 4px 0 10px; padding: 10px 12px; border-left: 2px solid var(--line); }
 .metadata-summary dd { color: var(--muted); }
 .snapshot-field textarea { background: var(--bg); color: var(--muted); cursor: default; }
-.header-system-status { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; padding-left: 12px; border-left: 1px solid var(--line); }
+.header-system-status { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; padding-left: 12px; }
 .header-write-mode { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .mode-switch-label { color: var(--text); font-weight: 600; }
 .mode-switch { display: inline-flex; align-items: center; justify-content: flex-start; width: 42px; height: 24px; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-hover); cursor: pointer; }
