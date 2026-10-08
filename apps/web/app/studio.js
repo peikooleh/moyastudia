@@ -2098,6 +2098,20 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setCalendarDetailDay(localDateKey(today));
   }
+
+  const catalogLastSuccessMs = catalogStatus.last_success_at ? Date.parse(catalogStatus.last_success_at) : NaN;
+  const catalogOlderThan24Hours = Number.isFinite(catalogLastSuccessMs)
+    && Date.now() - catalogLastSuccessMs >= 24 * 60 * 60 * 1000;
+  const catalogCanResume = shouldShowCatalogContinue(catalogStatus);
+
+  function refreshCatalogFromToolbar() {
+    if (catalogCanResume) {
+      runCatalogSync(catalogStatus.mode || "initial", shouldResumeCatalogSync(catalogStatus));
+      return;
+    }
+    runCatalogSync("incremental");
+  }
+
   return (
     <div className="studio-wrap">
       <section className="catalog-state" aria-live="polite">
@@ -2132,64 +2146,35 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               <span>{t(uiLang, "catalogLastUpdated", { date: catalogStatus.last_success_at.replace("T", " ").slice(0, 16) })}</span>
             ) : null}
           </div>
-          {catalogStatus.state === "NOT_IMPORTED" ? (
-            <button className="btn" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
-              {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
-            </button>
-          ) : null}
-          {shouldShowCatalogContinue(catalogStatus) ? (
-            <button
-              className="btn"
-              type="button"
-              disabled={syncBusy}
-              onClick={() => runCatalogSync(
-                catalogStatus.mode || "initial",
-                shouldResumeCatalogSync(catalogStatus),
-              )}
-            >
-              {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogContinue")}
-            </button>
-          ) : null}
-          {["COMPLETE", "STALE", "EMPTY"].includes(catalogStatus.state) ? (
-            catalogStatus.state === "STALE" && catalogStatus.last_error_code ? (
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={syncBusy}
-                onClick={() => runCatalogSync(catalogStatus.mode || "reconcile")}
-              >
-                {syncBusy ? t(uiLang, "catalogContinuing") : t(uiLang, "catalogResume")}
+          <div className="catalog-action-slot">
+            {catalogStatus.state === "NOT_IMPORTED" ? (
+              <button className="btn" type="button" title={t(uiLang, "tipRefreshCatalog")} disabled={syncBusy} onClick={() => runCatalogSync("initial")}>
+                {syncBusy ? t(uiLang, "catalogStarting") : t(uiLang, "catalogStart")}
               </button>
             ) : (
               <div className="catalog-actions">
                 <button
-                  className="btn catalog-refresh-icon"
+                  className={`btn catalog-refresh-icon ${catalogOlderThan24Hours ? "catalog-refresh-overdue" : ""}`}
                   type="button"
-                  title={t(uiLang, "tipRefreshCatalog")}
-                  aria-label={t(uiLang, "catalogRefresh")}
+                  title={catalogOlderThan24Hours ? t(uiLang, "catalogRefreshOverdueHint") : t(uiLang, "tipRefreshCatalog")}
+                  aria-label={catalogCanResume ? t(uiLang, "catalogContinue") : t(uiLang, "catalogRefresh")}
                   disabled={syncBusy}
-                  onClick={() => runCatalogSync("incremental")}
+                  onClick={refreshCatalogFromToolbar}
                 >
                   <span aria-hidden="true">↻</span>
                 </button>
-                <details className="catalog-more-actions">
-                  <summary className="btn ghost" title={t(uiLang, "catalogMoreActions")} aria-label={t(uiLang, "catalogMoreActions")}>⋯</summary>
-                  <div className="catalog-more-menu">
-                    <button
-                      className="text-button"
-                      type="button"
-                      title={t(uiLang, "tipReconcileCatalog")}
-                      disabled={syncBusy}
-                      onClick={() => runCatalogSync("reconcile")}
-                    >
-                      {t(uiLang, "catalogReconcile")}
-                    </button>
-                  </div>
-                </details>
+                <button
+                  className="text-button catalog-reconcile-action"
+                  type="button"
+                  title={t(uiLang, "tipReconcileCatalog")}
+                  disabled={syncBusy}
+                  onClick={() => runCatalogSync("reconcile")}
+                >
+                  {t(uiLang, "catalogReconcile")}
+                </button>
               </div>
-            )
-          ) : null}
-          {syncBusy ? <span role="status">{t(uiLang, "catalogBusy")}</span> : null}
+            )}
+          </div>
       </section>
 
       {view === "videos" ? (
