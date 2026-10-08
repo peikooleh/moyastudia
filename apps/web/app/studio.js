@@ -2174,15 +2174,20 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 >
                   <span aria-hidden="true">↻</span>
                 </button>
-                <button
-                  className="catalog-reconcile-action"
-                  type="button"
-                  title={t(uiLang, "tipReconcileCatalog")}
-                  disabled={syncBusy}
-                  onClick={() => runCatalogSync("reconcile")}
-                >
-                  {t(uiLang, "catalogReconcile")}
-                </button>
+                <details className="catalog-more-actions">
+                  <summary className="btn ghost" title={t(uiLang, "catalogMoreActions")} aria-label={t(uiLang, "catalogMoreActions")}>⋯</summary>
+                  <div className="catalog-more-menu">
+                    <button
+                      className="text-button"
+                      type="button"
+                      title={t(uiLang, "tipReconcileCatalog")}
+                      disabled={syncBusy}
+                      onClick={() => runCatalogSync("reconcile")}
+                    >
+                      {t(uiLang, "catalogReconcile")}
+                    </button>
+                  </div>
+                </details>
               </div>
             )
           ) : null}
