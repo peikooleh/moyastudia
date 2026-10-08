@@ -738,7 +738,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSelectedId("");
     setErr("");
     setLoadingMore(false);
-    if (!channelId) {
+    if (!channelId || view !== "videos") {
       setLoadingVideos(false);
       return () => controller.abort();
     }
@@ -768,7 +768,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (requestId === catalogRequestId.current) setLoadingVideos(false);
       });
     return () => controller.abort();
-  }, [channelId, filter, query, sort, catalogDataVersion]);
+  }, [channelId, filter, query, sort, catalogDataVersion, view]);
 
   useEffect(() => {
     const requestId = ++workingRequestId.current;
@@ -982,6 +982,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCalendarCursor(null);
     setSelectedId("");
     setCalendarDetailDay("");
+    setErr("");
     setLoadingCalendar(true);
     (async () => {
       try {
@@ -1046,8 +1047,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   async function loadMoreCalendar() {
     if (!calendarCursor || !channelId || loadingCalendar) return;
     const requestId = channelRequestId.current;
-    const start = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
+    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
     setLoadingCalendar(true);
     try {
       const response = await apiFetch(
