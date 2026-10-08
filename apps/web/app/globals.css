@@ -3735,9 +3735,11 @@ body {
 /* Stable catalog action area: controls keep their footprint while synchronization runs. */
 .catalog-action-slot {
   min-width: 238px;
+  margin-left: auto;
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  flex-wrap: nowrap !important;
 }
 .catalog-action-slot .catalog-actions {
   min-width: 238px;
