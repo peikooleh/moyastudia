@@ -357,6 +357,10 @@ def google_callback(
     subject = claims.get("sub")
     if not subject:
         return _oauth_status_redirect("/", "auth_error", "identity_failed", state)
+    if settings.is_production and settings.deployment_access_mode == "private_test":
+        verified_email = str(claims.get("email") or "").strip().casefold()
+        if not claims.get("email_verified") or verified_email not in settings.allowed_login_email_set:
+            return _oauth_status_redirect("/", "auth_error", "access_restricted", state)
     identity = (
         db.query(Identity)
         .filter(Identity.provider == "google", Identity.subject == subject)
