@@ -26,6 +26,7 @@ import {
   youtubeMetadataLimit,
   unicodeCharacterCount,
 } from "../lib/catalog-state.mjs";
+import { calendarWeekCells, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 import { StatisticsDashboard } from "./statistics-dashboard";
@@ -119,19 +120,6 @@ function statusLabel(uiLang, status) {
     remote_missing: "filterRemoteMissing",
   }[status];
   return key ? t(uiLang, key) : status || "—";
-}
-
-function monthMatrix(anchor) {
-  const y = anchor.getFullYear();
-  const m = anchor.getMonth();
-  const first = new Date(y, m, 1);
-  const start = (first.getDay() + 6) % 7;
-  const days = new Date(y, m + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < start; i += 1) cells.push(null);
-  for (let d = 1; d <= days; d += 1) cells.push(new Date(y, m, d));
-  while (cells.length % 7) cells.push(null);
-  return cells;
 }
 
 function localDateKey(date) {
@@ -611,7 +599,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const videoListRef = useRef(null);
   const inspectorEditRef = useRef(null);
-  const [month, setMonth] = useState(() => new Date());
+  const [month, setMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [calendarDetailDay, setCalendarDetailDay] = useState("");
   const [calendarDrafts, setCalendarDrafts] = useState({});
   const [calendarSaving, setCalendarSaving] = useState(false);
@@ -974,8 +965,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   useEffect(() => {
     if (view !== "calendar" || !channelId) return undefined;
     const controller = new AbortController();
-    const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
+    const { start, end } = calendarWindowRange(month);
     setCalendarVideos([]);
     setCalendarCursor(null);
     setSelectedId("");
@@ -1045,8 +1035,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   async function loadMoreCalendar() {
     if (!calendarCursor || !channelId || loadingCalendar) return;
     const requestId = channelRequestId.current;
-    const start = new Date(month.getFullYear(), month.getMonth() - 1, 1).toISOString();
-    const end = new Date(month.getFullYear(), month.getMonth() + 2, 1).toISOString();
+    const { start, end } = calendarWindowRange(month);
     setLoadingCalendar(true);
     try {
       const response = await apiFetch(
@@ -2065,7 +2054,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     }
   }
 
-  const cells = monthMatrix(month);
+  const cells = calendarWeekCells(month);
   const byDay = {};
   effectiveCalendarVideos.forEach((v) => {
     const key = (v.slot || (v.privacy !== "private" ? v.publishedAt : "") || "").slice(0, 10);
@@ -2075,7 +2064,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   });
   const calendarDayItems = byDay[calendarDetailDay] || [];
   const todayKey = localDateKey(new Date());
-  const monthHasToday = month.getFullYear() === new Date().getFullYear() && month.getMonth() === new Date().getMonth();
 
   function showCalendarToday() {
     const today = new Date();
@@ -2685,9 +2673,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                 </button>
               </div>
               <div className="cal-nav">
-                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousMonth")} aria-label={t(uiLang, "tipPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>←</button>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipPreviousWeek")} aria-label={t(uiLang, "tipPreviousWeek")} onClick={() => setMonth((current) => shiftCalendarWeek(current, -1))}>←</button>
                 <strong>{month.toLocaleString(t(uiLang, "calendarLocale"), { month: "long", year: "numeric" })}</strong>
-                <button type="button" className="btn ghost" title={t(uiLang, "tipNextMonth")} aria-label={t(uiLang, "tipNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>→</button>
+                <button type="button" className="btn ghost" title={t(uiLang, "tipNextWeek")} aria-label={t(uiLang, "tipNextWeek")} onClick={() => setMonth((current) => shiftCalendarWeek(current, 1))}>→</button>
                 <button type="button" className="btn ghost calendar-today" onClick={showCalendarToday}>{t(uiLang, "calendarToday")}</button>
               </div>
             </header>
@@ -2708,23 +2696,24 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             <div className="cal" role="grid" aria-label={t(uiLang, "calendarTab")}>
               {WEEKDAY_KEYS.map((key) => <div key={key} className="cal-h" role="columnheader">{t(uiLang, key)}</div>)}
               {cells.map((day, index) => {
-                const key = day ? localDateKey(day) : `empty-${index}`;
-                const items = day ? byDay[key] || [] : [];
+                const key = localDateKey(day);
+                const items = byDay[key] || [];
+                const outsideMonth = day.getMonth() !== month.getMonth() || day.getFullYear() !== month.getFullYear();
                 return (
                   <div
                     key={key}
-                    className={`cal-cell ${day ? "" : "off"} ${day && localDateKey(day) === todayKey ? "today" : ""}`}
+                    className={`cal-cell ${outsideMonth ? "off-month" : ""} ${key === todayKey ? "today" : ""}`}
                     role="gridcell"
-                    title={day && items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
-                    onDragOver={day ? (event) => event.preventDefault() : undefined}
-                    onDrop={day ? (event) => {
+                    title={items.length ? t(uiLang, "calendarDayBrief", { count: items.length }) : undefined}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
                       event.preventDefault();
                       const videoId = Number(event.dataTransfer.getData("text/calendar-video"));
                       const video = effectiveCalendarVideos.find((item) => item.id === videoId);
                       if (video) stageCalendarDay(video, key);
-                    } : undefined}
+                    }}
                   >
-                    {day ? <b aria-current={monthHasToday && localDateKey(day) === todayKey ? "date" : undefined}>{day.getDate()}</b> : null}
+                    <b aria-current={key === todayKey ? "date" : undefined}>{day.getDate()}</b>
                     {items.slice(0, 2).map((video) => (
                       <button
                         key={video.id}
