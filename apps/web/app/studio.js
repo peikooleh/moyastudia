@@ -62,6 +62,19 @@ const VIDEO_LANGUAGES = [
 
 const WEEKDAY_KEYS = ["dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat", "daySun"];
 
+function apiErrorMessage(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => item?.msg || item?.message || (typeof item === "string" ? item : ""))
+      .filter(Boolean);
+    return messages.length ? messages.join("; ") : fallback;
+  }
+  if (typeof detail === "object") return detail.msg || detail.message || fallback;
+  return String(detail);
+}
+
 function formatStudioDate(value, uiLang) {
   if (!value) return "";
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -747,7 +760,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     apiFetch(catalogVideosUrl(channelId, { filter, query, sort }), { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCatalogLoadError"));
+        if (!response.ok) throw new Error(apiErrorMessage(data.detail, t(uiLangRef.current, "studioCatalogLoadError")));
         return data;
       })
       .then((data) => {
@@ -869,7 +882,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         do {
           const response = await apiFetch(catalogVideosUrl(channelId, { sort: "date_desc", cursor }), { signal: controller.signal });
           const data = await response.json();
-          if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCatalogLoadError"));
+          if (!response.ok) throw new Error(apiErrorMessage(data.detail, t(uiLangRef.current, "studioCatalogLoadError")));
           items.push(...(data.items || []));
           cursor = data.next_cursor || "";
         } while (cursor && !controller.signal.aborted);
@@ -992,7 +1005,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             { signal: controller.signal },
           );
           const data = await response.json();
-          if (!response.ok) throw new Error(data.detail || t(uiLangRef.current, "studioCalendarLoadError"));
+          if (!response.ok) throw new Error(apiErrorMessage(data.detail, t(uiLangRef.current, "studioCalendarLoadError")));
           if (controller.signal.aborted) return;
           items.push(...(data.items || []));
           cursor = data.next_cursor || null;
