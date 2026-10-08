@@ -93,3 +93,6 @@ class Settings(BaseSettings):
             errors.append("TOKEN_ENCRYPTION_KEY must be a valid Fernet key")
         if errors:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
+
+
+settings = Settings()
