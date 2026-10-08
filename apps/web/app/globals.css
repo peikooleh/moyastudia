@@ -3804,14 +3804,14 @@ body {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  margin-left: 38px;
+  margin-left: 22px;
   padding-left: 0;
   border-left: 0;
   white-space: nowrap;
 }
 .playlist-bulk-status-control select {
   min-height: 34px;
-  min-width: 142px;
+  min-width: 138px;
   max-width: none;
   padding: 5px 30px 5px 11px;
   border: 1px solid var(--line);
@@ -3842,10 +3842,10 @@ body {
   white-space: nowrap;
 }
 .playlist-page-size select {
-  width: 58px;
-  min-width: 58px;
+  width: 72px;
+  min-width: 72px;
   padding-left: 9px;
-  padding-right: 20px;
+  padding-right: 22px;
 }
 .playlist-bulk-status-save,
 .playlist-membership-editor,
