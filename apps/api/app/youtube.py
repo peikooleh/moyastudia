@@ -747,12 +747,15 @@ def video_file_details(
     youtube_video_id: str,
     recorder: QuotaRecorder | None = None,
 ) -> dict:
-    """Return owner-only source geometry needed to classify a video's physical format."""
+    """Return read-only YouTube evidence useful for video-format classification."""
     if not youtube_video_id:
         raise ValueError("youtube_video_id is required")
     service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
     response = _execute(
-        service.videos().list(part="contentDetails,fileDetails", id=youtube_video_id),
+        service.videos().list(
+            part="snippet,status,contentDetails,player,fileDetails,processingDetails",
+            id=youtube_video_id,
+        ),
         "videos.list",
         recorder,
     )
@@ -760,31 +763,48 @@ def video_file_details(
     if not items:
         raise LookupError("YouTube video details are unavailable")
     item = items[0]
+    snippet = item.get("snippet") or {}
+    status = item.get("status") or {}
     content = item.get("contentDetails") or {}
+    player = item.get("player") or {}
     file_details = item.get("fileDetails") or {}
+    processing = item.get("processingDetails") or {}
     streams = file_details.get("videoStreams") or []
     stream = next(
         (
-            value
-            for value in streams
+            value for value in streams
             if isinstance(value, dict)
             and isinstance(value.get("widthPixels"), int)
             and isinstance(value.get("heightPixels"), int)
-            and value["widthPixels"] > 0
-            and value["heightPixels"] > 0
+            and value["widthPixels"] > 0 and value["heightPixels"] > 0
         ),
         None,
     )
     return {
         "youtube_video_id": item.get("id") or youtube_video_id,
         "duration": content.get("duration") or "",
+        "definition": content.get("definition"),
+        "dimension": content.get("dimension"),
+        "projection": content.get("projection"),
+        "caption": content.get("caption"),
+        "licensed_content": content.get("licensedContent"),
+        "privacy_status": status.get("privacyStatus"),
+        "upload_status": status.get("uploadStatus"),
+        "embeddable": status.get("embeddable"),
+        "made_for_kids": status.get("madeForKids"),
+        "published_at": snippet.get("publishedAt"),
+        "live_broadcast_content": snippet.get("liveBroadcastContent"),
+        "player_embed_width": player.get("embedWidth"),
+        "player_embed_height": player.get("embedHeight"),
         "file_details_available": bool(file_details),
+        "file_detail_keys": sorted(file_details.keys()),
+        "file_container": file_details.get("container"),
+        "file_type": file_details.get("fileType"),
+        "video_stream_count": len(streams),
         "width": stream.get("widthPixels") if stream else None,
         "height": stream.get("heightPixels") if stream else None,
         "rotation": stream.get("rotation") if stream else None,
         "aspect_ratio": stream.get("aspectRatio") if stream else None,
-        "file_detail_keys": sorted(file_details.keys()),
-        "video_stream_count": len(streams),
         "video_streams": [
             {
                 "width": value.get("widthPixels"),
@@ -794,9 +814,13 @@ def video_file_details(
                 "codec": value.get("codec"),
                 "frame_rate": value.get("frameRateFps"),
             }
-            for value in streams
-            if isinstance(value, dict)
+            for value in streams if isinstance(value, dict)
         ],
+        "processing_status": processing.get("processingStatus"),
+        "processing_parts_total": processing.get("partsTotal"),
+        "processing_parts_processed": processing.get("partsProcessed"),
+        "processing_parts_remaining": processing.get("partsRemaining"),
+        "processing_detail_keys": sorted(processing.keys()),
     }
 
 
