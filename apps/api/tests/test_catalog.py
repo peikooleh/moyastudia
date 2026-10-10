@@ -518,7 +518,6 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
         {
             "part": "snippet",
             "forMine": True,
-            "channelId": "selected-channel",
             "type": "video",
             "order": "date",
             "maxResults": 50,
@@ -530,6 +529,56 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
     assert result["uploads_playlist_id"] is None
     assert result["videos"][0]["youtube_video_id"] == "selected-video"
     assert result["videos"][0]["youtube_scheduled_at"] == "2026-10-07T05:00:00Z"
+
+
+def test_list_videos_owner_search_filters_foreign_channel_before_details(monkeypatch):
+    calls = []
+
+    class FakeResource:
+        def __init__(self, resource):
+            self.resource = resource
+
+        def list(self, **kwargs):
+            calls.append((self.resource, kwargs))
+            if self.resource == "search":
+                assert kwargs["forMine"] is True
+                assert "channelId" not in kwargs
+                return SimpleNamespace(execute=lambda: {
+                    "items": [
+                        {
+                            "id": {"videoId": "selected-id"},
+                            "snippet": {"channelId": "selected-channel"},
+                        },
+                        {
+                            "id": {"videoId": "foreign-id"},
+                            "snippet": {"channelId": "other-channel"},
+                        },
+                    ]
+                })
+            if self.resource == "videos":
+                assert kwargs["id"] == "selected-id"
+                return SimpleNamespace(execute=lambda: {
+                    "items": [{
+                        "id": "selected-id",
+                        "snippet": {"channelId": "selected-channel", "title": "Selected"},
+                        "status": {"privacyStatus": "unlisted"},
+                        "contentDetails": {},
+                        "statistics": {},
+                    }]
+                })
+            raise AssertionError(self.resource)
+
+    class FakeService:
+        def search(self):
+            return FakeResource("search")
+        def videos(self):
+            return FakeResource("videos")
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+    result = youtube.list_videos("token", "selected-channel")
+    assert result["video_ids"] == ["selected-id"]
+    assert [item["youtube_video_id"] for item in result["videos"]] == ["selected-id"]
 
 
 def test_list_videos_ignores_legacy_uploads_id_and_uses_owner_search(monkeypatch):
@@ -566,7 +615,6 @@ def test_list_videos_ignores_legacy_uploads_id_and_uses_owner_search(monkeypatch
     assert calls == [{
         "part": "snippet",
         "forMine": True,
-        "channelId": "selected-channel",
         "type": "video",
         "order": "date",
         "maxResults": 25,
@@ -1103,7 +1151,7 @@ def test_owner_search_finds_all_seven_unlisted_videos_missing_from_uploads(
             calls.append((self.resource, kwargs))
             if self.resource == "search":
                 assert kwargs["forMine"] is True
-                assert kwargs["channelId"] == selected_channel
+                assert "channelId" not in kwargs
                 assert kwargs["type"] == "video"
                 if not kwargs.get("pageToken"):
                     ids = video_ids[:5]
