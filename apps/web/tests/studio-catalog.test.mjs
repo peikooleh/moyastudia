@@ -12,7 +12,7 @@ import {
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import { t } from "../lib/i18n.js";
-import { calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
+import { calendarLocalDateKey, calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -39,6 +39,20 @@ import {
   youtubeTagsCharacterCount,
   youtubeVideoCategoryName,
 } from "../lib/catalog-state.mjs";
+
+
+test("calendar groups ISO timestamps by the browser local day", () => {
+  const timestamp = "2026-10-10T23:30:00Z";
+  const expected = new Date(timestamp);
+  const localKey = [
+    expected.getFullYear(),
+    String(expected.getMonth() + 1).padStart(2, "0"),
+    String(expected.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  assert.equal(calendarLocalDateKey(timestamp), localKey);
+  assert.equal(calendarLocalDateKey("not-a-date"), "");
+});
 
 test("channel labels distinguish equal titles with stable YouTube IDs", () => {
   const first = { id: 7, title: "MOYAMOVA", youtube_channel_id: "UCo_Srxy3jqF4PbuxgldLpWA" };
