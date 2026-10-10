@@ -627,15 +627,17 @@ def save_ai_connection(
 ):
     api_key = payload.api_key.strip() if payload.api_key is not None else None
     detected = ai_metadata.infer_provider(api_key or "") if api_key else None
-    # Generic sk- prefixes are shared by providers; explicit xAI selection takes precedence.
-    if payload.provider == "xai" and detected == "openai":
+    # Generic sk- prefixes are shared by providers; explicit xAI/Groq selection takes precedence.
+    if payload.provider in {"xai", "groq"} and detected == "openai":
         detected = None
     provider = detected or payload.provider
     if provider is None:
         raise HTTPException(422, detail={"code": "ai_provider_selection_required"})
     if detected and payload.provider and detected != payload.provider:
         raise HTTPException(422, detail={"code": "ai_provider_key_mismatch"})
-    model = (payload.model or "").strip() or ai_metadata.MODELS[provider]
+    if payload.model is not None and not payload.model.strip():
+        raise HTTPException(422, detail={"code": "ai_model_required"})
+    model = payload.model.strip() if payload.model is not None else ai_metadata.MODELS[provider]
     if api_key == "":
         api_key = None
     row = (
