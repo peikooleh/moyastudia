@@ -283,7 +283,8 @@ export function StatisticsDashboard({
     : scope === "playlist"
       ? remotePlaylists.find((playlist) => String(playlist.id) === String(playlistId))?.title || t(uiLang, "statisticsChoosePlaylist")
       : t(uiLang, "statisticsScopeChannel");
-  const subscriberMetricsAvailable = analytics?.subscribers_gained != null && analytics?.subscribers_lost != null;
+  const analyticsDataUnavailable = Boolean(analytics && analytics.has_data === false);
+  const subscriberMetricsAvailable = !analyticsDataUnavailable && analytics?.subscribers_gained != null && analytics?.subscribers_lost != null;
   const netSubscribers = subscriberMetricsAvailable
     ? Number(analytics.subscribers_gained) - Number(analytics.subscribers_lost)
     : null;
@@ -298,32 +299,36 @@ export function StatisticsDashboard({
   const kpiDefinitions = {
     views: {
       label: t(uiLang, "videoViews"),
-      value: analytics ? formatNumber(analytics.views, locale) : "—",
-      detail: analytics?.current_statistics?.views != null && scope === "video" ? t(uiLang, "statisticsCurrentYouTubeViews", { count: formatNumber(analytics.current_statistics.views, locale), period: periodLabel }) : periodLabel,
+      value: analyticsDataUnavailable ? "—" : analytics ? formatNumber(analytics.views, locale) : "—",
+      detail: analyticsDataUnavailable
+        ? t(uiLang, "statisticsAnalyticsDataPending")
+        : analytics?.current_statistics?.views != null && scope === "video"
+          ? t(uiLang, "statisticsCurrentYouTubeViews", { count: formatNumber(analytics.current_statistics.views, locale), period: periodLabel })
+          : periodLabel,
       seriesValue: (point) => Number(point.views || 0),
       seriesTitle: (point) => `${point.date}: ${formatNumber(point.views, locale)}`,
       chartTitle: t(uiLang, "statisticsViewsOverTime"),
     },
     watchTime: {
       label: t(uiLang, "statisticsWatchTime"),
-      value: analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—",
-      detail: periodLabel,
+      value: analyticsDataUnavailable ? "—" : analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—",
+      detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : periodLabel,
       seriesValue: (point) => Number(point.estimated_minutes_watched || 0),
       seriesTitle: (point) => `${point.date}: ${t(uiLang, "statisticsWatchTimeValue", { count: (Number(point.estimated_minutes_watched || 0) / 60).toFixed(1) })}`,
       chartTitle: t(uiLang, "statisticsWatchTimeOverTime"),
     },
     averageDuration: {
       label: t(uiLang, "statisticsAverageViewDuration"),
-      value: analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—",
-      detail: analytics?.average_view_percentage != null ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage).toFixed(1) }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
+      value: analyticsDataUnavailable ? "—" : analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—",
+      detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : analytics?.average_view_percentage != null ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage).toFixed(1) }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
       seriesValue: (point) => point.average_view_duration == null ? null : Number(point.average_view_duration),
       seriesTitle: (point) => `${point.date}: ${formatDuration(point.average_view_duration, uiLang)}`,
       chartTitle: t(uiLang, "statisticsAverageDurationOverTime"),
     },
     subscribers: {
       label: t(uiLang, scope === "channel" ? "statisticsSubscribersTotal" : "statisticsSubscribersChange"),
-      value: analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : formatNullableNumber(netSubscribers, locale)) : "—",
-      detail: analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
+      value: analyticsDataUnavailable ? "—" : analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : formatNullableNumber(netSubscribers, locale)) : "—",
+      detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
       seriesValue: (point) => point.subscribers_gained == null || point.subscribers_lost == null ? null : Number(point.subscribers_gained) - Number(point.subscribers_lost),
       seriesTitle: (point) => `${point.date}: ${Number(point.subscribers_gained || 0) - Number(point.subscribers_lost || 0)} (${t(uiLang, "statisticsSubscribersDetail", { gained: point.subscribers_gained || 0, lost: point.subscribers_lost || 0 })})`,
       chartTitle: t(uiLang, "statisticsSubscribersOverTime"),
@@ -432,7 +437,7 @@ export function StatisticsDashboard({
                 return <i key={point.date} className={positive ? "positive" : "negative"} style={chartMin < 0 ? (positive ? { height: `${size}%`, bottom: `${100 - positiveShare}%` } : { height: `${size}%`, top: `${positiveShare}%` }) : { height: `${size}%` }} title={activeMetric.seriesTitle(point)} />;
               })}
             </div>
-          ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
+          ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, analyticsDataUnavailable ? "statisticsAnalyticsDataPendingDetail" : activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
         </div>
         {chartPoints.length ? <ul className="visually-hidden" aria-label={activeMetric.chartTitle}>{chartPoints.map(({ point }) => <li key={point.date}>{activeMetric.seriesTitle(point)}</li>)}</ul> : null}
         <p>{t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
