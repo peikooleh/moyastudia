@@ -587,6 +587,7 @@ const dict = {
     ai_invalid_credentials: "AI key is invalid or has no access.",
     ai_not_connected: "Connect an AI provider in Cabinet first.",
     aiImproveFailed: "AI improvement failed.",
+    aiNetworkError: "Cannot reach the server. Check the connection and try again.",
     aiImproving: "Improving…",
     aiTagsPrompt: "Tags / keywords instructions",
     aiImproveComingLater: "Connect an AI provider in Cabinet to enable this later.",
