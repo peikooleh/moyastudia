@@ -3856,7 +3856,7 @@ body {
 /* Compact monetization progress: separate control from KPI chart buttons. */
 .statistics-kpi-wrap { position: relative; min-width: 0; }
 .statistics-kpi-wrap > .statistics-kpi { height: 100%; }
-.statistics-kpi-wrap > .statistics-kpi > span:first-child { display: block; padding-right: 100px; }
+.statistics-kpi-wrap:has(.statistics-monetization-badge) > .statistics-kpi > span:first-child { display: block; padding-right: 100px; }
 .statistics-monetization-badge {
   position: absolute;
   z-index: 2;
