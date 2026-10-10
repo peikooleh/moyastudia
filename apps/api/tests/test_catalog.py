@@ -466,26 +466,15 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
             return SimpleNamespace(execute=lambda: self.response)
 
     class FakeService:
-        def channels(self):
+        def search(self):
             return FakeResource(
-                "channels",
+                "search",
                 {
                     "items": [
                         {
-                            "contentDetails": {
-                                "relatedPlaylists": {"uploads": "uploads-playlist"}
-                            }
+                            "id": {"videoId": "selected-video"},
+                            "snippet": {"channelId": "selected-channel"},
                         }
-                    ]
-                },
-            )
-
-        def playlistItems(self):
-            return FakeResource(
-                "playlistItems",
-                {
-                    "items": [
-                        {"contentDetails": {"videoId": "selected-video"}}
                     ],
                     "nextPageToken": "next-page",
                 },
@@ -502,7 +491,10 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
                                 "channelId": "selected-channel",
                                 "title": "Selected video",
                             },
-                            "status": {"privacyStatus": "private", "publishAt": "2026-10-07T05:00:00Z"},
+                            "status": {
+                                "privacyStatus": "private",
+                                "publishAt": "2026-10-07T05:00:00Z",
+                            },
                             "contentDetails": {},
                             "statistics": {},
                         }
@@ -510,51 +502,56 @@ def test_list_videos_discovers_complete_owned_video_page(monkeypatch):
                 },
             )
 
+        def channels(self):
+            raise AssertionError("owner search must not look up uploads playlist")
+
+        def playlistItems(self):
+            raise AssertionError("owner search must not enumerate uploads playlist")
+
     monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: SimpleNamespace())
     monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
 
     result = youtube.list_videos("token", "selected-channel", limit=50)
 
     assert calls[0] == (
-        "channels",
-        {"part": "contentDetails", "id": "selected-channel", "maxResults": 1},
+        "search",
+        {
+            "part": "snippet",
+            "forMine": True,
+            "channelId": "selected-channel",
+            "type": "video",
+            "order": "date",
+            "maxResults": 50,
+        },
     )
-    assert calls[1] == (
-        "playlistItems",
-        {"part": "contentDetails", "playlistId": "uploads-playlist", "maxResults": 50},
-    )
-    assert calls[2][0] == "videos"
-    assert calls[2][1]["id"] == "selected-video"
+    assert calls[1][0] == "videos"
+    assert calls[1][1]["id"] == "selected-video"
     assert result["next_page_token"] == "next-page"
-    assert result["uploads_playlist_id"] == "uploads-playlist"
+    assert result["uploads_playlist_id"] is None
     assert result["videos"][0]["youtube_video_id"] == "selected-video"
     assert result["videos"][0]["youtube_scheduled_at"] == "2026-10-07T05:00:00Z"
 
 
-def test_list_videos_reuses_known_uploads_playlist_without_channel_lookup(monkeypatch):
+def test_list_videos_ignores_legacy_uploads_id_and_uses_owner_search(monkeypatch):
     calls = []
 
     class FakeResource:
-        def __init__(self, name, response):
-            self.name = name
-            self.response = response
-
         def list(self, **kwargs):
-            calls.append((self.name, kwargs))
-            return SimpleNamespace(execute=lambda: self.response)
+            calls.append(kwargs)
+            return SimpleNamespace(execute=lambda: {"items": [], "nextPageToken": None})
 
     class FakeService:
+        def search(self):
+            return FakeResource()
+
         def channels(self):
-            raise AssertionError("known uploads playlist must avoid channels.list")
+            raise AssertionError("legacy uploads ID must not trigger channel lookup")
 
         def playlistItems(self):
-            return FakeResource(
-                "playlistItems",
-                {"items": [], "nextPageToken": None},
-            )
+            raise AssertionError("legacy uploads ID must not trigger playlist enumeration")
 
         def videos(self):
-            raise AssertionError("empty upload page must avoid videos.list")
+            raise AssertionError("empty search page must avoid videos.list")
 
     monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: SimpleNamespace())
     monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
@@ -566,13 +563,15 @@ def test_list_videos_reuses_known_uploads_playlist_without_channel_lookup(monkey
         limit=25,
     )
 
-    assert calls == [
-        (
-            "playlistItems",
-            {"part": "contentDetails", "playlistId": "known-uploads", "maxResults": 25},
-        )
-    ]
-    assert result["uploads_playlist_id"] == "known-uploads"
+    assert calls == [{
+        "part": "snippet",
+        "forMine": True,
+        "channelId": "selected-channel",
+        "type": "video",
+        "order": "date",
+        "maxResults": 25,
+    }]
+    assert result["uploads_playlist_id"] is None
     assert result["video_ids"] == []
     assert result["videos"] == []
 
