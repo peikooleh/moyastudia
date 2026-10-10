@@ -57,8 +57,6 @@ def infer_provider(key):
         return "anthropic"
     if key.startswith("AIza"):
         return "gemini"
-    if key.startswith("sk-"):
-        return "openai"
     return None
 
 
