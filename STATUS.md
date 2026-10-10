@@ -13,8 +13,8 @@
 
 ## Проверки
 
-- CI для исправлений запущен; финальный статус и точные counts фиксируются после завершения всех проверок.
-- Последний подтверждённый полный CI до этих исправлений: backend 178 passed, frontend 36 passed, i18n 684 EN/RU/UK keys, lint/build successful, pip-audit clean.
+- Полный CI на `932bd97` (последний коммит с изменением исполняемого кода/тестов) — **успешен**: backend **179 passed, 3 warnings**; frontend **38/38 passed**; EN/RU/UK **684 unique keys, no duplicates**; ESLint **0 errors** (известные предупреждения `<img>` и custom font); Next.js production build **успешен, 7/7 static pages**; `pip-audit` — **No known vulnerabilities found**.
+- Последующие коммиты изменяют только документацию; CI для них также выполняется отдельно.
 
 ---
 
