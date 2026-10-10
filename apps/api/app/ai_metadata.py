@@ -147,15 +147,16 @@ def _request(provider, model, key, system, data):
         raise AIError("ai_provider_failed") from exc
 
 
-def improve(connection, entity, field, value):
+def improve(connection, entity, field, value, video_format="long"):
+
     if (entity, field) not in LIMITS:
         raise AIError("ai_field_unsupported")
     key = decrypt_refresh_token(connection.encrypted_api_key)
-    prompt_field = "title_prompt" if field == "title" else "description_prompt" if field == "description" else "tags_prompt"
+    prompt_field = "title_prompt" if field == "title" else "description_prompt" if field == "description" else "tags_prompt"\n    if entity == "video" and video_format == "short":\n        prompt_field = f"shorts_{prompt_field}"
     style = getattr(connection, prompt_field, "") or ""
     # JSON serialization distinguishes data from the higher-priority system instruction.
     data = json.dumps({"entity": entity, "field": field, "source_metadata": value,
-                       "style_preferences_untrusted": style, "maximum_utf8_bytes": LIMITS[(entity, field)]},
+                       "video_format": video_format if entity == "video" else None, "style_preferences_untrusted": style, "maximum_utf8_bytes": LIMITS[(entity, field)]},
                       ensure_ascii=False)
     text = _request(connection.provider, connection.model, key, POLICY, data)
     return _parse_output(text, entity, field)
