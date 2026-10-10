@@ -1945,6 +1945,7 @@ def catalog_status(
 @app.get("/channels/{channel_id}/catalog/audit")
 def audit_channel_catalog(
     channel_id: int,
+    probe_ids: str = Query("", max_length=500),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1959,11 +1960,17 @@ def audit_channel_catalog(
         .all()
     )
     local_by_id = {row.youtube_video_id: row for row in local_rows}
+    probes = [value.strip() for value in probe_ids.split(",") if value.strip()]
+    if len(probes) > 20 or any(
+        len(value) != 11 or not all(char.isalnum() or char in "_-" for char in value)
+        for value in probes
+    ):
+        raise HTTPException(422, detail={"code": "invalid_audit_video_ids"})
     try:
         refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
             remote = yt.audit_video_discovery(
-                refresh_token, channel.youtube_channel_id, list(local_by_id)
+                refresh_token, channel.youtube_channel_id, list(dict.fromkeys(list(local_by_id) + probes))
             )
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
@@ -2054,6 +2061,15 @@ def audit_channel_catalog(
             ],
         },
         "mismatches": sorted(differences, key=lambda item: item["youtubeId"]),
+        "probes": [
+            {
+                "youtubeId": video_id,
+                "foundBy": sorted(name for name, ids in source_ids.items() if video_id in ids),
+                "direct": details.get(video_id),
+                "localPrivacy": local_by_id[video_id].youtube_visibility if video_id in local_by_id else None,
+            }
+            for video_id in probes
+        ],
         "localNotDiscovered": sorted(set(local_by_id) - all_discovered),
     }
 
