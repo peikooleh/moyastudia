@@ -344,6 +344,10 @@ test("Analytics pending-data guidance explains successful API response in all UI
   assert.match(t("uk", "statisticsAnalyticsDataPendingDetail"), /API відповів успішно/);
   assert.equal(t("en", "statisticsAnalyticsDataPending"), "YouTube Analytics data is not available yet.");
   assert.match(t("en", "statisticsAnalyticsDataPendingDetail"), /API responded successfully/);
+  assert.equal(
+    t("ru", "statisticsCurrentYouTubeViewsPendingAnalytics", { count: "249" }),
+    "Сейчас на YouTube: 249 · Данные YouTube Analytics ещё не доступны.",
+  );
 });
 
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
@@ -355,7 +359,7 @@ test("new Studio labels are localized in English, Russian, and Ukrainian", () =>
     "statisticsScopePlaylist", "statisticsScopeVideo", "statisticsPeriod", "statisticsPeriodLifetime",
     "statisticsAverageViewDuration", "statisticsSubscribersNet", "statisticsSubscribersTotal", "statisticsSubscribersChange",
     "statisticsViewsOverTime", "statisticsWatchTimeOverTime", "statisticsAverageDurationOverTime", "statisticsSubscribersOverTime", "statisticsShares",
-    "statisticsPlaylistMetricUnavailable", "statisticsAnalyticsDataPending", "statisticsAnalyticsDataPendingDetail", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
+    "statisticsPlaylistMetricUnavailable", "statisticsAnalyticsDataPending", "statisticsAnalyticsDataPendingDetail", "statisticsCurrentYouTubeViewsPendingAnalytics", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
     "youtubeChangesPreview", "youtubeValueBefore", "youtubeValueAfter", "youtubeOrderCurrent", "youtubeOrderChanged",
     "statisticsContentMix", "youtube_analytics_api_disabled", "youtube_analytics_permission_required",
     "youtubeDescriptionByteRule",
