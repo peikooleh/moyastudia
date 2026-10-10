@@ -48,6 +48,17 @@ function connectionDisplayName(connection) {
   return email;
 }
 
+function aiModelDisplayName(connection) {
+  const names = {
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
+    "gemini-3.6-pro": "Gemini 3.6 Pro",
+    "openai/gpt-oss-120b": "GPT-OSS 120B",
+    "openai/gpt-oss-20b": "GPT-OSS 20B",
+    "grok-4.3": "Grok 4.3",
+  };
+  return names[connection?.model] || connection?.model || "";
+}
+
 export default function CabinetPage() {
   const { prefs, uiLang, update } = usePrefs();
   const router = useRouter();
@@ -85,6 +96,7 @@ export default function CabinetPage() {
   const migratedChannelLanguages = useRef(new Set());
   const [aiConnections, setAiConnections] = useState([]);
   const [selectedAiConnectionId, setSelectedAiConnectionId] = useState(null);
+  const [aiImproveMenu, setAiImproveMenu] = useState("");
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiModel, setAiModel] = useState("");
   const [aiApiKey, setAiApiKey] = useState("");
@@ -889,12 +901,12 @@ export default function CabinetPage() {
                       {channelEditing ? (
                         <div className="channel-description-editor">
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("description", channelDescriptionDraft)}>{aiBusy === "channel:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button>{aiConnections.length ? <select className="ai-improve-model" value={String(selectedAiConnectionId || aiConnections[0]?.id || "")} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onChange={(event) => { const id = Number(event.target.value); setSelectedAiConnectionId(id); window.localStorage.setItem("moyastudia.aiConnectionId", String(id)); }}>{aiConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.model}</option>)}</select> : null}</span></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("description", channelDescriptionDraft)}>{aiBusy === "channel:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImproveAction")}</button>{aiConnections.length ? <span className="ai-model-picker"><button className="ai-model-picker-btn" type="button" aria-haspopup="menu" aria-expanded={aiImproveMenu === "description"} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onClick={() => setAiImproveMenu((open) => open === "description" ? "" : "description")}><span>{aiModelDisplayName(aiConnections.find((connection) => connection.id === selectedAiConnectionId) || aiConnections[0])}</span><span className="ai-model-picker-chevron" aria-hidden="true">⌄</span></button>{aiImproveMenu === "description" ? <span className="ai-model-picker-menu" role="menu">{aiConnections.map((connection) => <button className={`ai-model-picker-option ${connection.id === selectedAiConnectionId ? "selected" : ""}`} type="button" role="menuitemradio" aria-checked={connection.id === selectedAiConnectionId} key={connection.id} onClick={() => { setSelectedAiConnectionId(connection.id); window.localStorage.setItem("moyastudia.aiConnectionId", String(connection.id)); setAiImproveMenu(""); }}>{aiModelDisplayName(connection)}</button>)}</span> : null}</span> : null}</span></span>
                             <textarea rows={10} maxLength={1000} value={channelDescriptionDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelDescriptionDraft(event.target.value)} />
                           </label>
                           <small>{channelDescriptionDraft.length} / 1000</small>
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("keywords", channelKeywordsDraft)}>{aiBusy === "channel:keywords" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button>{aiConnections.length ? <select className="ai-improve-model" value={String(selectedAiConnectionId || aiConnections[0]?.id || "")} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onChange={(event) => { const id = Number(event.target.value); setSelectedAiConnectionId(id); window.localStorage.setItem("moyastudia.aiConnectionId", String(id)); }}>{aiConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.model}</option>)}</select> : null}</span></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("keywords", channelKeywordsDraft)}>{aiBusy === "channel:keywords" ? t(uiLang, "aiImproving") : t(uiLang, "aiImproveAction")}</button>{aiConnections.length ? <span className="ai-model-picker"><button className="ai-model-picker-btn" type="button" aria-haspopup="menu" aria-expanded={aiImproveMenu === "keywords"} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onClick={() => setAiImproveMenu((open) => open === "keywords" ? "" : "keywords")}><span>{aiModelDisplayName(aiConnections.find((connection) => connection.id === selectedAiConnectionId) || aiConnections[0])}</span><span className="ai-model-picker-chevron" aria-hidden="true">⌄</span></button>{aiImproveMenu === "keywords" ? <span className="ai-model-picker-menu" role="menu">{aiConnections.map((connection) => <button className={`ai-model-picker-option ${connection.id === selectedAiConnectionId ? "selected" : ""}`} type="button" role="menuitemradio" aria-checked={connection.id === selectedAiConnectionId} key={connection.id} onClick={() => { setSelectedAiConnectionId(connection.id); window.localStorage.setItem("moyastudia.aiConnectionId", String(connection.id)); setAiImproveMenu(""); }}>{aiModelDisplayName(connection)}</button>)}</span> : null}</span> : null}</span></span>
                             <textarea rows={4} maxLength={500} value={channelKeywordsDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelKeywordsDraft(event.target.value)} />
                           </label>
                           <small>{channelKeywordsDraft.length} / 500</small>
