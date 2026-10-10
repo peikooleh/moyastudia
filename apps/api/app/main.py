@@ -1895,6 +1895,59 @@ def probe_channel_video_format(
     }
 
 
+@app.get("/channels/{channel_id}/format-probe")
+def probe_channel_video_formats(
+    channel_id: int,
+    limit: int = Query(12, ge=1, le=25),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Read-only diagnostic sample of real owner fileDetails across a channel."""
+    channel = _channel_or_404(db, user, channel_id)
+    videos = (
+        db.query(Video)
+        .filter(
+            Video.channel_id == channel.id,
+            Video.availability_status == "available",
+            Video.youtube_video_id.is_not(None),
+        )
+        .order_by(
+            func.coalesce(Video.youtube_published_at, Video.youtube_scheduled_at).desc(),
+            Video.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        results = []
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            for video in videos:
+                try:
+                    details = yt.video_file_details(token, video.youtube_video_id)
+                    results.append({
+                        "videoId": video.id,
+                        "youtubeId": video.youtube_video_id,
+                        "title": video.title or video.youtube_title or "",
+                        **details,
+                    })
+                except Exception as exc:
+                    status, reasons = _youtube_error_facts(exc)
+                    results.append({
+                        "videoId": video.id,
+                        "youtubeId": video.youtube_video_id,
+                        "title": video.title or video.youtube_title or "",
+                        "error": {
+                            "type": type(exc).__name__,
+                            "httpStatus": status,
+                            "reasons": sorted(reasons),
+                        },
+                    })
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
+    return {"channelId": channel.id, "sampleSize": len(results), "items": results}
+
+
 @app.put(
     "/channels/{channel_id}/videos/{video_id}/thumbnail",
     dependencies=[Depends(require_same_origin)],
