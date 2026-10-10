@@ -7,7 +7,7 @@ import httpx
 
 from .tokens import decrypt_refresh_token
 
-MODELS = {"openai": "gpt-6-luna", "gemini": "gemini-3.6-flash", "anthropic": "claude-sonnet-4-5"}
+MODELS = {"openai": "gpt-6-luna", "gemini": "gemini-3.6-flash", "anthropic": "claude-sonnet-4-5", "xai": "grok-4.3"}
 LIMITS = {
     ("video", "title"): 100, ("video", "description"): 5000, ("video", "tags"): 500,
     ("playlist", "title"): 150, ("playlist", "description"): 5000,
@@ -93,6 +93,11 @@ def _request(provider, model, key, system, data):
         headers = {"Authorization": f"Bearer {key}"}
         payload = {"model": model, "messages": [{"role": "system", "content": system},
                    {"role": "user", "content": data}], "response_format": {"type": "json_object"}}
+    elif provider == "xai":
+        url = "https://api.x.ai/v1/responses"
+        headers = {"Authorization": f"Bearer {key}"}
+        payload = {"model": model, "input": [{"role": "system", "content": system},
+                   {"role": "user", "content": data}]}
     elif provider == "anthropic":
         url = "https://api.anthropic.com/v1/messages"
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
@@ -117,6 +122,9 @@ def _request(provider, model, key, system, data):
         if response.status_code >= 400:
             raise AIError("ai_provider_failed", response.status_code, provider_message)
         body = response.json()
+        if provider == "xai":
+            return "".join(part["text"] for item in body["output"] if item.get("type") == "message"
+                           for part in item.get("content", []) if part.get("type") == "output_text")
         if provider == "openai":
             return body["choices"][0]["message"]["content"]
         if provider == "anthropic":
