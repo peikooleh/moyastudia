@@ -1725,6 +1725,41 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   cursor: default;
   opacity: .72;
 }
+.ai-improve-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-improve-model {
+  max-width: 190px;
+  min-height: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 2px 24px 2px 7px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.ai-improve-model:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.ai-improve-model:disabled {
+  opacity: .65;
+}
+@media (max-width: 620px) {
+  .ai-improve-control {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+  .ai-improve-model {
+    max-width: 150px;
+  }
+}
 .ai-connections-panel {
   margin-top: 28px;
   padding-top: 22px;
