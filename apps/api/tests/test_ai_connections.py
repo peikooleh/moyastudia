@@ -215,3 +215,28 @@ def test_ai_auto_selects_provider_and_model(client, test_database):
     assert result.json()["provider"] == "anthropic"
     assert result.json()["model"]
     assert result.json()["tags_prompt"] == "simple"
+
+
+def test_ai_prompts_are_shared_across_saved_models(client, test_database):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    headers = {"Origin": settings.frontend_origin}
+
+    first = client.put("/ai-connections", json=_payload(
+        model="model-a", title_prompt="Old title", description_prompt="Old description",
+        tags_prompt="Old tags"
+    ), headers=headers)
+    assert first.status_code == 200
+
+    second = client.put("/ai-connections", json=_payload(
+        model="model-b", api_key="second-secret", title_prompt="Shared title",
+        description_prompt="Shared description", tags_prompt="Shared tags"
+    ), headers=headers)
+    assert second.status_code == 200
+
+    rows = client.get("/ai-connections").json()
+    assert len(rows) == 2
+    for row in rows:
+        assert row["title_prompt"] == "Shared title"
+        assert row["description_prompt"] == "Shared description"
+        assert row["tags_prompt"] == "Shared tags"
