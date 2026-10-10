@@ -337,6 +337,15 @@ test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () =>
   assert.equal(t("uk", "actionCancel"), "Скасувати");
 });
 
+test("Analytics pending-data guidance explains successful API response in all UI languages", () => {
+  assert.equal(t("ru", "statisticsAnalyticsDataPending"), "Данные YouTube Analytics ещё не доступны.");
+  assert.match(t("ru", "statisticsAnalyticsDataPendingDetail"), /API ответил успешно/);
+  assert.equal(t("uk", "statisticsAnalyticsDataPending"), "Дані YouTube Analytics ще недоступні.");
+  assert.match(t("uk", "statisticsAnalyticsDataPendingDetail"), /API відповів успішно/);
+  assert.equal(t("en", "statisticsAnalyticsDataPending"), "YouTube Analytics data is not available yet.");
+  assert.match(t("en", "statisticsAnalyticsDataPendingDetail"), /API responded successfully/);
+});
+
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
   const keys = [
     "more", "statisticsTab", "calendarToday", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
@@ -346,7 +355,7 @@ test("new Studio labels are localized in English, Russian, and Ukrainian", () =>
     "statisticsScopePlaylist", "statisticsScopeVideo", "statisticsPeriod", "statisticsPeriodLifetime",
     "statisticsAverageViewDuration", "statisticsSubscribersNet", "statisticsSubscribersTotal", "statisticsSubscribersChange",
     "statisticsViewsOverTime", "statisticsWatchTimeOverTime", "statisticsAverageDurationOverTime", "statisticsSubscribersOverTime", "statisticsShares",
-    "statisticsPlaylistMetricUnavailable", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
+    "statisticsPlaylistMetricUnavailable", "statisticsAnalyticsDataPending", "statisticsAnalyticsDataPendingDetail", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
     "youtubeChangesPreview", "youtubeValueBefore", "youtubeValueAfter", "youtubeOrderCurrent", "youtubeOrderChanged",
     "statisticsContentMix", "youtube_analytics_api_disabled", "youtube_analytics_permission_required",
     "youtubeDescriptionByteRule",
