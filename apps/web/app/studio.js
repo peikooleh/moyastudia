@@ -163,6 +163,7 @@ function VideoInspector({
   updateWorkingField,
   improveVideoField,
   aiBusy,
+  aiImproveLabel,
   confirmResetWorkingToSnapshot,
   discardWorkingChanges,
   resolveWorkingConflict,
@@ -2299,6 +2300,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             updateWorkingField={updateWorkingField}
             improveVideoField={improveVideoField}
             aiBusy={aiBusy}
+            aiImproveLabel={aiImproveLabel}
             confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
             discardWorkingChanges={discardWorkingChanges}
             resolveWorkingConflict={resolveWorkingConflict}
