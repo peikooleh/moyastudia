@@ -14,6 +14,10 @@ const AI_MODEL_CATALOG = {
     { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Быстрая · платный API" },
     { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", description: "Качественная универсальная · платный API" },
   ],
+  groq: [
+    { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", description: "GroqCloud · бесплатный тариф с лимитами" },
+    { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", description: "GroqCloud · бесплатный тариф с лимитами" },
+  ],
   xai: [
     { id: "grok-4.3", name: "Grok 4.3", description: "Быстрая · платный API" },
     { id: "grok-4.7", name: "Grok 4.7", description: "Флагманская · платный API" },
@@ -404,6 +408,36 @@ export default function CabinetPage() {
     }
   }
 
+  async function deleteAiConnection() {
+    const saved = aiConnections.find((item) => item.provider === aiProvider && item.model === aiModel);
+    if (!saved?.id || aiSaving) return;
+    if (!window.confirm("Удалить сохранённый API-ключ и подключение этой модели?")) return;
+    setAiSaving(true);
+    setAiError("");
+    setAiNotice("");
+    try {
+      const response = await apiFetch(`/ai-connections/${saved.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`Не удалось удалить подключение (HTTP ${response.status})`);
+      const remaining = aiConnections.filter((item) => item.id !== saved.id);
+      setAiConnections(remaining);
+      const next = remaining[0];
+      setAiProvider(next?.provider || "groq");
+      setAiModel(next?.model || "");
+      setAiTitlePrompt(next?.title_prompt || "");
+      setAiDescriptionPrompt(next?.description_prompt || "");
+      setAiTagsPrompt(next?.tags_prompt || "");
+      setAiApiKey("");
+      setAiBaseline({ provider: next?.provider || "groq", model: next?.model || "",
+        titlePrompt: next?.title_prompt || "", descriptionPrompt: next?.description_prompt || "",
+        tagsPrompt: next?.tags_prompt || "" });
+      setAiNotice("API-ключ и подключение удалены.");
+    } catch (error) {
+      setAiError(error.message || "Ошибка удаления подключения");
+    } finally {
+      setAiSaving(false);
+    }
+  }
+
   async function saveAiConnection() {
     if (!aiProvider && !aiApiKey.trim()) {
       setAiError(t(uiLang, "aiModelRequired"));
@@ -687,7 +721,7 @@ export default function CabinetPage() {
                     <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                     <div className="ai-connection-grid ai-connection-main">
-                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option><option value="xai">xAI / Grok</option></select></label>
+                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option><option value="xai">xAI / Grok</option><option value="groq">GroqCloud</option></select></label>
                       <label className="ai-model-field" title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}
                         <select value={(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? aiModel : "custom"} onChange={(event) => setAiModel(event.target.value === "custom" ? "" : event.target.value)}>
                           <option value="custom">Своя модель (ввести ID)</option>
@@ -696,7 +730,7 @@ export default function CabinetPage() {
                         <small className="ai-model-description">{(AI_MODEL_CATALOG[aiProvider] || []).find((item) => item.id === aiModel)?.description || "Введите ID модели вручную. Доступность и стоимость зависят от провайдера."}</small>
                         {!(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? <input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /> : null}
                       </label>
-                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
+                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>{aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={deleteAiConnection}>Удалить API-ключ</button> : null}
                     </div>
                     {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                     {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
