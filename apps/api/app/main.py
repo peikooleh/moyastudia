@@ -1979,6 +1979,7 @@ def audit_channel_catalog(
             502, detail={"code": "youtube_catalog_audit_failed", "reason": _youtube_error_code(exc)}
         ) from exc
 
+    audit_errors = remote.get("errors") or {}
     sources = remote["sources"]
     source_ids = {name: set(data["ids"]) for name, data in sources.items()}
     details = remote["details"]
@@ -2023,8 +2024,15 @@ def audit_channel_catalog(
             "localId": channel.id,
             "youtubeId": channel.youtube_channel_id,
             "oauthOwnedChannelIds": remote["owned_channel_ids"],
-            "oauthOwnsSelectedChannel": channel.youtube_channel_id in remote["owned_channel_ids"],
+            "oauthOwnsSelectedChannel": (
+                None if "channels.list:mine" in audit_errors or "authentication" in audit_errors
+                else channel.youtube_channel_id in remote["owned_channel_ids"]
+            ),
         },
+        "auditComplete": not bool(audit_errors) and not any(
+            source["truncated"] for source in sources.values()
+        ),
+        "auditErrors": audit_errors,
         "sync": _catalog_status(db, channel),
         "local": {
             "count": len(local_by_id),
