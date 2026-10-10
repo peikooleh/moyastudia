@@ -873,33 +873,66 @@ def test_reconcile_is_upserted_and_repeat_sync_does_not_duplicate(client, test_d
         assert rows[0].youtube_title == "same-video"
 
 
-def test_incremental_sync_stops_after_known_video_overlap(client, test_database, monkeypatch):
+def test_incremental_sync_refreshes_known_videos_across_all_pages(
+    client, test_database, monkeypatch
+):
     user_id, token = create_account(test_database)
     channel_id, youtube_channel_id, _ = create_channel(test_database, user_id)
     authorized_client(client, token)
     with test_database() as db:
-        db.add(
-            Video(
-                channel_id=channel_id,
-                youtube_video_id="known-video",
-                internal_status=None,
-                youtube_title="Known",
-            )
+        db.add_all(
+            [
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="known-first",
+                    internal_status=None,
+                    youtube_visibility="public",
+                ),
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id="known-later",
+                    internal_status=None,
+                    youtube_visibility="public",
+                ),
+            ]
         )
         db.commit()
     calls = []
 
     def list_page(refresh_token, selected_id, **kwargs):
-        calls.append(kwargs.get("page_token"))
-        return page(selected_id, ["new-video", "known-video"], next_token="more")
+        page_token = kwargs.get("page_token")
+        calls.append(page_token)
+        if page_token is None:
+            return page(
+                selected_id,
+                ["new-video", "known-first"],
+                next_token="more",
+            )
+        assert page_token == "more"
+        changed = remote_video("known-later", selected_id)
+        changed["youtube_visibility"] = "unlisted"
+        changed["youtube_scheduled_at"] = "2026-10-16T05:00:00Z"
+        return page(
+            selected_id,
+            ["known-later"],
+            details=[changed],
+        )
 
     monkeypatch.setattr(main.yt, "list_videos", list_page)
     assert start_sync(client, channel_id, "incremental").status_code == 200
+    assert continue_sync(client, channel_id).json()["state"] == "PARTIAL"
     assert continue_sync(client, channel_id).json()["state"] == "COMPLETE"
 
-    assert calls == [None]
+    assert calls == [None, "more"]
     with test_database() as db:
-        assert db.query(Video).filter(Video.channel_id == channel_id).count() == 2
+        assert db.query(Video).filter(Video.channel_id == channel_id).count() == 3
+        changed = (
+            db.query(Video)
+            .filter_by(channel_id=channel_id, youtube_video_id="known-later")
+            .one()
+        )
+        assert changed.youtube_visibility == "unlisted"
+        assert changed.youtube_scheduled_at.isoformat() == "2026-10-16T05:00:00"
 
 
 def test_failed_partial_reconcile_keeps_cache_and_marks_stale(
