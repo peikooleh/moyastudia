@@ -1689,7 +1689,10 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       if (typeof result.value !== "string") throw new Error(t(uiLang, "aiImproveFailed"));
       apply(result.value);
     } catch (error) {
-      onError(error.message || t(uiLang, "aiImproveFailed"));
+      const message = error?.message === "Failed to fetch"
+        ? t(uiLang, "aiNetworkError")
+        : (error.message || t(uiLang, "aiImproveFailed"));
+      onError(message);
     } finally {
       if (requestId === aiRequestRef.current) setAiBusy("");
     }
