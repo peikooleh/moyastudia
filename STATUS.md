@@ -1,3 +1,12 @@
+## Корень расхождения 7 против 2 доказан — 2026-10-10
+
+- Реальный аудит украинского канала `UCo_Srxy3jqF4PbuxgldLpWA`: OAuth ownership подтверждён; DB/uploads = **137**, owner-wide search = **144**, direct videos.list = **144/144**, YouTube unlisted = **7**, DB unlisted = **2**.
+- Отсутствуют ровно 7 записей: **5 unlisted + 2 public**. Значит проблема была не во frontend-фильтре и не только в unlisted.
+- Реальный scoped `search.list(forMine=true, channelId=...)` возвращает **400 badRequest**; из-за этого reconcile стал `STALE`.
+- Исправлено: каталог синхронизируется через подтверждённый рабочий `search.list(forMine=true,type=video)` без `channelId`; результаты жёстко фильтруются по `snippet.channelId` выбранного канала до запроса деталей. Тест отдельно запрещает попадание foreign-channel ID.
+- После зелёного CI и локального pull/restart выполнить reconcile. Ожидаемый результат для этого снимка: **144 total / 7 unlisted**. Не мерджить до фактического подтверждения.
+- Календарь не менялся.
+
 # Current Status — 2026-10-10
 
 > **Текущий рабочий статус.** Актуальная ветка: `fix-youtube-status-calendar-2026-10-08`, создана от merge `5143460` в `main`. Предыдущая ветка `page-audit-refinement-2026-10-08` сохранена для отката. Исторические записи ниже относятся к состоянию на 8 октября.
