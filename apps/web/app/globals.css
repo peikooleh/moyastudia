@@ -1714,16 +1714,109 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .editor-field-heading label {
   margin: 0;
 }
-.ai-improve-btn {
-  border: 0;
-  padding: 2px 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
+.ai-improve-btn,
+.ai-model-picker-btn {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
 }
-.ai-improve-btn:disabled {
+.ai-improve-btn {
+  padding: 4px 9px;
+  font-weight: 600;
+}
+.ai-improve-btn:hover:not(:disabled),
+.ai-model-picker-btn:hover:not(:disabled),
+.ai-model-picker-option:hover {
+  background: var(--hover);
+}
+.ai-improve-btn:focus-visible,
+.ai-model-picker-btn:focus-visible,
+.ai-model-picker-option:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.ai-improve-btn:disabled,
+.ai-model-picker-btn:disabled {
   cursor: default;
-  opacity: .72;
+  opacity: .65;
+}
+.ai-improve-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-model-picker {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.ai-model-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 150px;
+  max-width: 210px;
+  padding: 4px 7px 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ai-model-picker-btn > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-model-picker-chevron {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+}
+.ai-model-picker-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 100%;
+  width: max-content;
+  max-width: 260px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-raise);
+  box-shadow: var(--shadow);
+}
+.ai-model-picker-option {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ai-model-picker-option.selected {
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+@media (max-width: 620px) {
+  .ai-improve-control {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+  .ai-model-picker-btn {
+    min-width: 140px;
+    max-width: 170px;
+  }
 }
 .ai-connections-panel {
   margin-top: 28px;
@@ -1751,8 +1844,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: var(--bg-soft);
   color: var(--text);
 }
+.ai-connection-main {
+  grid-template-columns: minmax(220px, .8fr) minmax(280px, 1fr);
+  align-items: start;
+}
+.ai-connection-main > label:last-child {
+  grid-column: 1 / -1;
+}
+.ai-model-field {
+  position: relative;
+  padding-bottom: 20px;
+}
+.ai-model-description {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 @media (max-width: 900px) {
   .ai-connection-grid { grid-template-columns: 1fr; }
+  .ai-connection-main > label:last-child { grid-column: 1; }
 }
 
 
@@ -3924,4 +4042,46 @@ body {
 @media (max-width: 760px) {
   .statistics-monetization-rows { grid-template-columns: minmax(0, 1fr); }
   .statistics-monetization-badge { top: 10px; right: 10px; }
+}
+
+/* AI connection row: keep Provider and Model controls on the same baseline. */
+.ai-connection-main {
+  align-items: start;
+}
+.ai-connection-main > label {
+  align-content: start;
+}
+.ai-connection-main .ai-model-field {
+  padding-bottom: 0;
+}
+.ai-connection-main .ai-model-description {
+  position: static;
+  display: block;
+  height: 14px;
+  margin-top: 0;
+  line-height: 14px;
+}
+.ai-connection-main > label:first-child::after {
+  content: "";
+  display: block;
+  height: 14px;
+}
+
+/* Keep the AI connection row stable when the custom model ID input appears. */
+.ai-connection-main {
+  align-items: start;
+}
+.ai-connection-main > label:first-child,
+.ai-connection-main > .ai-model-field {
+  grid-row: 1;
+}
+.ai-connection-main > label:first-child {
+  align-self: start;
+}
+.ai-connection-main > label:last-child {
+  grid-row: 2;
+  margin-top: 0;
+}
+.ai-model-field {
+  min-height: calc(var(--control-h) + 54px);
 }

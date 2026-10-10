@@ -1,5 +1,29 @@
 "use client";
 
+const AI_MODEL_CATALOG = {
+  gemini: [
+    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", description: "Экономичная · доступность бесплатного тарифа зависит от проекта" },
+    { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", description: "Быстрая универсальная · тариф зависит от аккаунта" },
+    { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "Предыдущее поколение · доступность зависит от проекта" },
+  ],
+  openai: [
+    { id: "gpt-5-mini", name: "GPT-5 mini", description: "Экономичная · платный API" },
+    { id: "gpt-5", name: "GPT-5", description: "Мощная · платный API" },
+  ],
+  anthropic: [
+    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Быстрая · платный API" },
+    { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", description: "Качественная универсальная · платный API" },
+  ],
+  groq: [
+    { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", description: "GroqCloud · бесплатный тариф с лимитами" },
+    { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", description: "GroqCloud · бесплатный тариф с лимитами" },
+  ],
+  xai: [
+    { id: "grok-4.3", name: "Grok 4.3", description: "Быстрая · платный API" },
+    { id: "grok-4.7", name: "Grok 4.7", description: "Флагманская · платный API" },
+  ],
+};
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, apiUrl } from "../../lib/api";
@@ -22,6 +46,17 @@ function connectionDisplayName(connection) {
     return connection?.channels?.[0]?.title || email.split("@")[0] || email;
   }
   return email;
+}
+
+function aiModelDisplayName(connection) {
+  const names = {
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
+    "gemini-3.6-pro": "Gemini 3.6 Pro",
+    "openai/gpt-oss-120b": "GPT-OSS 120B",
+    "openai/gpt-oss-20b": "GPT-OSS 20B",
+    "grok-4.3": "Grok 4.3",
+  };
+  return names[connection?.model] || connection?.model || "";
 }
 
 export default function CabinetPage() {
@@ -60,11 +95,15 @@ export default function CabinetPage() {
   const [channelShareNotice, setChannelShareNotice] = useState("");
   const migratedChannelLanguages = useRef(new Set());
   const [aiConnections, setAiConnections] = useState([]);
+  const [selectedAiConnectionId, setSelectedAiConnectionId] = useState(null);
+  const [aiImproveMenu, setAiImproveMenu] = useState("");
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiModel, setAiModel] = useState("");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiTitlePrompt, setAiTitlePrompt] = useState("");
   const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("");
+  const [aiTagsPrompt, setAiTagsPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiNotice, setAiNotice] = useState("");
@@ -296,19 +335,24 @@ export default function CabinetPage() {
       .then((rows) => {
         if (cancelled) return;
         setAiConnections(rows);
+        const savedId = Number(window.localStorage.getItem("moyastudia.aiConnectionId") || 0);
+        const improveConnection = rows.find((item) => item.id === savedId) || rows[0] || null;
+        setSelectedAiConnectionId(improveConnection?.id || null);
         if (rows[0]) {
           setAiProvider(rows[0].provider);
           setAiModel(rows[0].model);
           setAiTitlePrompt(rows[0].title_prompt || "");
           setAiDescriptionPrompt(rows[0].description_prompt || "");
+          setAiTagsPrompt(rows[0].tags_prompt || "");
           setAiBaseline({
             provider: rows[0].provider,
             model: rows[0].model,
             titlePrompt: rows[0].title_prompt || "",
             descriptionPrompt: rows[0].description_prompt || "",
+            tagsPrompt: rows[0].tags_prompt || "",
           });
         } else {
-          setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "" });
+          setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "", tagsPrompt: "" });
         }
       })
       .catch((error) => { if (!cancelled) setAiError(error.message); });
@@ -319,9 +363,6 @@ export default function CabinetPage() {
     setAiProvider(provider);
     setAiModel(model);
     setAiApiKey("");
-    const saved = aiConnections.find((item) => item.provider === provider && item.model === model);
-    setAiTitlePrompt(saved?.title_prompt || "");
-    setAiDescriptionPrompt(saved?.description_prompt || "");
     setAiNotice("");
     setAiError("");
   }
@@ -332,6 +373,7 @@ export default function CabinetPage() {
     setAiModel(aiBaseline.model);
     setAiTitlePrompt(aiBaseline.titlePrompt);
     setAiDescriptionPrompt(aiBaseline.descriptionPrompt);
+    setAiTagsPrompt(aiBaseline.tagsPrompt || "");
     setAiApiKey("");
     setAiError("");
     setAiNotice("");
@@ -342,15 +384,79 @@ export default function CabinetPage() {
     || aiModel !== aiBaseline.model
     || aiTitlePrompt !== aiBaseline.titlePrompt
     || aiDescriptionPrompt !== aiBaseline.descriptionPrompt
+    || aiTagsPrompt !== (aiBaseline.tagsPrompt || "")
     || Boolean(aiApiKey.trim())
   );
 
+  function updateAiKey(value) {
+    setAiApiKey(value);
+    const provider = value.startsWith("sk-ant-") ? "anthropic" : value.startsWith("AIza") ? "gemini" : value.startsWith("sk-") ? "" : "";
+    if (provider) {
+      setAiProvider(provider);
+      setAiModel("");
+    }
+  }
+
+  async function improveChannelField(field, value) {
+    if (aiBusy || channelDescriptionSaving) return;
+    const channelId = String(prefs.selectedChannelId || "");
+    setAiBusy(`channel:${field}`);
+    setChannelDescriptionError("");
+    try {
+      const response = await apiFetch("/ai/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "channel", field, value, connection_id: selectedAiConnectionId || undefined }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(t(uiLang, data?.detail?.code || "aiImproveFailed"));
+      if (String(prefs.selectedChannelId || "") !== channelId) return;
+      if (field === "description") setChannelDescriptionDraft(data.value);
+      else setChannelKeywordsDraft(data.value);
+    } catch (error) {
+      setChannelDescriptionError(error.message || t(uiLang, "aiImproveFailed"));
+    } finally {
+      setAiBusy("");
+    }
+  }
+
+  async function deleteAiConnection() {
+    const saved = aiConnections.find((item) => item.provider === aiProvider && item.model === aiModel);
+    if (!saved?.id || aiSaving) return;
+    if (!window.confirm(t(uiLang, "aiDeleteConnectionConfirm"))) return;
+    setAiSaving(true);
+    setAiError("");
+    setAiNotice("");
+    try {
+      const response = await apiFetch(`/ai-connections/${saved.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`${t(uiLang, "aiDeleteConnectionError")} (HTTP ${response.status})`);
+      const remaining = aiConnections.filter((item) => item.id !== saved.id);
+      setAiConnections(remaining);
+      const next = remaining[0];
+      setAiProvider(next?.provider || "groq");
+      setAiModel(next?.model || "");
+      setAiApiKey("");
+      setAiBaseline({ provider: next?.provider || "groq", model: next?.model || "",
+        titlePrompt: aiTitlePrompt, descriptionPrompt: aiDescriptionPrompt, tagsPrompt: aiTagsPrompt });
+      if (selectedAiConnectionId === saved.id) {
+        setSelectedAiConnectionId(next?.id || null);
+        if (next?.id) window.localStorage.setItem("moyastudia.aiConnectionId", String(next.id));
+        else window.localStorage.removeItem("moyastudia.aiConnectionId");
+      }
+      setAiNotice(t(uiLang, "aiDeleteConnectionSuccess"));
+    } catch (error) {
+      setAiError(error.message || t(uiLang, "aiDeleteConnectionError"));
+    } finally {
+      setAiSaving(false);
+    }
+  }
+
   async function saveAiConnection() {
-    if (!aiModel.trim()) {
+    if (!aiProvider && !aiApiKey.trim()) {
       setAiError(t(uiLang, "aiModelRequired"));
       return;
     }
-    const saved = aiConnections.find((item) => item.provider === aiProvider && item.model === aiModel.trim());
+    const saved = aiConnections.find((item) => item.provider === aiProvider && (!aiModel || item.model === aiModel.trim()));
     if (!saved?.has_api_key && !aiApiKey.trim()) {
       setAiError(t(uiLang, "aiApiKeyRequired"));
       return;
@@ -364,21 +470,42 @@ export default function CabinetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider: aiProvider,
-          model: aiModel.trim(),
+          model: aiModel.trim() || null,
           api_key: aiApiKey.trim() || null,
           title_prompt: aiTitlePrompt,
           description_prompt: aiDescriptionPrompt,
+          tags_prompt: aiTagsPrompt,
         }),
       });
-      if (!response.ok) throw new Error(t(uiLang, "aiSaveError"));
-      const row = await response.json();
-      setAiConnections((current) => [...current.filter((item) => item.id !== row.id), row]);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = body?.detail;
+        const code = !Array.isArray(detail) && typeof detail === "object" ? detail?.code : detail;
+        const validation = Array.isArray(detail) ? detail.map((item) => item?.msg).filter(Boolean).join("; ") : "";
+        const description = typeof code === "string" ? code : validation || `HTTP ${response.status}`;
+        throw new Error(`${t(uiLang, "aiSaveError")} (${description})`);
+      }
+      const row = body;
+      setAiConnections((current) => [
+        ...current.filter((item) => item.id !== row.id).map((item) => ({
+          ...item,
+          title_prompt: row.title_prompt || "",
+          description_prompt: row.description_prompt || "",
+          tags_prompt: row.tags_prompt || "",
+        })),
+        row,
+      ]);
+      setSelectedAiConnectionId(row.id);
+      window.localStorage.setItem("moyastudia.aiConnectionId", String(row.id));
       setAiApiKey("");
+      setAiProvider(row.provider);
+      setAiModel(row.model);
       setAiBaseline({
         provider: row.provider,
         model: row.model,
         titlePrompt: row.title_prompt || "",
         descriptionPrompt: row.description_prompt || "",
+        tagsPrompt: row.tags_prompt || "",
       });
       setAiNotice(t(uiLang, "aiSaved"));
     } catch (error) {
@@ -616,10 +743,17 @@ export default function CabinetPage() {
                   <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
                     <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
-                    <div className="ai-connection-grid">
-                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
-                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
-                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
+                    <div className="ai-connection-grid ai-connection-main">
+                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option><option value="xai">xAI / Grok</option><option value="groq">GroqCloud</option></select></label>
+                      <label className="ai-model-field" title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}
+                        <select value={(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? aiModel : "custom"} onChange={(event) => setAiModel(event.target.value === "custom" ? "" : event.target.value)}>
+                          <option value="custom">Своя модель (ввести ID)</option>
+                          {(AI_MODEL_CATALOG[aiProvider] || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                        </select>
+                        <small className="ai-model-description">{(AI_MODEL_CATALOG[aiProvider] || []).find((item) => item.id === aiModel)?.description || "Введите ID модели вручную. Доступность и стоимость зависят от провайдера."}</small>
+                        {!(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? <input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /> : null}
+                      </label>
+                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>{aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? <button className="btn ghost" type="button" disabled={aiSaving} onClick={deleteAiConnection}>Удалить API-ключ</button> : null}
                     </div>
                     {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                     {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
@@ -629,6 +763,7 @@ export default function CabinetPage() {
                     <div className="ai-model-settings">
                       <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
                       <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
                     </div>
                   </aside>
                   {aiDirty ? (
@@ -767,12 +902,12 @@ export default function CabinetPage() {
                       {channelEditing ? (
                         <div className="channel-description-editor">
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setChannelDescriptionError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("description", channelDescriptionDraft)}>{aiBusy === "channel:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImproveAction")}</button>{aiConnections.length ? <span className="ai-model-picker"><button className="ai-model-picker-btn" type="button" aria-haspopup="menu" aria-expanded={aiImproveMenu === "description"} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onClick={() => setAiImproveMenu((open) => open === "description" ? "" : "description")}><span>{aiModelDisplayName(aiConnections.find((connection) => connection.id === selectedAiConnectionId) || aiConnections[0])}</span><span className="ai-model-picker-chevron" aria-hidden="true">⌄</span></button>{aiImproveMenu === "description" ? <span className="ai-model-picker-menu" role="menu">{aiConnections.map((connection) => <button className={`ai-model-picker-option ${connection.id === selectedAiConnectionId ? "selected" : ""}`} type="button" role="menuitemradio" aria-checked={connection.id === selectedAiConnectionId} key={connection.id} onClick={() => { setSelectedAiConnectionId(connection.id); window.localStorage.setItem("moyastudia.aiConnectionId", String(connection.id)); setAiImproveMenu(""); }}>{aiModelDisplayName(connection)}</button>)}</span> : null}</span> : null}</span></span>
                             <textarea rows={10} maxLength={1000} value={channelDescriptionDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelDescriptionDraft(event.target.value)} />
                           </label>
                           <small>{channelDescriptionDraft.length} / 1000</small>
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setChannelDescriptionError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("keywords", channelKeywordsDraft)}>{aiBusy === "channel:keywords" ? t(uiLang, "aiImproving") : t(uiLang, "aiImproveAction")}</button>{aiConnections.length ? <span className="ai-model-picker"><button className="ai-model-picker-btn" type="button" aria-haspopup="menu" aria-expanded={aiImproveMenu === "keywords"} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onClick={() => setAiImproveMenu((open) => open === "keywords" ? "" : "keywords")}><span>{aiModelDisplayName(aiConnections.find((connection) => connection.id === selectedAiConnectionId) || aiConnections[0])}</span><span className="ai-model-picker-chevron" aria-hidden="true">⌄</span></button>{aiImproveMenu === "keywords" ? <span className="ai-model-picker-menu" role="menu">{aiConnections.map((connection) => <button className={`ai-model-picker-option ${connection.id === selectedAiConnectionId ? "selected" : ""}`} type="button" role="menuitemradio" aria-checked={connection.id === selectedAiConnectionId} key={connection.id} onClick={() => { setSelectedAiConnectionId(connection.id); window.localStorage.setItem("moyastudia.aiConnectionId", String(connection.id)); setAiImproveMenu(""); }}>{aiModelDisplayName(connection)}</button>)}</span> : null}</span> : null}</span></span>
                             <textarea rows={4} maxLength={500} value={channelKeywordsDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelKeywordsDraft(event.target.value)} />
                           </label>
                           <small>{channelKeywordsDraft.length} / 500</small>

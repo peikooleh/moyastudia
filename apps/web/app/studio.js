@@ -146,6 +146,90 @@ function MetadataLimitNotice({ uiLang, state, characters }) {
   );
 }
 
+function aiModelDisplayName(connection) {
+  const names = {
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
+    "gemini-3.6-pro": "Gemini 3.6 Pro",
+    "openai/gpt-oss-120b": "GPT-OSS 120B",
+    "openai/gpt-oss-20b": "GPT-OSS 20B",
+    "grok-4.3": "Grok 4.3",
+  };
+  return names[connection?.model] || connection?.model || "";
+}
+
+function AIImproveControl({ uiLang, busy, disabled, onImprove, connections, selectedConnectionId, onSelectConnection }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const controlRef = useRef(null);
+  const hasConnections = connections.length > 0;
+  const selected = connections.find((connection) => connection.id === selectedConnectionId) || connections[0] || null;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function closeMenu(event) {
+      if (!controlRef.current?.contains(event.target)) setMenuOpen(false);
+    }
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
+
+  return (
+    <span className="ai-improve-control" ref={controlRef}>
+      <button
+        className="ai-improve-btn"
+        type="button"
+        disabled={disabled || !hasConnections}
+        title={hasConnections ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")}
+        onClick={onImprove}
+      >
+        {busy ? t(uiLang, "aiImproving") : t(uiLang, "aiImproveAction")}
+      </button>
+      {hasConnections ? (
+        <span className="ai-model-picker">
+          <button
+            className="ai-model-picker-btn"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={t(uiLang, "aiModelForImprove")}
+            title={t(uiLang, "aiModelForImproveHint")}
+            disabled={Boolean(busy)}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span>{aiModelDisplayName(selected)}</span>
+            <span className="ai-model-picker-chevron" aria-hidden="true">⌄</span>
+          </button>
+          {menuOpen ? (
+            <span className="ai-model-picker-menu" role="menu">
+              {connections.map((connection) => (
+                <button
+                  className={`ai-model-picker-option ${connection.id === selected?.id ? "selected" : ""}`}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={connection.id === selected?.id}
+                  key={connection.id}
+                  onClick={() => {
+                    onSelectConnection(connection.id);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {aiModelDisplayName(connection)}
+                </button>
+              ))}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function VideoInspector({
   uiLang,
   channelId,
@@ -161,6 +245,11 @@ function VideoInspector({
   statusDraft,
   onStageStatus,
   updateWorkingField,
+  improveVideoField,
+  aiBusy,
+  aiConnections,
+  selectedAiConnectionId,
+  onSelectAiConnection,
   confirmResetWorkingToSnapshot,
   discardWorkingChanges,
   resolveWorkingConflict,
@@ -280,7 +369,7 @@ function VideoInspector({
       <section ref={inspectorEditRef} className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><AIImproveControl uiLang={uiLang} busy={aiBusy === "video:title"} disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} onImprove={() => improveVideoField("title", effectiveTitle)} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={onSelectAiConnection} /></div>
           <textarea
             id="video-working-title"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -295,7 +384,7 @@ function VideoInspector({
         </div>
         <div className="description-metadata-layout">
         <div className={`editor-field description-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><AIImproveControl uiLang={uiLang} busy={aiBusy === "video:description"} disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} onImprove={() => improveVideoField("description", description)} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={onSelectAiConnection} /></div>
           <textarea
             id="video-working-description"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -310,7 +399,7 @@ function VideoInspector({
         </div>
         </div>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setWorkingError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><AIImproveControl uiLang={uiLang} busy={aiBusy === "video:tags"} disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} onImprove={() => improveVideoField("tags", tags)} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={onSelectAiConnection} /></div>
           <textarea
             id="video-working-tags"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -597,6 +686,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingSaving, setWorkingSaving] = useState(false);
   const [workingLoading, setWorkingLoading] = useState(false);
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
+  const [aiBusy, setAiBusy] = useState("");
+  const [aiConnections, setAiConnections] = useState([]);
+  const [selectedAiConnectionId, setSelectedAiConnectionId] = useState(null);
+  const aiRequestRef = useRef(0);
+  const aiContextRef = useRef({});
   const videoListRef = useRef(null);
   const inspectorEditRef = useRef(null);
   const [month, setMonth] = useState(() => {
@@ -619,6 +713,35 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const uiLangRef = useRef(uiLang);
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
+  aiContextRef.current = { channelId, videoId: selectedId, playlistId: selectedPlaylistId };
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/ai-connections")
+      .then((response) => response.ok ? response.json() : [])
+      .then((rows) => {
+        if (cancelled) return;
+        const connections = Array.isArray(rows) ? rows : [];
+        setAiConnections(connections);
+        const savedId = Number(window.localStorage.getItem("moyastudia.aiConnectionId") || 0);
+        const selected = connections.find((item) => item.id === savedId) || connections[0] || null;
+        setSelectedAiConnectionId(selected?.id || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAiConnections([]);
+          setSelectedAiConnectionId(null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  function selectAiConnection(connectionId) {
+    const id = Number(connectionId);
+    if (!aiConnections.some((item) => item.id === id)) return;
+    setSelectedAiConnectionId(id);
+    window.localStorage.setItem("moyastudia.aiConnectionId", String(id));
+  }
   const playlists = playlistsForChannel(playlistState, channelId);
   const visiblePlaylists = playlists.filter((playlist) => {
     const needle = playlistQuery.trim().toLocaleLowerCase();
@@ -1647,6 +1770,51 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setVideoStatusDraft(status === currentStatus ? "" : status);
   }
 
+  async function requestAI(entity, field, value, targetId, apply, onError) {
+    if (aiBusy) return;
+    const requestId = ++aiRequestRef.current;
+    const originalChannel = channelId;
+    setAiBusy(`${entity}:${field}`);
+    try {
+      const response = await apiFetch("/ai/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity, field, value, connection_id: selectedAiConnectionId || undefined }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = result?.detail || {};
+        const base = t(uiLang, detail?.code || "aiImproveFailed");
+        const diagnostic = [detail?.provider_status ? `HTTP ${detail.provider_status}` : "", detail?.provider_message || ""].filter(Boolean).join(" · ");
+        throw new Error(diagnostic ? `${base} (${diagnostic})` : base);
+      }
+      if (requestId !== aiRequestRef.current || aiContextRef.current.channelId !== originalChannel ||
+          (entity === "video" && aiContextRef.current.videoId !== targetId) ||
+          (entity === "playlist" && aiContextRef.current.playlistId !== targetId)) return;
+      if (typeof result.value !== "string") throw new Error(t(uiLang, "aiImproveFailed"));
+      apply(result.value);
+    } catch (error) {
+      const message = error?.message === "Failed to fetch"
+        ? t(uiLang, "aiNetworkError")
+        : (error.message || t(uiLang, "aiImproveFailed"));
+      onError(message);
+    } finally {
+      if (requestId === aiRequestRef.current) setAiBusy("");
+    }
+  }
+
+  function improveVideoField(field, value) {
+    if (!workingVideo || workingSaving || workingLoading) return;
+    const id = selectedId;
+    requestAI("video", field, value, id, (result) => updateWorkingField(field, result), setWorkingError);
+  }
+
+  function improvePlaylistField(field, value) {
+    if (!playlistMetadataEditing || !selectedPlaylist || playlistSaving) return;
+    const id = selectedPlaylist.id;
+    requestAI("playlist", field, value, id, (result) => updatePlaylistDraft(field, result), setPlaylistIdCopyStatus);
+  }
+
   function updateWorkingField(field, value) {
     if (!workingVideo) return;
     setWorkingDraft((current) => ({ ...current, [field]: value }));
@@ -2234,6 +2402,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             statusDraft={videoStatusDraft}
             onStageStatus={stageVideoStatus}
             updateWorkingField={updateWorkingField}
+            improveVideoField={improveVideoField}
+            aiBusy={aiBusy}
+            aiConnections={aiConnections}
+            selectedAiConnectionId={selectedAiConnectionId}
+            onSelectAiConnection={selectAiConnection}
             confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
             discardWorkingChanges={discardWorkingChanges}
             resolveWorkingConflict={resolveWorkingConflict}
@@ -2331,7 +2504,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoTitle")}</span>
-                          {playlistEditing ? <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button> : null}
+                          {playlistEditing ? <AIImproveControl uiLang={uiLang} busy={aiBusy === "playlist:title"} disabled={playlistSaving || Boolean(aiBusy)} onImprove={() => improvePlaylistField("title", effectivePlaylistDraft?.title || "")} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={selectAiConnection} /> : null}
                         </div>
                         {playlistEditing ? (
                           <>
@@ -2343,7 +2516,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoDescription")}</span>
-                          {playlistEditing ? <button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setPlaylistIdCopyStatus(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button> : null}
+                          {playlistEditing ? <AIImproveControl uiLang={uiLang} busy={aiBusy === "playlist:description"} disabled={playlistSaving || Boolean(aiBusy)} onImprove={() => improvePlaylistField("description", effectivePlaylistDraft?.description || "")} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={selectAiConnection} /> : null}
                         </div>
                         {playlistEditing ? (
                           <>

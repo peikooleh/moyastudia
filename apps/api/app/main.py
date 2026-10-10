@@ -51,6 +51,7 @@ from .tokens import (
 )
 from . import quota as quota_service
 from . import youtube as yt
+from . import ai_metadata
 
 app = FastAPI(title="MoyaStudia API")
 app.add_middleware(AbuseRateLimitMiddleware, session_cookie_name=settings.session_cookie_name)
@@ -70,11 +71,20 @@ def _youtube_error_facts(exc: Exception) -> tuple[int | None, set[str]]:
 class AIConnectionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["openai", "gemini", "anthropic"]
-    model: str = Field(min_length=1, max_length=128)
+    provider: Literal["openai", "gemini", "anthropic", "xai", "groq"] | None = None
+    model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, min_length=1, max_length=4096)
     title_prompt: str = Field(default="", max_length=12000)
     description_prompt: str = Field(default="", max_length=12000)
+    tags_prompt: str = Field(default="", max_length=12000)
+
+
+class AIImproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entity: Literal["video", "playlist", "channel"]
+    field: Literal["title", "description", "tags", "keywords"]
+    value: str = Field(max_length=12000)
+    connection_id: int | None = Field(default=None, gt=0)
 
 
 ExternalId = Annotated[str, Field(min_length=1, max_length=256)]
@@ -590,7 +600,9 @@ def list_ai_connections(
     rows = (
         db.query(AIConnection)
         .filter(AIConnection.user_id == user.id)
-        .order_by(AIConnection.provider, AIConnection.model)
+        # Keep the first row aligned with /ai/improve: the most recently
+        # saved/used connection is the active AI model shown by the UI.
+        .order_by(AIConnection.updated_at.desc(), AIConnection.id.desc())
         .all()
     )
     return [
@@ -601,6 +613,7 @@ def list_ai_connections(
             "has_api_key": bool(row.encrypted_api_key),
             "title_prompt": row.title_prompt or "",
             "description_prompt": row.description_prompt or "",
+            "tags_prompt": row.tags_prompt or "",
         }
         for row in rows
     ]
@@ -612,11 +625,19 @@ def save_ai_connection(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    provider = payload.provider.strip().lower()
-    model = payload.model.strip()
     api_key = payload.api_key.strip() if payload.api_key is not None else None
-    if not model:
-        raise HTTPException(422, "model must not be blank")
+    detected = ai_metadata.infer_provider(api_key or "") if api_key else None
+    # Generic sk- prefixes are shared by providers; explicit xAI/Groq selection takes precedence.
+    if payload.provider in {"xai", "groq"} and detected == "openai":
+        detected = None
+    provider = detected or payload.provider
+    if provider is None:
+        raise HTTPException(422, detail={"code": "ai_provider_selection_required"})
+    if detected and payload.provider and detected != payload.provider:
+        raise HTTPException(422, detail={"code": "ai_provider_key_mismatch"})
+    if payload.model is not None and not payload.model.strip():
+        raise HTTPException(422, detail={"code": "ai_model_required"})
+    model = payload.model.strip() if payload.model is not None else ai_metadata.MODELS[provider]
     if api_key == "":
         api_key = None
     row = (
@@ -638,8 +659,19 @@ def save_ai_connection(
             row.encrypted_api_key = encrypt_refresh_token(api_key)
         except TokenEncryptionError as exc:
             raise HTTPException(503, "API key encryption configuration is invalid") from exc
-    row.title_prompt = payload.title_prompt.strip()
-    row.description_prompt = payload.description_prompt.strip()
+    # Prompt preferences are user-level settings, not model-level settings.
+    # Keep one shared set across every saved AI connection so switching models
+    # never changes the user's metadata instructions.
+    title_prompt = payload.title_prompt.strip()
+    description_prompt = payload.description_prompt.strip()
+    tags_prompt = payload.tags_prompt.strip()
+    for connection in db.query(AIConnection).filter(AIConnection.user_id == user.id).all():
+        connection.title_prompt = title_prompt
+        connection.description_prompt = description_prompt
+        connection.tags_prompt = tags_prompt
+    row.title_prompt = title_prompt
+    row.description_prompt = description_prompt
+    row.tags_prompt = tags_prompt
     db.commit()
     db.refresh(row)
     return {
@@ -649,7 +681,63 @@ def save_ai_connection(
         "has_api_key": True,
         "title_prompt": row.title_prompt or "",
         "description_prompt": row.description_prompt or "",
+        "tags_prompt": row.tags_prompt or "",
     }
+
+
+@app.delete("/ai-connections/{connection_id}", dependencies=[Depends(require_same_origin)])
+def delete_ai_connection(
+    connection_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(AIConnection)
+        .filter(AIConnection.id == connection_id, AIConnection.user_id == user.id)
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(404, detail={"code": "ai_connection_not_found"})
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/ai/improve", dependencies=[Depends(require_same_origin)])
+def improve_ai_metadata(
+    payload: AIImproveRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if (payload.entity, payload.field) not in ai_metadata.LIMITS:
+        raise HTTPException(422, detail={"code": "ai_field_unsupported"})
+    query = db.query(AIConnection).filter(AIConnection.user_id == user.id)
+    if payload.connection_id is not None:
+        connection = query.filter(AIConnection.id == payload.connection_id).one_or_none()
+        if connection is None:
+            raise HTTPException(404, detail={"code": "ai_connection_not_found"})
+    else:
+        # Backward-compatible default for older clients: most recently saved connection.
+        connection = query.order_by(AIConnection.updated_at.desc(), AIConnection.id.desc()).first()
+        if connection is None:
+            raise HTTPException(409, detail={"code": "ai_not_connected"})
+    try:
+        value = ai_metadata.improve(connection, payload.entity, payload.field, payload.value)
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, detail={"code": "ai_credentials_unavailable"}) from exc
+    except ai_metadata.AIError as exc:
+        status = 422 if exc.code in {"ai_invalid_response", "ai_output_too_long", "ai_field_unsupported"} else 502
+        if exc.code == "ai_invalid_credentials":
+            status = 409
+        if exc.code == "ai_rate_limited":
+            status = 429
+        detail = {"code": exc.code}
+        if exc.provider_status is not None:
+            detail["provider_status"] = exc.provider_status
+        if exc.provider_message:
+            detail["provider_message"] = exc.provider_message
+        raise HTTPException(status, detail=detail) from exc
+    return {"value": value, "provider": connection.provider, "model": connection.model}
 
 
 @app.get("/channels")

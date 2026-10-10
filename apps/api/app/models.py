@@ -53,6 +53,7 @@ class AIConnection(Base):
     encrypted_api_key: Mapped[str] = mapped_column(Text)
     title_prompt: Mapped[str] = mapped_column(Text, default="")
     description_prompt: Mapped[str] = mapped_column(Text, default="")
+    tags_prompt: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
