@@ -55,7 +55,7 @@ def test_channel_analytics_summary_is_owner_scoped(client, test_database, monkey
         }
 
     def fake_timeseries(token, start_date, end_date, video_id="", playlist_id="", dimension="day", channel_id=""):
-        return [{"date": start_date, "views": 321, "estimated_minutes_watched": 1234.0}]
+        return [{"date": end_date, "views": 321, "estimated_minutes_watched": 1234.0}]
 
     monkeypatch.setattr(main.yt, "verified_analytics_channel", lambda token, youtube_channel_id: {
         "youtube_channel_id": youtube_channel_id, "subscriber_count": 229,
@@ -76,7 +76,7 @@ def test_channel_analytics_summary_is_owner_scoped(client, test_database, monkey
     assert response.json()["youtube_channel_id"] == "analytics-channel"
     assert response.json()["oauth_channel_verified"] is True
     assert response.json()["current_subscriber_count"] == 229
-    assert response.json()["analytics_last_reported_date"] == called["start_date"]
+    assert response.json()["analytics_last_reported_date"] == called["end_date"]
     assert response.json()["series"][0]["views"] == 321
     assert called["token"] == "analytics-token"
     assert called["start_date"] == "2020-03-04"
