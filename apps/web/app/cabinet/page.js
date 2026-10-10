@@ -1,3 +1,23 @@
+
+const AI_MODEL_CATALOG = {
+  gemini: [
+    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", description: "Экономичная · доступность бесплатного тарифа зависит от проекта" },
+    { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", description: "Быстрая универсальная · тариф зависит от аккаунта" },
+    { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "Предыдущее поколение · доступность зависит от проекта" },
+  ],
+  openai: [
+    { id: "gpt-5-mini", name: "GPT-5 mini", description: "Экономичная · платный API" },
+    { id: "gpt-5", name: "GPT-5", description: "Мощная · платный API" },
+  ],
+  anthropic: [
+    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Быстрая · платный API" },
+    { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", description: "Качественная универсальная · платный API" },
+  ],
+  xai: [
+    { id: "grok-4.3", name: "Grok 4.3", description: "Быстрая · платный API" },
+    { id: "grok-4.7", name: "Grok 4.7", description: "Флагманская · платный API" },
+  ],
+};
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -667,7 +687,14 @@ export default function CabinetPage() {
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                     <div className="ai-connection-grid">
                       <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option><option value="xai">xAI / Grok</option></select></label>
-                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
+                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}
+                        <select value={(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? aiModel : "custom"} onChange={(event) => setAiModel(event.target.value === "custom" ? "" : event.target.value)}>
+                          <option value="custom">Своя модель (ввести ID)</option>
+                          {(AI_MODEL_CATALOG[aiProvider] || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                        </select>
+                        <small>{(AI_MODEL_CATALOG[aiProvider] || []).find((item) => item.id === aiModel)?.description || "Введите ID модели вручную. Доступность и стоимость зависят от провайдера."}</small>
+                        {!(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? <input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /> : null}
+                      </label>
                       <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
                     </div>
                     {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
