@@ -779,6 +779,162 @@ def test_channel_playlists_repeated_page_token_fails_instead_of_looping(
     assert page_tokens == [None, "repeat"]
 
 
+def test_catalog_audit_identifies_five_missing_unlisted_ids_without_writing(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database, subject="catalog-audit-owner")
+    channel_id, remote_channel_id, _ = create_channel(test_database, user_id, "audit")
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add_all([
+            Video(
+                channel_id=channel_id,
+                youtube_video_id=f"unlisted-{index}",
+                youtube_visibility="unlisted",
+                availability_status="available",
+            )
+            for index in range(2)
+        ])
+        db.commit()
+
+    remote_ids = [f"unlisted-{index}" for index in range(7)]
+    calls = []
+
+    def fake_audit(refresh_token, youtube_channel_id, local_video_ids):
+        calls.append((refresh_token, youtube_channel_id, local_video_ids))
+        return {
+            "owned_channel_ids": [remote_channel_id],
+            "sources": {
+                "search_scoped": {
+                    "ids": remote_ids[:2], "page_sizes": [2],
+                    "rejected": [], "truncated": False,
+                },
+                "search_unscoped": {
+                    "ids": remote_ids, "page_sizes": [5, 2],
+                    "rejected": [], "truncated": False,
+                },
+                "uploads": {
+                    "ids": remote_ids[:2], "page_sizes": [2],
+                    "rejected": [], "truncated": False,
+                },
+            },
+            "details": {
+                video_id: {
+                    "channelId": remote_channel_id,
+                    "title": video_id,
+                    "privacy": "unlisted",
+                    "publishAt": None,
+                    "uploadStatus": "processed",
+                }
+                for video_id in remote_ids
+            },
+            "requested_ids": remote_ids,
+            "uploads_playlist_available": True,
+        }
+
+    monkeypatch.setattr(main.yt, "audit_video_discovery", fake_audit)
+    response = client.get(f"/channels/{channel_id}/catalog/audit")
+    assert response.status_code == 200, response.text
+    report = response.json()
+    assert report["channel"]["oauthOwnsSelectedChannel"] is True
+    assert report["local"]["unlistedCount"] == 2
+    assert report["remote"]["unlistedCount"] == 7
+    assert report["sources"]["search_scoped"]["count"] == 2
+    assert report["sources"]["search_unscoped"]["count"] == 7
+    assert len(report["sources"]["search_unscoped"]["missingFromLocal"]) == 5
+    assert len(report["mismatches"]) == 5
+    assert calls == [("refresh-token", remote_channel_id, remote_ids[:2])]
+    with test_database() as db:
+        assert db.query(Video).filter(Video.channel_id == channel_id).count() == 2
+
+
+def test_catalog_audit_is_owner_scoped(client, test_database, monkeypatch):
+    owner_id, _ = create_account(test_database, subject="catalog-audit-owner-scope")
+    _, outsider_token = create_account(test_database, subject="catalog-audit-outsider")
+    channel_id, _, _ = create_channel(test_database, owner_id, "audit-scope")
+    authorized_client(client, outsider_token)
+    monkeypatch.setattr(
+        main.yt, "audit_video_discovery",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not access YouTube")),
+    )
+    assert client.get(f"/channels/{channel_id}/catalog/audit").status_code == 404
+
+
+def test_youtube_audit_crosschecks_scoped_and_unscoped_owner_search(monkeypatch):
+    selected_channel = "youtube-uk"
+    all_ids = [f"unlisted-{index}" for index in range(7)]
+    calls = []
+
+    class FakeResource:
+        def __init__(self, name):
+            self.name = name
+
+        def list(self, **kwargs):
+            calls.append((self.name, kwargs))
+            if self.name == "channels":
+                if kwargs.get("mine"):
+                    response = {"items": [{"id": selected_channel}]}
+                else:
+                    response = {
+                        "items": [{
+                            "id": selected_channel,
+                            "contentDetails": {"relatedPlaylists": {"uploads": "uploads-uk"}},
+                        }]
+                    }
+            elif self.name == "search":
+                ids = all_ids[:2] if kwargs.get("channelId") else all_ids
+                response = {
+                    "items": [
+                        {"id": {"videoId": video_id}, "snippet": {"channelId": selected_channel}}
+                        for video_id in ids
+                    ]
+                }
+            elif self.name == "playlistItems":
+                response = {
+                    "items": [
+                        {"contentDetails": {"videoId": video_id}}
+                        for video_id in all_ids[:2]
+                    ]
+                }
+            elif self.name == "videos":
+                response = {
+                    "items": [
+                        {
+                            "id": video_id,
+                            "snippet": {"channelId": selected_channel, "title": video_id},
+                            "status": {"privacyStatus": "unlisted"},
+                        }
+                        for video_id in kwargs["id"].split(",")
+                    ]
+                }
+            else:
+                raise AssertionError(self.name)
+            return SimpleNamespace(execute=lambda: response)
+
+    class FakeService:
+        def channels(self):
+            return FakeResource("channels")
+
+        def search(self):
+            return FakeResource("search")
+
+        def playlistItems(self):
+            return FakeResource("playlistItems")
+
+        def videos(self):
+            return FakeResource("videos")
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+    report = youtube.audit_video_discovery("token", selected_channel, all_ids[:2])
+    assert report["owned_channel_ids"] == [selected_channel]
+    assert report["sources"]["search_scoped"]["ids"] == all_ids[:2]
+    assert report["sources"]["search_unscoped"]["ids"] == all_ids
+    assert report["sources"]["uploads"]["ids"] == all_ids[:2]
+    assert len(report["details"]) == 7
+    assert len([call for call in calls if call[0] == "videos"]) == 1
+
+
 def test_owner_search_finds_all_seven_unlisted_videos_missing_from_uploads(
     monkeypatch,
 ):
