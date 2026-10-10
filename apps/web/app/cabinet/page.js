@@ -65,6 +65,8 @@ export default function CabinetPage() {
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiTitlePrompt, setAiTitlePrompt] = useState("");
   const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("");
+  const [aiTagsPrompt, setAiTagsPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiNotice, setAiNotice] = useState("");
@@ -301,14 +303,16 @@ export default function CabinetPage() {
           setAiModel(rows[0].model);
           setAiTitlePrompt(rows[0].title_prompt || "");
           setAiDescriptionPrompt(rows[0].description_prompt || "");
+          setAiTagsPrompt(rows[0].tags_prompt || "");
           setAiBaseline({
             provider: rows[0].provider,
             model: rows[0].model,
             titlePrompt: rows[0].title_prompt || "",
             descriptionPrompt: rows[0].description_prompt || "",
+            tagsPrompt: rows[0].tags_prompt || "",
           });
         } else {
-          setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "" });
+          setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "", tagsPrompt: "" });
         }
       })
       .catch((error) => { if (!cancelled) setAiError(error.message); });
@@ -322,6 +326,7 @@ export default function CabinetPage() {
     const saved = aiConnections.find((item) => item.provider === provider && item.model === model);
     setAiTitlePrompt(saved?.title_prompt || "");
     setAiDescriptionPrompt(saved?.description_prompt || "");
+    setAiTagsPrompt(saved?.tags_prompt || "");
     setAiNotice("");
     setAiError("");
   }
@@ -332,6 +337,7 @@ export default function CabinetPage() {
     setAiModel(aiBaseline.model);
     setAiTitlePrompt(aiBaseline.titlePrompt);
     setAiDescriptionPrompt(aiBaseline.descriptionPrompt);
+    setAiTagsPrompt(aiBaseline.tagsPrompt || "");
     setAiApiKey("");
     setAiError("");
     setAiNotice("");
@@ -342,11 +348,44 @@ export default function CabinetPage() {
     || aiModel !== aiBaseline.model
     || aiTitlePrompt !== aiBaseline.titlePrompt
     || aiDescriptionPrompt !== aiBaseline.descriptionPrompt
+    || aiTagsPrompt !== (aiBaseline.tagsPrompt || "")
     || Boolean(aiApiKey.trim())
   );
 
+  function updateAiKey(value) {
+    setAiApiKey(value);
+    const provider = value.startsWith("sk-ant-") ? "anthropic" : value.startsWith("AIza") ? "gemini" : value.startsWith("sk-") ? "openai" : "";
+    if (provider) {
+      setAiProvider(provider);
+      setAiModel({ openai: "gpt-6-luna", gemini: "gemini-3.6-flash", anthropic: "claude-sonnet-4-5" }[provider]);
+    }
+  }
+
+  async function improveChannelField(field, value) {
+    if (aiBusy || channelDescriptionSaving) return;
+    const channelId = String(prefs.selectedChannelId || "");
+    setAiBusy(`channel:${field}`);
+    setChannelDescriptionError("");
+    try {
+      const response = await apiFetch("/ai/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "channel", field, value }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(t(uiLang, data?.detail?.code || "aiImproveFailed"));
+      if (String(prefs.selectedChannelId || "") !== channelId) return;
+      if (field === "description") setChannelDescriptionDraft(data.value);
+      else setChannelKeywordsDraft(data.value);
+    } catch (error) {
+      setChannelDescriptionError(error.message || t(uiLang, "aiImproveFailed"));
+    } finally {
+      setAiBusy("");
+    }
+  }
+
   async function saveAiConnection() {
-    if (!aiModel.trim()) {
+    if (!aiModel.trim() && !aiApiKey.trim()) {
       setAiError(t(uiLang, "aiModelRequired"));
       return;
     }
@@ -368,6 +407,8 @@ export default function CabinetPage() {
           api_key: aiApiKey.trim() || null,
           title_prompt: aiTitlePrompt,
           description_prompt: aiDescriptionPrompt,
+          tags_prompt: aiTagsPrompt,
+          tags_prompt: aiTagsPrompt,
         }),
       });
       if (!response.ok) throw new Error(t(uiLang, "aiSaveError"));
@@ -379,6 +420,7 @@ export default function CabinetPage() {
         model: row.model,
         titlePrompt: row.title_prompt || "",
         descriptionPrompt: row.description_prompt || "",
+        tagsPrompt: row.tags_prompt || "",
       });
       setAiNotice(t(uiLang, "aiSaved"));
     } catch (error) {
@@ -618,8 +660,8 @@ export default function CabinetPage() {
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                     <div className="ai-connection-grid">
                       <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
-                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => selectAiModel(aiProvider, event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
-                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
+                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} readOnly placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
+                      <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
                     </div>
                     {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
                     {aiNotice ? <p className="selection-notice" role="status">{aiNotice}</p> : null}
@@ -767,12 +809,12 @@ export default function CabinetPage() {
                       {channelEditing ? (
                         <div className="channel-description-editor">
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setChannelDescriptionError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveChannelField("description", channelDescriptionDraft)}>{aiBusy === "channel:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></span>
                             <textarea rows={10} maxLength={1000} value={channelDescriptionDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelDescriptionDraft(event.target.value)} />
                           </label>
                           <small>{channelDescriptionDraft.length} / 1000</small>
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><button className="ai-improve-btn" type="button" title={t(uiLang, "aiImproveComingLater")} onClick={() => setChannelDescriptionError(t(uiLang, "aiImproveComingLater"))}>{t(uiLang, "aiImprove")}</button></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveChannelField("keywords", channelKeywordsDraft)}>{aiBusy === "channel:keywords" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></span>
                             <textarea rows={4} maxLength={500} value={channelKeywordsDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelKeywordsDraft(event.target.value)} />
                           </label>
                           <small>{channelKeywordsDraft.length} / 500</small>
