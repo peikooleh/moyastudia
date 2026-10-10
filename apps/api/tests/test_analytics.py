@@ -31,13 +31,14 @@ def test_channel_analytics_summary_is_owner_scoped(client, test_database, monkey
 
     called = {}
 
-    def fake_summary(token, start_date, end_date, video_id="", playlist_id=""):
+    def fake_summary(token, start_date, end_date, video_id="", playlist_id="", channel_id=""):
         called.update(
             token=token,
             start_date=start_date,
             end_date=end_date,
             video_id=video_id,
             playlist_id=playlist_id,
+            channel_id=channel_id,
         )
         return {
             "views": 321,
@@ -53,9 +54,12 @@ def test_channel_analytics_summary_is_owner_scoped(client, test_database, monkey
             "end_date": end_date,
         }
 
-    def fake_timeseries(token, start_date, end_date, video_id="", playlist_id="", dimension="day"):
+    def fake_timeseries(token, start_date, end_date, video_id="", playlist_id="", dimension="day", channel_id=""):
         return [{"date": start_date, "views": 321, "estimated_minutes_watched": 1234.0}]
 
+    monkeypatch.setattr(main.yt, "verified_analytics_channel", lambda token, youtube_channel_id: {
+        "youtube_channel_id": youtube_channel_id, "subscriber_count": 229,
+    })
     monkeypatch.setattr(main.yt, "channel_analytics_summary", fake_summary)
     monkeypatch.setattr(main.yt, "channel_analytics_timeseries", fake_timeseries)
 
@@ -69,9 +73,14 @@ def test_channel_analytics_summary_is_owner_scoped(client, test_database, monkey
     assert response.json()["estimated_minutes_watched"] == 1234.0
     assert response.json()["views"] == 321
     assert response.json()["scope"] == "channel"
+    assert response.json()["youtube_channel_id"] == "analytics-channel"
+    assert response.json()["oauth_channel_verified"] is True
+    assert response.json()["current_subscriber_count"] == 229
+    assert response.json()["analytics_last_reported_date"] == called["start_date"]
     assert response.json()["series"][0]["views"] == 321
     assert called["token"] == "analytics-token"
     assert called["start_date"] == "2020-03-04"
+    assert called["channel_id"] == "analytics-channel"
 
 
 def test_channel_analytics_summary_requires_authentication(client):
@@ -104,14 +113,17 @@ def test_channel_analytics_summary_supports_video_scope(client, test_database, m
 
     called = {}
 
-    def fake_summary(token, start_date, end_date, youtube_video_id="", playlist_id=""):
+    def fake_summary(token, start_date, end_date, youtube_video_id="", playlist_id="", channel_id=""):
         called.update(video_id=youtube_video_id, playlist_id=playlist_id)
         return {"views": 7, "estimated_minutes_watched": 12.0}
 
-    def fake_timeseries(token, start_date, end_date, youtube_video_id="", playlist_id="", dimension="day"):
+    def fake_timeseries(token, start_date, end_date, youtube_video_id="", playlist_id="", dimension="day", channel_id=""):
         called.update(series_video_id=youtube_video_id, dimension=dimension)
         return []
 
+    monkeypatch.setattr(main.yt, "verified_analytics_channel", lambda token, youtube_channel_id: {
+        "youtube_channel_id": youtube_channel_id, "subscriber_count": 229,
+    })
     monkeypatch.setattr(main.yt, "channel_analytics_summary", fake_summary)
     monkeypatch.setattr(main.yt, "channel_analytics_timeseries", fake_timeseries)
     monkeypatch.setattr(main.yt, "video_current_statistics", lambda token, youtube_video_id: {"views": 11, "likes": 2, "comments": 1})
@@ -148,14 +160,17 @@ def test_channel_analytics_summary_supports_playlist_scope(client, test_database
 
     called = {}
 
-    def fake_summary(token, start_date, end_date, video_id="", playlist_id=""):
+    def fake_summary(token, start_date, end_date, video_id="", playlist_id="", channel_id=""):
         called["playlist_id"] = playlist_id
         return {"views": 9, "estimated_minutes_watched": 20.0}
 
-    def fake_timeseries(token, start_date, end_date, video_id="", playlist_id="", dimension="day"):
+    def fake_timeseries(token, start_date, end_date, video_id="", playlist_id="", dimension="day", channel_id=""):
         called["series_playlist_id"] = playlist_id
         return []
 
+    monkeypatch.setattr(main.yt, "verified_analytics_channel", lambda token, youtube_channel_id: {
+        "youtube_channel_id": youtube_channel_id, "subscriber_count": 229,
+    })
     monkeypatch.setattr(main.yt, "channel_analytics_summary", fake_summary)
     monkeypatch.setattr(main.yt, "channel_analytics_timeseries", fake_timeseries)
     client.cookies.set(settings.session_cookie_name, owner_token)
@@ -211,3 +226,98 @@ def test_youtube_analytics_summary_marks_returned_report_row_as_available(monkey
     assert result["has_data"] is True
     assert result["views"] == 249
     assert result["estimated_minutes_watched"] == 120.0
+
+
+
+def test_analytics_rejects_oauth_channel_mismatch_before_query(client, test_database, monkeypatch):
+    owner_id, owner_token = create_account(test_database, subject="analytics-mismatch-owner")
+    with test_database() as db:
+        connection = GoogleConnection(
+            user_id=owner_id,
+            google_subject="analytics-mismatch-google",
+            encrypted_refresh_token=encrypt_refresh_token("analytics-mismatch-token"),
+        )
+        db.add(connection)
+        db.flush()
+        channel = Channel(
+            google_connection_id=connection.id,
+            youtube_channel_id="expected-channel",
+            title="Expected channel",
+        )
+        db.add(channel)
+        db.commit()
+        channel_id = channel.id
+
+    def reject(token, youtube_channel_id):
+        assert youtube_channel_id == "expected-channel"
+        raise LookupError("not owned")
+
+    def must_not_query(*args, **kwargs):
+        raise AssertionError("Analytics was called before OAuth channel verification")
+
+    monkeypatch.setattr(main.yt, "verified_analytics_channel", reject)
+    monkeypatch.setattr(main.yt, "channel_analytics_summary", must_not_query)
+    client.cookies.set(settings.session_cookie_name, owner_token)
+    response = client.get(f"/channels/{channel_id}/analytics/summary")
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "youtube_analytics_channel_mismatch"
+
+
+def test_verified_analytics_channel_reads_selected_owners_current_subscribers(monkeypatch):
+    calls = []
+
+    class FakeChannels:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(execute=lambda: {"items": [
+                {"id": "other-channel", "statistics": {"subscriberCount": "3"}},
+                {"id": "expected-channel", "statistics": {"subscriberCount": "229"}},
+            ]})
+
+    class FakeService:
+        def channels(self):
+            return FakeChannels()
+
+    monkeypatch.setattr(youtube, "service_for", lambda token: FakeService())
+    result = youtube.verified_analytics_channel("token", "expected-channel")
+    assert result["subscriber_count"] == 229
+    assert result["youtube_channel_id"] == "expected-channel"
+    assert calls == [{"part": "id,statistics", "mine": True, "maxResults": 50}]
+
+
+def test_verified_analytics_channel_rejects_wrong_oauth_owner(monkeypatch):
+    class FakeChannels:
+        def list(self, **kwargs):
+            return SimpleNamespace(execute=lambda: {"items": [{"id": "other-channel"}]})
+
+    class FakeService:
+        def channels(self):
+            return FakeChannels()
+
+    monkeypatch.setattr(youtube, "service_for", lambda token: FakeService())
+    import pytest
+
+    with pytest.raises(LookupError, match="not owned"):
+        youtube.verified_analytics_channel("token", "expected-channel")
+
+
+def test_analytics_queries_use_explicit_selected_channel_id(monkeypatch):
+    calls = []
+
+    class FakeReports:
+        def query(self, **kwargs):
+            calls.append(kwargs)
+            if kwargs.get("dimensions"):
+                return SimpleNamespace(execute=lambda: {"rows": [["2026-10-08", 2, 5]]})
+            return SimpleNamespace(execute=lambda: {"rows": [[2, 5, 12, 15, 0, 0, 0, 0, 0]]})
+
+    class FakeAnalytics:
+        def reports(self):
+            return FakeReports()
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeAnalytics())
+    youtube.channel_analytics_summary("token", "2026-10-01", "2026-10-10", channel_id="expected-channel")
+    youtube.channel_analytics_timeseries("token", "2026-10-01", "2026-10-10", channel_id="expected-channel")
+    assert len(calls) == 2
+    assert all(call["ids"] == "channel==expected-channel" for call in calls)
