@@ -620,14 +620,15 @@ def list_videos(
     credentials = creds_from_refresh(refresh_token)
     service = build("youtube", "v3", credentials=credentials)
 
-    # The uploads playlist can omit owner-visible private/unlisted/scheduled
-    # videos. Search the authenticated owner's full video inventory instead.
-    # Restrict the query to this channel so a connection with access to
-    # multiple channels cannot contaminate the selected channel's catalog.
+    # The uploads playlist is not a complete owner inventory: the live audit
+    # for channel 18 returned 137 unique upload IDs while owner search returned
+    # 144, including five unlisted and two public videos missing from uploads.
+    # YouTube also rejects forMine=true combined with channelId for this real
+    # account (HTTP 400 badRequest). Query the authenticated owner's inventory
+    # without channelId and enforce the selected channel from snippet.channelId.
     search_kwargs = {
         "part": "snippet",
         "forMine": True,
-        "channelId": youtube_channel_id,
         "type": "video",
         "order": "date",
         "maxResults": page_size,
