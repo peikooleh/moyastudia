@@ -433,8 +433,9 @@ export default function CabinetPage() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         const detail = body?.detail;
-        const code = typeof detail === "object" ? detail?.code : detail;
-        const description = typeof code === "string" ? code : `HTTP ${response.status}`;
+        const code = !Array.isArray(detail) && typeof detail === "object" ? detail?.code : detail;
+        const validation = Array.isArray(detail) ? detail.map((item) => item?.msg).filter(Boolean).join("; ") : "";
+        const description = typeof code === "string" ? code : validation || `HTTP ${response.status}`;
         throw new Error(`${t(uiLang, "aiSaveError")} (${description})`);
       }
       const row = body;
