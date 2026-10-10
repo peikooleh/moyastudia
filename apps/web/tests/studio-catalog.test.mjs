@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 
 import {
   accountPrefsForUser,
@@ -40,6 +41,19 @@ import {
   youtubeVideoCategoryName,
 } from "../lib/catalog-state.mjs";
 
+
+test("calendar groups a UTC-night publication on the next day in Zurich", () => {
+  const result = execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      'import { calendarLocalDateKey } from "./lib/calendar-grid.mjs"; process.stdout.write(calendarLocalDateKey("2026-10-10T23:30:00Z"));',
+    ],
+    { cwd: new URL("../", import.meta.url), env: { ...process.env, TZ: "Europe/Zurich" }, encoding: "utf8" },
+  );
+  assert.equal(result, "2026-10-11");
+});
 
 test("calendar groups ISO timestamps by the browser local day", () => {
   const timestamp = "2026-10-10T23:30:00Z";
