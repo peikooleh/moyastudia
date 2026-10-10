@@ -1942,6 +1942,122 @@ def catalog_status(
     return _catalog_status(db, channel)
 
 
+@app.get("/channels/{channel_id}/catalog/audit")
+def audit_channel_catalog(
+    channel_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Compare YouTube discovery, direct video status, and local cache by ID.
+
+    Diagnostic only: no sync, no cache changes, and no YouTube writes.
+    """
+    channel = _channel_or_404(db, user, channel_id)
+    local_rows = (
+        db.query(Video)
+        .filter(Video.channel_id == channel.id, Video.youtube_video_id.is_not(None))
+        .all()
+    )
+    local_by_id = {row.youtube_video_id: row for row in local_rows}
+    try:
+        refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            remote = yt.audit_video_discovery(
+                refresh_token, channel.youtube_channel_id, list(local_by_id)
+            )
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        raise HTTPException(
+            502, detail={"code": "youtube_catalog_audit_failed", "reason": _youtube_error_code(exc)}
+        ) from exc
+
+    sources = remote["sources"]
+    source_ids = {name: set(data["ids"]) for name, data in sources.items()}
+    details = remote["details"]
+    selected_details = {
+        video_id: item
+        for video_id, item in details.items()
+        if item["channelId"] == channel.youtube_channel_id
+    }
+    all_discovered = set().union(*source_ids.values())
+    remote_unlisted = sorted(
+        video_id for video_id, item in selected_details.items()
+        if item["privacy"] == "unlisted" and not item["publishAt"]
+    )
+    local_unlisted = sorted(
+        video_id for video_id, row in local_by_id.items()
+        if row.availability_status == "available"
+        and row.youtube_visibility == "unlisted"
+        and row.youtube_scheduled_at is None
+    )
+    differences = []
+    for video_id, item in selected_details.items():
+        row = local_by_id.get(video_id)
+        if (
+            row is None
+            or row.youtube_visibility != item["privacy"]
+            or (row.availability_status != "available")
+            or bool(row.youtube_scheduled_at) != bool(item["publishAt"])
+        ):
+            differences.append({
+                "youtubeId": video_id,
+                "title": item["title"],
+                "remotePrivacy": item["privacy"],
+                "remotePublishAt": item["publishAt"],
+                "localPrivacy": row.youtube_visibility if row else None,
+                "localScheduled": _catalog_datetime_iso(row.youtube_scheduled_at) if row else None,
+                "localAvailability": row.availability_status if row else None,
+                "foundBy": sorted(name for name, ids in source_ids.items() if video_id in ids),
+            })
+
+    return {
+        "channel": {
+            "localId": channel.id,
+            "youtubeId": channel.youtube_channel_id,
+            "oauthOwnedChannelIds": remote["owned_channel_ids"],
+            "oauthOwnsSelectedChannel": channel.youtube_channel_id in remote["owned_channel_ids"],
+        },
+        "sync": _catalog_status(db, channel),
+        "local": {
+            "count": len(local_by_id),
+            "unlistedCount": len(local_unlisted),
+            "unlistedIds": local_unlisted,
+        },
+        "sources": {
+            name: {
+                "count": len(data["ids"]),
+                "pageSizes": data["page_sizes"],
+                "truncated": data["truncated"],
+                "rejected": data["rejected"],
+                "missingFromLocal": sorted(ids - set(local_by_id)),
+                "unlistedIds": sorted(ids.intersection(remote_unlisted)),
+            }
+            for name, data in sources.items()
+            for ids in [source_ids[name]]
+        },
+        "remote": {
+            "discoveredCount": len(all_discovered),
+            "directlyReturnedCount": len(selected_details),
+            "notReturnedByVideosList": sorted(all_discovered - set(details)),
+            "wrongChannelFromVideosList": sorted(set(details) - set(selected_details)),
+            "unlistedCount": len(remote_unlisted),
+            "unlistedVideos": [
+                {
+                    "youtubeId": video_id,
+                    "title": selected_details[video_id]["title"],
+                    "foundBy": sorted(name for name, ids in source_ids.items() if video_id in ids),
+                    "localPrivacy": local_by_id[video_id].youtube_visibility if video_id in local_by_id else None,
+                    "localAvailability": local_by_id[video_id].availability_status if video_id in local_by_id else None,
+                }
+                for video_id in remote_unlisted
+            ],
+        },
+        "mismatches": sorted(differences, key=lambda item: item["youtubeId"]),
+        "localNotDiscovered": sorted(set(local_by_id) - all_discovered),
+    }
+
+
 @app.post(
     "/channels/{channel_id}/catalog/sync",
     dependencies=[Depends(require_same_origin)],
