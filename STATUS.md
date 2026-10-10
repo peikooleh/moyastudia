@@ -1,16 +1,16 @@
-# Current Handoff — AI metadata merged, 2026-10-10
+# Current Handoff — Shorts / long-form AI prompt routing complete, 2026-10-10
 
-- PR #16, `feature-ai-metadata-generation-2026-10-10` → `main`, has been merged. Merge commit: `0c70e4aa0fb20b57af071248155b4314717ab82a`. The feature branch is intentionally retained for rollback/reference.
-- AI metadata generation is active server-side for saved OpenAI, Gemini, Anthropic, xAI and Groq connections. API keys remain encrypted at rest and are never returned in plaintext.
-- Cabinet exposes three shared prompt editors in this order: title, description, tags/keywords. These prompt preferences are user-level settings shared across every saved AI model; saving synchronizes all three values across the user's saved AI connections.
-- Prompt routing is field-specific: title uses `title_prompt`, description uses `description_prompt`, and video tags plus channel keywords use `tags_prompt`. Regression coverage verifies this routing.
-- Every AI Improve action for video title/description/tags, playlist title/description and channel description/keywords exposes a compact model button/menu containing only actually saved AI connections. Human-readable labels are used for known models.
-- The selected AI connection is persisted in browser local storage under `moyastudia.aiConnectionId` and reused across Studio and Cabinet. Saving a model selects it; deleting the selected model falls back to another saved connection or clears the preference.
-- `POST /ai/improve` accepts optional `connection_id`; the backend resolves it only inside the authenticated user's AI connections and returns 404 for an unknown/non-owned ID. Older clients without `connection_id` retain the latest-saved fallback.
-- Groq uses the OpenAI-compatible Groq endpoint and supports `openai/gpt-oss-120b`; explicit Groq/xAI selection is preserved for generic `sk-` key prefixes instead of being misclassified as OpenAI.
-- AI suggestions change only local draft/editor state. They never write directly to YouTube; remote publication remains an explicit Write Mode action.
-- Latest pre-merge feature validation: CI #437 passed completely — API pytest and pip-audit; frontend catalog tests, EN/RU/UK i18n parity, lint, production dependency audit and Next.js deployment build.
-- The next planned AI metadata increment is reliable video-format classification (`short | long | unknown`) followed by separate title/description/tags prompt sets for Shorts and long-form videos. This classification is not implemented yet; do not infer it from title text or `#shorts`.
+- Working branch: `feature-video-format-prompts-2026-10-10`; draft PR #17 targets `main`. PR #16 with the base AI metadata implementation is already merged. Do not use the retained old AI feature branch for new work.
+- Reliable video-format routing is implemented without heuristics. For a video AI Improve request the backend resolves the owner-scoped video and uses YouTube Analytics `creatorContentType`; observed/supported production values are `shorts` and `videoOnDemand`. The result is cached in `videos.youtube_content_type`.
+- If YouTube does not provide a content type, MoyaStudia returns `youtube_content_type_unavailable` instead of guessing from duration, aspect ratio, title text or `#shorts`.
+- Cabinet now stores two independent prompt sets for video metadata: **Обычные видео** and **Shorts**, each with title / description / tags prompts. The editor uses compact tabs so both sets do not extend the settings column vertically. Prompt preferences remain user-level and are synchronized across the user's saved AI connections.
+- Playlist title/description and channel description/keywords keep the existing field-specific prompt behavior. AI provider/model/API-key selection is unchanged.
+- Studio sends the internal `video_id` with video AI Improve requests. Backend ownership is checked before using the video or its YouTube OAuth connection.
+- Migration head is `0014_video_content_type_prompts`: adds `videos.youtube_content_type` plus `shorts_title_prompt`, `shorts_description_prompt`, and `shorts_tags_prompt` to `ai_connections`.
+- Temporary format/geometry diagnostics used during investigation have been removed. Production code retains only `video_creator_content_type()`; no `/format-probe`, `/content-type-probe`, geometry probe or expanded `fileDetails` diagnostic path remains.
+- CI was green after the production cleanup/restoration pass. Frontend gate covered catalog tests, EN/RU/UK i18n parity, lint, production dependency audit and deployment build; API gate covered pytest and dependency audit. A new CI run is expected after these documentation-only commits and must also be green before merge.
+- AI suggestions still modify only local draft/editor state. They never write directly to YouTube; remote publication remains a separate explicit Write Mode action.
+- Next merge gate: verify the documentation-only CI run, review final PR #17 diff, then mark ready/merge. After merge, update `main` locally and retain the feature branch only if a rollback/reference point is desired.
 
 ---
 

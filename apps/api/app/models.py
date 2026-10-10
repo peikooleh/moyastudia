@@ -54,6 +54,9 @@ class AIConnection(Base):
     title_prompt: Mapped[str] = mapped_column(Text, default="")
     description_prompt: Mapped[str] = mapped_column(Text, default="")
     tags_prompt: Mapped[str] = mapped_column(Text, default="")
+    shorts_title_prompt: Mapped[str] = mapped_column(Text, default="")
+    shorts_description_prompt: Mapped[str] = mapped_column(Text, default="")
+    shorts_tags_prompt: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -161,6 +164,7 @@ class Video(Base):
     youtube_default_language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     youtube_default_audio_language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     youtube_duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    youtube_content_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     youtube_published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

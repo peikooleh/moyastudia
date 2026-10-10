@@ -1779,7 +1779,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       const response = await apiFetch("/ai/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entity, field, value, connection_id: selectedAiConnectionId || undefined }),
+        body: JSON.stringify({ entity, field, value, connection_id: selectedAiConnectionId || undefined, video_id: entity === "video" ? Number(targetId) : undefined }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {

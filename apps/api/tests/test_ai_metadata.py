@@ -139,3 +139,29 @@ def test_improve_uses_prompt_for_matching_field(monkeypatch):
     ai_metadata.improve(connection, "channel", "keywords", "source")
 
     assert seen == ["TITLE ONLY", "DESCRIPTION ONLY", "TAGS ONLY", "TAGS ONLY"]
+
+
+def test_improve_uses_shorts_prompt_only_for_short_video(monkeypatch):
+    connection = SimpleNamespace(
+        encrypted_api_key="encrypted", provider="openai", model="model",
+        title_prompt="LONG TITLE", description_prompt="LONG DESCRIPTION", tags_prompt="LONG TAGS",
+        shorts_title_prompt="SHORT TITLE", shorts_description_prompt="SHORT DESCRIPTION",
+        shorts_tags_prompt="SHORT TAGS",
+    )
+    monkeypatch.setattr(ai_metadata, "decrypt_refresh_token", lambda _: "secret")
+    seen = []
+    def fake_request(provider, model, key, system, data):
+        seen.append(json.loads(data))
+        return '{"value":"result"}'
+    monkeypatch.setattr(ai_metadata, "_request", fake_request)
+    monkeypatch.setattr(ai_metadata, "_parse_output", lambda text, entity, field: text)
+
+    ai_metadata.improve(connection, "video", "title", "source", "short")
+    ai_metadata.improve(connection, "video", "description", "source", "short")
+    ai_metadata.improve(connection, "video", "tags", "source", "short")
+    ai_metadata.improve(connection, "video", "title", "source", "long")
+
+    assert [item["style_preferences_untrusted"] for item in seen] == [
+        "SHORT TITLE", "SHORT DESCRIPTION", "SHORT TAGS", "LONG TITLE"
+    ]
+    assert [item["video_format"] for item in seen] == ["short", "short", "short", "long"]

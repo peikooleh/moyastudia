@@ -103,6 +103,10 @@ export default function CabinetPage() {
   const [aiTitlePrompt, setAiTitlePrompt] = useState("");
   const [aiDescriptionPrompt, setAiDescriptionPrompt] = useState("");
   const [aiTagsPrompt, setAiTagsPrompt] = useState("");
+  const [aiShortsTitlePrompt, setAiShortsTitlePrompt] = useState("");
+  const [aiShortsDescriptionPrompt, setAiShortsDescriptionPrompt] = useState("");
+  const [aiShortsTagsPrompt, setAiShortsTagsPrompt] = useState("");
+  const [aiPromptTab, setAiPromptTab] = useState("long");
   const [aiBusy, setAiBusy] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
@@ -344,12 +348,18 @@ export default function CabinetPage() {
           setAiTitlePrompt(rows[0].title_prompt || "");
           setAiDescriptionPrompt(rows[0].description_prompt || "");
           setAiTagsPrompt(rows[0].tags_prompt || "");
+          setAiShortsTitlePrompt(rows[0].shorts_title_prompt || "");
+          setAiShortsDescriptionPrompt(rows[0].shorts_description_prompt || "");
+          setAiShortsTagsPrompt(rows[0].shorts_tags_prompt || "");
           setAiBaseline({
             provider: rows[0].provider,
             model: rows[0].model,
             titlePrompt: rows[0].title_prompt || "",
             descriptionPrompt: rows[0].description_prompt || "",
             tagsPrompt: rows[0].tags_prompt || "",
+            shortsTitlePrompt: rows[0].shorts_title_prompt || "",
+            shortsDescriptionPrompt: rows[0].shorts_description_prompt || "",
+            shortsTagsPrompt: rows[0].shorts_tags_prompt || "",
           });
         } else {
           setAiBaseline({ provider: "openai", model: "", titlePrompt: "", descriptionPrompt: "", tagsPrompt: "" });
@@ -374,6 +384,9 @@ export default function CabinetPage() {
     setAiTitlePrompt(aiBaseline.titlePrompt);
     setAiDescriptionPrompt(aiBaseline.descriptionPrompt);
     setAiTagsPrompt(aiBaseline.tagsPrompt || "");
+    setAiShortsTitlePrompt(aiBaseline.shortsTitlePrompt || "");
+    setAiShortsDescriptionPrompt(aiBaseline.shortsDescriptionPrompt || "");
+    setAiShortsTagsPrompt(aiBaseline.shortsTagsPrompt || "");
     setAiApiKey("");
     setAiError("");
     setAiNotice("");
@@ -385,6 +398,9 @@ export default function CabinetPage() {
     || aiTitlePrompt !== aiBaseline.titlePrompt
     || aiDescriptionPrompt !== aiBaseline.descriptionPrompt
     || aiTagsPrompt !== (aiBaseline.tagsPrompt || "")
+    || aiShortsTitlePrompt !== (aiBaseline.shortsTitlePrompt || "")
+    || aiShortsDescriptionPrompt !== (aiBaseline.shortsDescriptionPrompt || "")
+    || aiShortsTagsPrompt !== (aiBaseline.shortsTagsPrompt || "")
     || Boolean(aiApiKey.trim())
   );
 
@@ -475,6 +491,9 @@ export default function CabinetPage() {
           title_prompt: aiTitlePrompt,
           description_prompt: aiDescriptionPrompt,
           tags_prompt: aiTagsPrompt,
+          shorts_title_prompt: aiShortsTitlePrompt,
+          shorts_description_prompt: aiShortsDescriptionPrompt,
+          shorts_tags_prompt: aiShortsTagsPrompt,
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -492,6 +511,9 @@ export default function CabinetPage() {
           title_prompt: row.title_prompt || "",
           description_prompt: row.description_prompt || "",
           tags_prompt: row.tags_prompt || "",
+          shorts_title_prompt: row.shorts_title_prompt || "",
+          shorts_description_prompt: row.shorts_description_prompt || "",
+          shorts_tags_prompt: row.shorts_tags_prompt || "",
         })),
         row,
       ]);
@@ -506,6 +528,9 @@ export default function CabinetPage() {
         titlePrompt: row.title_prompt || "",
         descriptionPrompt: row.description_prompt || "",
         tagsPrompt: row.tags_prompt || "",
+        shortsTitlePrompt: row.shorts_title_prompt || "",
+        shortsDescriptionPrompt: row.shorts_description_prompt || "",
+        shortsTagsPrompt: row.shorts_tags_prompt || "",
       });
       setAiNotice(t(uiLang, "aiSaved"));
     } catch (error) {
@@ -760,10 +785,20 @@ export default function CabinetPage() {
                   </section>
                   <aside className="ai-model-settings-column" aria-labelledby="ai-model-settings-title">
                     <h2 id="ai-model-settings-title">{t(uiLang, "aiModelSettings")}</h2>
+                    <div className="ai-prompt-tabs" role="tablist" aria-label={t(uiLang, "aiModelSettings")}>
+                      <button type="button" role="tab" aria-selected={aiPromptTab === "long"} className={aiPromptTab === "long" ? "active" : ""} onClick={() => setAiPromptTab("long")}>{t(uiLang, "aiLongPrompts")}</button>
+                      <button type="button" role="tab" aria-selected={aiPromptTab === "shorts"} className={aiPromptTab === "shorts" ? "active" : ""} onClick={() => setAiPromptTab("shorts")}>{t(uiLang, "aiShortsPrompts")}</button>
+                    </div>
                     <div className="ai-model-settings">
-                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      {aiPromptTab === "long" ? <>
+                        <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      </> : <>
+                        <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiShortsTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiShortsTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiShortsDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiShortsDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiShortsTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiShortsTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      </>}
                     </div>
                   </aside>
                   {aiDirty ? (

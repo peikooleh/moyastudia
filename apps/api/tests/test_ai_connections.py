@@ -76,6 +76,9 @@ def test_ai_connection_encrypts_key_and_never_returns_plaintext(client, test_dat
         "title_prompt": "Improve the title",
         "description_prompt": "Improve the description",
         "tags_prompt": "",
+        "shorts_title_prompt": "",
+        "shorts_description_prompt": "",
+        "shorts_tags_prompt": "",
     }]
 
 
@@ -196,7 +199,7 @@ def test_ai_improve_uses_owner_key_and_does_not_write_to_youtube(client, test_da
         return '{"value":"Deutsch, A2, Lernen"}'
 
     monkeypatch.setattr(ai_metadata, "_request", fake_request)
-    result = client.post("/ai/improve", json={"entity": "video", "field": "tags", "value": "Deutsch"},
+    result = client.post("/ai/improve", json={"entity": "channel", "field": "keywords", "value": "Deutsch"},
                          headers=headers)
     assert result.status_code == 200
     assert result.json()["value"] == "Deutsch, A2, Lernen"
@@ -259,7 +262,7 @@ def test_ai_improve_can_select_saved_connection(client, test_database, monkeypat
     monkeypatch.setattr(ai_metadata, "_request", fake_request)
     result = client.post(
         "/ai/improve",
-        json={"entity": "video", "field": "title", "value": "Original", "connection_id": first["id"]},
+        json={"entity": "playlist", "field": "title", "value": "Original", "connection_id": first["id"]},
         headers=headers,
     )
     assert result.status_code == 200
@@ -268,7 +271,7 @@ def test_ai_improve_can_select_saved_connection(client, test_database, monkeypat
 
     missing = client.post(
         "/ai/improve",
-        json={"entity": "video", "field": "title", "value": "Original", "connection_id": second["id"] + 10000},
+        json={"entity": "playlist", "field": "title", "value": "Original", "connection_id": second["id"] + 10000},
         headers=headers,
     )
     assert missing.status_code == 404
