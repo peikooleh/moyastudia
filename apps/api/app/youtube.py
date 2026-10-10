@@ -209,6 +209,38 @@ def verified_analytics_channel(refresh_token: str, youtube_channel_id: str) -> d
     raise LookupError("selected channel is not owned by the current YouTube OAuth connection")
 
 
+def channel_creator_content_types(
+    refresh_token: str,
+    start_date: str,
+    end_date: str,
+    channel_id: str = "",
+) -> list[dict]:
+    """Return YouTube's own content-type classification per video when Analytics has data."""
+    service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
+    response = _execute(
+        service.reports().query(
+            ids=f"channel=={channel_id}" if channel_id else "channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics="views",
+            dimensions="video,creatorContentType",
+            sort="video,creatorContentType",
+            maxResults=200,
+        ),
+        "reports.query",
+    )
+    result = []
+    for row in response.get("rows") or []:
+        if len(row) < 3:
+            continue
+        result.append({
+            "youtube_video_id": str(row[0]),
+            "creator_content_type": str(row[1]),
+            "views": int(row[2] or 0),
+        })
+    return result
+
+
 def channel_analytics_summary(
     refresh_token: str,
     start_date: str,
