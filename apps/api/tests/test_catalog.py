@@ -848,6 +848,46 @@ def test_catalog_audit_identifies_five_missing_unlisted_ids_without_writing(
         assert db.query(Video).filter(Video.channel_id == channel_id).count() == 2
 
 
+def test_catalog_audit_probes_video_absent_from_all_search_sources(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database, subject="catalog-audit-probe")
+    channel_id, remote_channel_id, _ = create_channel(test_database, user_id, "audit-probe")
+    authorized_client(client, token)
+    probe = "AbCdEf12345"
+    seen = []
+
+    def fake_audit(refresh_token, youtube_channel_id, local_video_ids):
+        seen.extend(local_video_ids)
+        return {
+            "owned_channel_ids": [remote_channel_id],
+            "sources": {
+                name: {"ids": [], "page_sizes": [0], "rejected": [], "truncated": False}
+                for name in ("search_scoped", "search_unscoped", "uploads")
+            },
+            "details": {
+                probe: {
+                    "channelId": remote_channel_id, "title": "Hidden from discovery",
+                    "privacy": "unlisted", "publishAt": None, "uploadStatus": "processed",
+                }
+            },
+            "requested_ids": [probe],
+            "uploads_playlist_available": True,
+        }
+
+    monkeypatch.setattr(main.yt, "audit_video_discovery", fake_audit)
+    response = client.get(f"/channels/{channel_id}/catalog/audit?probe_ids={probe}")
+    assert response.status_code == 200
+    assert seen == [probe]
+    report = response.json()
+    assert report["remote"]["unlistedCount"] == 1
+    assert report["probes"][0]["foundBy"] == []
+    assert report["probes"][0]["direct"]["privacy"] == "unlisted"
+    assert len(report["mismatches"]) == 1
+    invalid = client.get(f"/channels/{channel_id}/catalog/audit?probe_ids=not-an-id")
+    assert invalid.status_code == 422
+
+
 def test_catalog_audit_is_owner_scoped(client, test_database, monkeypatch):
     owner_id, _ = create_account(test_database, subject="catalog-audit-owner-scope")
     _, outsider_token = create_account(test_database, subject="catalog-audit-outsider")
