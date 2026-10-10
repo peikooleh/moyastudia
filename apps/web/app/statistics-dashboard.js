@@ -229,7 +229,6 @@ export function StatisticsDashboard({
     [catalogVideos],
   );
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
-  const currentChannel = channels.find((channel) => String(channel.id) === String(selectedChannelId)) || null;
 
   useEffect(() => {
     setVideoId("");
@@ -331,7 +330,7 @@ export function StatisticsDashboard({
     },
     subscribers: {
       label: t(uiLang, scope === "channel" ? "statisticsSubscribersTotal" : "statisticsSubscribersChange"),
-      value: analyticsDataUnavailable ? "—" : analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : formatNullableNumber(netSubscribers, locale)) : "—",
+      value: analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : analyticsDataUnavailable ? "—" : formatNullableNumber(netSubscribers, locale)) : "—",
       detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
       seriesValue: (point) => point.subscribers_gained == null || point.subscribers_lost == null ? null : Number(point.subscribers_gained) - Number(point.subscribers_lost),
       seriesTitle: (point) => `${point.date}: ${Number(point.subscribers_gained || 0) - Number(point.subscribers_lost || 0)} (${t(uiLang, "statisticsSubscribersDetail", { gained: point.subscribers_gained || 0, lost: point.subscribers_lost || 0 })})`,
