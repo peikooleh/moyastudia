@@ -75,6 +75,7 @@ def test_ai_connection_encrypts_key_and_never_returns_plaintext(client, test_dat
         "has_api_key": True,
         "title_prompt": "Improve the title",
         "description_prompt": "Improve the description",
+        "tags_prompt": "",
     }]
 
 
@@ -169,3 +170,48 @@ def test_ai_connection_rejects_blank_model_and_blank_new_key(client, test_databa
     assert blank_key.status_code == 422
     with test_database() as db:
         assert db.query(AIConnection).count() == 0
+
+
+def test_ai_improve_auth_origin_and_field_whitelist(client, test_database):
+    _, token = create_account(test_database)
+    payload = {"entity": "video", "field": "title", "value": "Original"}
+    assert client.post("/ai/improve", json=payload, headers={"Origin": settings.frontend_origin}).status_code == 401
+    client.cookies.set(settings.session_cookie_name, token)
+    assert client.post("/ai/improve", json=payload, headers={"Origin": "https://evil.test"}).status_code == 403
+    assert client.post("/ai/improve", json={**payload, "entity": "channel"}, headers={"Origin": settings.frontend_origin}).status_code == 422
+    assert client.post("/ai/improve", json=payload, headers={"Origin": settings.frontend_origin}).status_code == 409
+
+
+def test_ai_improve_uses_owner_key_and_does_not_write_to_youtube(client, test_database, monkeypatch):
+    from app import ai_metadata
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    headers = {"Origin": settings.frontend_origin}
+    saved = client.put("/ai-connections", json=_payload(tags_prompt="Use relevant tags"), headers=headers)
+    assert saved.status_code == 200
+    calls = []
+
+    def fake_request(provider, model, key, system, data):
+        calls.append((provider, model, key, system, data))
+        return '{"value":"Deutsch, A2, Lernen"}'
+
+    monkeypatch.setattr(ai_metadata, "_request", fake_request)
+    result = client.post("/ai/improve", json={"entity": "video", "field": "tags", "value": "Deutsch"},
+                         headers=headers)
+    assert result.status_code == 200
+    assert result.json()["value"] == "Deutsch, A2, Lernen"
+    assert calls[0][2] == "secret-ai-key"
+    assert "Use relevant tags" in calls[0][4]
+    assert "source_metadata" in calls[0][4]
+    assert "secret-ai-key" not in result.text
+
+
+def test_ai_auto_selects_provider_and_model(client, test_database):
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    result = client.put("/ai-connections", json={"api_key": "sk-ant-example", "tags_prompt": "simple"},
+                        headers={"Origin": settings.frontend_origin})
+    assert result.status_code == 200
+    assert result.json()["provider"] == "anthropic"
+    assert result.json()["model"]
+    assert result.json()["tags_prompt"] == "simple"
