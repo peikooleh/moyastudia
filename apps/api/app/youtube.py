@@ -1,4 +1,5 @@
 import io
+import json
 
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -712,60 +713,104 @@ def audit_video_discovery(
     local_video_ids: list[str],
     recorder: QuotaRecorder | None = None,
 ) -> dict:
-    """Read-only, bounded cross-check of independent YouTube video sources.
+    """Read-only cross-check that reports failures per YouTube API operation.
 
-    Returns ID-level evidence rather than guessing why a video is absent.
-    The scan never changes a video or the catalog.
+    A failed source must not erase evidence from the other sources. Only
+    provider error status and reason are exposed, never credentials or URLs.
     """
-    credentials = creds_from_refresh(refresh_token)
-    service = build("youtube", "v3", credentials=credentials)
-    owned_response = _execute(
-        service.channels().list(part="id", mine=True, maxResults=50),
-        "channels.list", recorder,
+    errors = {}
+
+    def safe_execute(stage: str, request_factory):
+        try:
+            return _execute(request_factory(), stage.split(":")[0], recorder)
+        except Exception as exc:
+            error = {"type": type(exc).__name__}
+            if isinstance(exc, HttpError):
+                error["httpStatus"] = getattr(exc.resp, "status", None)
+                try:
+                    body = json.loads(exc.content.decode("utf-8"))
+                    first = ((body.get("error") or {}).get("errors") or [{}])[0]
+                    error["youtubeReason"] = first.get("reason") or "unknown"
+                    error["youtubeCode"] = (body.get("error") or {}).get("code")
+                except (ValueError, UnicodeError, AttributeError, TypeError):
+                    error["youtubeReason"] = "unknown"
+            errors[stage] = error
+            return None
+
+    try:
+        credentials = creds_from_refresh(refresh_token)
+        service = build("youtube", "v3", credentials=credentials)
+    except Exception as exc:
+        return {
+            "owned_channel_ids": [],
+            "sources": {
+                name: {"ids": [], "page_sizes": [], "rejected": [], "truncated": True}
+                for name in ("search_scoped", "search_unscoped", "uploads")
+            },
+            "details": {}, "requested_ids": local_video_ids,
+            "uploads_playlist_available": False,
+            "errors": {"authentication": {"type": type(exc).__name__}},
+        }
+
+    owned_response = safe_execute(
+        "channels.list:mine",
+        lambda: service.channels().list(part="id", mine=True, maxResults=50),
     )
-    owned_ids = [item.get("id") for item in owned_response.get("items") or [] if item.get("id")]
-    channel_response = _execute(
-        service.channels().list(part="contentDetails", id=youtube_channel_id, maxResults=1),
-        "channels.list", recorder,
+    owned_ids = [
+        item.get("id") for item in (owned_response or {}).get("items") or []
+        if item.get("id")
+    ]
+    channel_response = safe_execute(
+        "channels.list:contentDetails",
+        lambda: service.channels().list(
+            part="contentDetails", id=youtube_channel_id, maxResults=1
+        ),
     )
-    channel_items = channel_response.get("items") or []
+    channel_items = (channel_response or {}).get("items") or []
     uploads_id = (
         ((channel_items[0].get("contentDetails") or {}).get("relatedPlaylists") or {}).get("uploads")
         if channel_items and channel_items[0].get("id") == youtube_channel_id else None
     )
 
-    def scan(operation: str, make_request, extract):
+    def empty_source(truncated=False):
+        return {"ids": [], "page_sizes": [], "rejected": [], "truncated": truncated}
+
+    def scan(stage: str, operation: str, make_request, extract):
         token = None
         seen_tokens = set()
-        ids = []
+        result = empty_source()
         seen_ids = set()
-        rejected = []
-        pages = []
-        truncated = False
-        for _ in range(10):
-            response = _execute(make_request(token), operation, recorder)
+        for page_index in range(10):
+            response = safe_execute(
+                stage, lambda: make_request(token)
+            )
+            if response is None:
+                result["truncated"] = True
+                break
             items = response.get("items") or []
-            pages.append(len(items))
+            result["page_sizes"].append(len(items))
             for item in items:
                 video_id, owner_id = extract(item)
                 if not video_id:
                     continue
                 if owner_id and owner_id != youtube_channel_id:
-                    rejected.append({"id": video_id, "channelId": owner_id})
+                    result["rejected"].append({"id": video_id, "channelId": owner_id})
                     continue
                 if video_id not in seen_ids:
                     seen_ids.add(video_id)
-                    ids.append(video_id)
+                    result["ids"].append(video_id)
             next_token = response.get("nextPageToken")
             if not next_token:
                 break
             if next_token == token or next_token in seen_tokens:
-                raise RuntimeError(f"YouTube {operation} repeated a page token")
+                errors[stage] = {"type": "RepeatedPageToken"}
+                result["truncated"] = True
+                break
             seen_tokens.add(next_token)
             token = next_token
         else:
-            truncated = True
-        return {"ids": ids, "page_sizes": pages, "rejected": rejected, "truncated": truncated}
+            result["truncated"] = True
+        return result
 
     def search_request(scoped: bool):
         def request(token):
@@ -783,27 +828,32 @@ def audit_video_discovery(
     def search_item(item):
         return (item.get("id") or {}).get("videoId"), (item.get("snippet") or {}).get("channelId")
 
-    scoped = scan("search.list", search_request(True), search_item)
-    unscoped = scan("search.list", search_request(False), search_item)
-    uploads = scan(
-        "playlistItems.list",
-        lambda token: service.playlistItems().list(**{
-            "part": "contentDetails", "playlistId": uploads_id, "maxResults": 50,
-            **({"pageToken": token} if token else {}),
-        }),
-        lambda item: ((item.get("contentDetails") or {}).get("videoId"), None),
-    ) if uploads_id else {"ids": [], "page_sizes": [], "rejected": [], "truncated": False}
-
+    scoped = scan("search.list:scoped", "search.list", search_request(True), search_item)
+    unscoped = scan("search.list:unscoped", "search.list", search_request(False), search_item)
+    uploads = (
+        scan(
+            "playlistItems.list:uploads",
+            "playlistItems.list",
+            lambda token: service.playlistItems().list(**{
+                "part": "contentDetails", "playlistId": uploads_id, "maxResults": 50,
+                **({"pageToken": token} if token else {}),
+            }),
+            lambda item: ((item.get("contentDetails") or {}).get("videoId"), None),
+        )
+        if uploads_id else empty_source(truncated=channel_response is None)
+    )
     all_ids = list(dict.fromkeys(
         scoped["ids"] + unscoped["ids"] + uploads["ids"] + local_video_ids
     ))
     details = {}
     for offset in range(0, len(all_ids), 50):
         batch = all_ids[offset:offset + 50]
-        response = _execute(
-            service.videos().list(part="snippet,status", id=",".join(batch)),
-            "videos.list", recorder,
+        response = safe_execute(
+            f"videos.list:batch_{offset // 50 + 1}",
+            lambda: service.videos().list(part="snippet,status", id=",".join(batch)),
         )
+        if response is None:
+            continue
         for item in response.get("items") or []:
             snippet = item.get("snippet") or {}
             status = item.get("status") or {}
@@ -816,10 +866,15 @@ def audit_video_discovery(
             }
     return {
         "owned_channel_ids": owned_ids,
-        "sources": {"search_scoped": scoped, "search_unscoped": unscoped, "uploads": uploads},
+        "sources": {
+            "search_scoped": scoped,
+            "search_unscoped": unscoped,
+            "uploads": uploads,
+        },
         "details": details,
         "requested_ids": all_ids,
         "uploads_playlist_available": bool(uploads_id),
+        "errors": errors,
     }
 
 
