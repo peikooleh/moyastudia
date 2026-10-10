@@ -4,7 +4,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 
 Пользователь подключает свой Google-аккаунт и свои YouTube-каналы. Видео остаются на YouTube; MoyaStudia хранит только необходимые метаданные и настройки, поэтому большие видеофайлы не нужно переносить в наше хранилище.
 
-Текущая реализация уже вышла за пределы раннего read-only Stage 3: есть server-authoritative Write Mode, локальный working state видео, контролируемая отправка поддерживаемых изменений в YouTube, playlist/calendar write increments, quota telemetry и серверные AI connection settings. Google OAuth остаётся единственным реализованным identity flow; Apple login и AI provider calls не включены. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md); принципы write security зафиксированы в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md).
+Текущая реализация уже вышла за пределы раннего read-only Stage 3: есть server-authoritative Write Mode, локальный working state видео, контролируемая отправка поддерживаемых изменений в YouTube, playlist/calendar write increments, quota telemetry и серверные AI connection settings. Google OAuth остаётся единственным реализованным identity flow; Apple login не реализован. AI metadata provider calls уже доступны server-side для OpenAI, Gemini, Anthropic, xAI и Groq. Актуальное состояние и ограничения перечислены в [STATUS.md](STATUS.md); принципы write security зафиксированы в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md).
 
 ## Аудит 2026-10-07
 
@@ -28,7 +28,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - Полный набор операций YouTube Studio: доступны только явно реализованные write flows; destructive удаление YouTube video/channel не реализовано.
 - Полноценный Google revoke/disconnect lifecycle.
 - Биллинг и публичный SaaS multi-tenancy.
-- Вызовы OpenAI/Gemini/Anthropic пока не включены: AI connection settings уже хранятся server-side, но наличие ключа не запускает provider call и не даёт AI права напрямую изменять YouTube.
+- AI suggestions изменяют только локальный draft/редактор. Даже подключённая AI-модель не получает права напрямую записывать изменения в YouTube; публикация остаётся отдельным явным действием пользователя под Write Mode.
 
 ## Стек
 
@@ -67,7 +67,8 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - `GET /auth/youtube/login` → callback `GET /auth/youtube/callback`
 - `GET /write-mode`; `PUT /write-mode` — server-authoritative Write Mode
 - `GET /quota/today` — MoyaStudia-tracked YouTube Data API usage
-- `GET /ai-connections`; `PUT /ai-connections` — encrypted per-user AI settings
+- `GET /ai-connections`; `PUT /ai-connections`; `DELETE /ai-connections/{id}` — encrypted per-user AI settings
+- `POST /ai/improve` — bounded AI metadata suggestion через выбранное сохранённое подключение
 - `GET /channels`, `POST /channels/{id}/refresh-profile`, `PUT /channels/{id}/working-language`, `PUT /channels/{id}/metadata`
 - `DELETE /channels/{id}` — убрать managed channel из MoyaStudia; YouTube-канал не удаляется
 - `GET /google-connections/{connection_id}/available-channels`; `POST /google-connections/{connection_id}/channels`
