@@ -211,6 +211,10 @@ export function StatisticsDashboard({
     };
   }, [selectedChannelId]);
 
+  const currentChannel = useMemo(
+    () => channels.find((channel) => String(channel.id) === String(selectedChannelId)) || null,
+    [channels, selectedChannelId],
+  );
   const remotePlaylists = useMemo(
     () => (playlists || []).filter((playlist) => !playlist.localOnly),
     [playlists],
