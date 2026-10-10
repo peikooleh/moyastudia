@@ -13,6 +13,7 @@ import {
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import { t } from "../lib/i18n.js";
+import { monetizationStorageKey, progressToGoal, publicUploadsInLast90Days, sanitizeQualifiedInput, yppThresholds } from "../lib/monetization.mjs";
 import { calendarLocalDateKey, calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import {
   catalogVideoDetailUrl,
@@ -335,6 +336,62 @@ test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () =>
   }
   assert.equal(t("ru", "actionCancel"), "Отмена");
   assert.equal(t("uk", "actionCancel"), "Скасувати");
+});
+
+test("YouTube monetization requirements use current and 2027 effective dates", () => {
+  assert.deepEqual(yppThresholds(new Date("2026-10-10T12:00:00Z")).early, {
+    subscribers: 500, watchHours: 3000, shortsViews: 3000000, uploads: 3,
+  });
+  assert.deepEqual(yppThresholds(new Date("2027-01-31T23:59:59Z")).ads, {
+    subscribers: 1000, watchHours: 4000, shortsViews: 10000000,
+  });
+  assert.deepEqual(yppThresholds(new Date("2027-02-01T00:00:00Z")).ads, {
+    subscribers: 1000, watchHours: 8000, shortsViews: 20000000,
+  });
+});
+
+test("Monetization progress distinguishes unavailable qualified data from zero", () => {
+  assert.equal(progressToGoal(null, 4000), null);
+  assert.equal(progressToGoal("", 4000), null);
+  assert.equal(progressToGoal(275, 1000).remaining, 725);
+  assert.ok(Math.abs(progressToGoal(275, 1000).percent - 27.5) < 0.001);
+  assert.equal(progressToGoal(9000, 4000).percent, 100);
+  assert.equal(sanitizeQualifiedInput(""), null);
+  assert.equal(sanitizeQualifiedInput("-1"), null);
+  assert.equal(sanitizeQualifiedInput("4.2"), null);
+  assert.equal(sanitizeQualifiedInput("420"), 420);
+  assert.equal(monetizationStorageKey({ accountUserId: "account-1" }, { youtube_channel_id: "channel-1" }), "account-1:channel-1");
+  assert.equal(monetizationStorageKey({ accountUserId: "" }, { youtube_channel_id: "channel-1" }), "");
+});
+
+test("Recent public upload estimate excludes private, old and unavailable videos", () => {
+  const videos = [
+    { status: "public", availability: "available", publishedAt: "2026-10-01T00:00:00Z" },
+    { status: "private", availability: "available", publishedAt: "2026-10-01T00:00:00Z" },
+    { status: "public", availability: "unavailable", publishedAt: "2026-10-01T00:00:00Z" },
+    { status: "public", availability: "available", publishedAt: "2026-01-01T00:00:00Z" },
+    { status: "public", availability: "available", publishedAt: "" },
+  ];
+  assert.equal(publicUploadsInLast90Days(videos, new Date("2026-10-10T12:00:00Z")), 1);
+});
+
+test("Monetization labels are localized in all UI languages", () => {
+  const keys = [
+    "monetizationTitle", "monetizationSubtitle", "monetizationBadge", "monetizationOpenHint",
+    "monetizationClose", "monetizationTierLabel", "monetizationEarly", "monetizationAds",
+    "monetizationEitherRoute", "monetizationSubscribers", "monetizationWatchHours",
+    "monetizationShortsViews", "monetizationUploads", "monetizationYouTubeSource",
+    "monetizationManualSource", "monetizationCatalogEstimate", "monetizationPercent",
+    "monetizationGoalProgress", "monetizationNotEntered", "monetizationUnknown",
+    "monetizationQualifiedWarning", "monetizationUpcomingChange", "monetizationEdit",
+    "monetizationWatchHoursInput", "monetizationShortsInput", "monetizationSave",
+    "monetizationCancel", "monetizationManualUpdated", "monetizationLocalOnly",
+    "monetizationOfficialRules", "monetizationRuleChanges",
+  ];
+  for (const lang of ["en", "ru", "uk"]) {
+    for (const key of keys) assert.notEqual(t(lang, key), key, lang + ":" + key);
+  }
+  assert.equal(t("ru", "monetizationPercent", { count: "27,5" }), "27,5%");
 });
 
 test("Analytics date and OAuth channel mismatch guidance are localized", () => {
