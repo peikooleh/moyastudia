@@ -2337,3 +2337,63 @@ def test_video_cache_filters_and_sorts_on_server(client, test_database):
     assert [item["youtubeId"] for item in newest_first.json()["items"]] == ["title-a", "unlisted-video"]
     assert [item["youtubeId"] for item in oldest_page_one.json()["items"]] == ["title-b"]
     assert [item["youtubeId"] for item in oldest_page_two.json()["items"]] == ["unlisted-video"]
+
+def test_video_file_details_returns_owner_source_geometry(monkeypatch):
+    calls = []
+
+    class FakeResource:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(execute=lambda: {"items": [{
+                "id": "short-id",
+                "contentDetails": {"duration": "PT42S"},
+                "fileDetails": {"videoStreams": [{
+                    "widthPixels": 1080,
+                    "heightPixels": 1920,
+                    "aspectRatio": 0.5625,
+                    "rotation": "none",
+                }]},
+            }]})
+
+    class FakeService:
+        def videos(self):
+            return FakeResource()
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+
+    result = youtube.video_file_details("token", "short-id")
+
+    assert calls == [{"part": "contentDetails,fileDetails", "id": "short-id"}]
+    assert result == {
+        "youtube_video_id": "short-id",
+        "duration": "PT42S",
+        "file_details_available": True,
+        "width": 1080,
+        "height": 1920,
+        "rotation": "none",
+        "aspect_ratio": 0.5625,
+    }
+
+
+def test_video_file_details_preserves_unknown_geometry(monkeypatch):
+    class FakeResource:
+        def list(self, **kwargs):
+            return SimpleNamespace(execute=lambda: {"items": [{
+                "id": "unknown-id",
+                "contentDetails": {"duration": "PT8M"},
+            }]})
+
+    class FakeService:
+        def videos(self):
+            return FakeResource()
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+
+    result = youtube.video_file_details("token", "unknown-id")
+
+    assert result["file_details_available"] is False
+    assert result["width"] is None
+    assert result["height"] is None
+    assert result["duration"] == "PT8M"
