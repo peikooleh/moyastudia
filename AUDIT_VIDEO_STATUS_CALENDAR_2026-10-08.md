@@ -1,3 +1,20 @@
+## Причина подтверждена реальным аудитом — 2026-10-10
+
+Реальный `GET /channels/18/catalog/audit` дал однозначную трассировку для украинского канала `UCo_Srxy3jqF4PbuxgldLpWA`:
+
+- OAuth действительно владеет выбранным каналом: `oauthOwnsSelectedChannel=true`.
+- Локальная БД: **137** видео, из них **2 unlisted**.
+- uploads playlist: **137 уникальных ID**, те же **2 unlisted**.
+- owner-wide `search.list(forMine=true,type=video)`: **144 уникальных ID**, без обрыва пагинации (50 + 50 + 44).
+- Прямой `videos.list`: вернул детали для всех **144/144**, чужих channel ID нет.
+- YouTube реально сообщает **7 unlisted**.
+- Ровно **7 видео отсутствуют в локальном каталоге**: пять unlisted (`6pWPB17RVBU`, `KGwg4Nwz56Y`, `VS2VHmfAfrI`, `apLlAZAEaxg`, `v9N9FshTgfA`) и два public (`0gfZ7NzKTsU`, `NBARK4eCSOg`).
+- Текущий sync-вызов `search.list(forMine=true, channelId=<selected>)` на реальном YouTube отвечает **HTTP 400 badRequest**. Поэтому reconcile находится в `STALE` с `youtube_api_error`.
+
+**Root cause:** uploads playlist неполон для этого реального канала, а попытка заменить его scoped owner search использовала комбинацию параметров, которую реальный API отклоняет. Рабочий и подтверждённый аудитом источник — owner-wide `forMine=true` без `channelId`, с обязательной локальной проверкой `snippet.channelId == selected channel`.
+
+**Исправление:** `yt.list_videos` теперь использует именно рабочий owner-wide запрос и фильтрует channel ID до `videos.list`. Это должно увеличить каталог 137 → 144 и unlisted 2 → 7 после успешного reconcile. Календарная логика не менялась.
+
 ## Реальный запуск аудита 2026-10-10: youtube_api_error
 
 - Пользователь вызвал `GET /channels/18/catalog/audit` на локальном backend и получил `{"detail":{"code":"youtube_catalog_audit_failed","reason":"youtube_api_error"}}`. **Это не ответ о статусах семи видео**, а сбой диагностического запроса до формирования отчёта.
