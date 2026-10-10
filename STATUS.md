@@ -1,3 +1,19 @@
+# Current Handoff — AI metadata model selection, 2026-10-10
+
+- AI metadata generation is active server-side for saved OpenAI, Gemini, Anthropic, xAI and Groq connections. API keys remain encrypted at rest and are never returned in plaintext.
+- Title, description and tags/keywords prompt preferences are user-level settings shared across every saved AI model. Switching provider/model does not replace the prompt editor; saving prompt changes synchronizes them across the user's saved AI connections.
+- Every AI Improve action for video title/description/tags, playlist title/description and channel description/keywords now exposes a compact selector containing only the user's actually saved/configured AI connections.
+- The selected AI connection is persisted in browser local storage under `moyastudia.aiConnectionId` and reused across Studio and Cabinet. Saving a model selects it for subsequent improvements; deleting the selected model falls back to another saved connection or clears the preference.
+- `POST /ai/improve` accepts optional `connection_id`; the backend resolves it only inside the authenticated user's AI connections and returns 404 for an unknown/non-owned ID. Older clients without `connection_id` retain the latest-saved fallback.
+- Groq uses the OpenAI-compatible Groq endpoint and supports `openai/gpt-oss-120b`; explicit Groq/xAI selection is preserved for generic `sk-` key prefixes instead of being misclassified as OpenAI.
+- AI connection removal is authenticated/same-origin, deletes only the selected saved AI connection/key, and its UI confirmation/success/error copy is localized in EN/RU/UK.
+- AI model selector controls use shared theme tokens and responsive rules; no separate light/dark hard-coded palette was introduced.
+- CI run #428 passed after the implementation: backend **225 passed** plus `pip-audit`; frontend catalog tests **44 passed**, EN/RU/UK i18n parity, lint, production dependency audit and Next.js deployment build all passed.
+- During validation two pre-existing branch defects were exposed and fixed: blank explicitly supplied model names now return 422 instead of silently selecting a default model, and the missing English `aiNetworkError` key was restored.
+- PR #16 remains draft. No merge has been performed. Manual browser visual review of the new compact selectors remains the next UI gate.
+
+---
+
 ## Подтверждение на реальном канале — 2026-10-10
 
 - Пользователь проверил исправление на украинском MOYAMOVA и подтвердил: **проблема расхождения статуса «По ссылке» решена**.
