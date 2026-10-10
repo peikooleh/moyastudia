@@ -337,6 +337,15 @@ test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () =>
   assert.equal(t("uk", "actionCancel"), "Скасувати");
 });
 
+test("Analytics date and OAuth channel mismatch guidance are localized", () => {
+  assert.equal(t("ru", "statisticsLastReportedDate", { date: "2026-10-08" }), "Последний день с данными Analytics: 2026-10-08");
+  assert.match(t("en", "statisticsLastReportedDateHint"), /not an official data-processing cutoff/);
+  assert.match(t("uk", "statisticsLastReportedDateHint"), /не офіційна дата/);
+  for (const lang of ["en", "ru", "uk"]) {
+    assert.notEqual(t(lang, "youtube_analytics_channel_mismatch"), "youtube_analytics_channel_mismatch");
+  }
+});
+
 test("Analytics pending-data guidance explains successful API response in all UI languages", () => {
   assert.equal(t("ru", "statisticsAnalyticsDataPending"), "Данные YouTube Analytics ещё не доступны.");
   assert.match(t("ru", "statisticsAnalyticsDataPendingDetail"), /API ответил успешно/);
@@ -359,7 +368,7 @@ test("new Studio labels are localized in English, Russian, and Ukrainian", () =>
     "statisticsScopePlaylist", "statisticsScopeVideo", "statisticsPeriod", "statisticsPeriodLifetime",
     "statisticsAverageViewDuration", "statisticsSubscribersNet", "statisticsSubscribersTotal", "statisticsSubscribersChange",
     "statisticsViewsOverTime", "statisticsWatchTimeOverTime", "statisticsAverageDurationOverTime", "statisticsSubscribersOverTime", "statisticsShares",
-    "statisticsPlaylistMetricUnavailable", "statisticsAnalyticsDataPending", "statisticsAnalyticsDataPendingDetail", "statisticsCurrentYouTubeViewsPendingAnalytics", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
+    "statisticsPlaylistMetricUnavailable", "statisticsAnalyticsDataPending", "statisticsAnalyticsDataPendingDetail", "statisticsCurrentYouTubeViewsPendingAnalytics", "statisticsLastReportedDate", "statisticsLastReportedDateHint", "youtube_analytics_channel_mismatch", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
     "youtubeChangesPreview", "youtubeValueBefore", "youtubeValueAfter", "youtubeOrderCurrent", "youtubeOrderChanged",
     "statisticsContentMix", "youtube_analytics_api_disabled", "youtube_analytics_permission_required",
     "youtubeDescriptionByteRule",
