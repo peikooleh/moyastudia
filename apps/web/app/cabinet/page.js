@@ -685,14 +685,14 @@ export default function CabinetPage() {
                   <section className="ai-connections-panel" aria-labelledby="ai-connections-title">
                     <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
-                    <div className="ai-connection-grid">
+                    <div className="ai-connection-grid ai-connection-main">
                       <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option><option value="xai">xAI / Grok</option></select></label>
-                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}
+                      <label className="ai-model-field" title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}
                         <select value={(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? aiModel : "custom"} onChange={(event) => setAiModel(event.target.value === "custom" ? "" : event.target.value)}>
                           <option value="custom">Своя модель (ввести ID)</option>
                           {(AI_MODEL_CATALOG[aiProvider] || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>
-                        <small>{(AI_MODEL_CATALOG[aiProvider] || []).find((item) => item.id === aiModel)?.description || "Введите ID модели вручную. Доступность и стоимость зависят от провайдера."}</small>
+                        <small className="ai-model-description">{(AI_MODEL_CATALOG[aiProvider] || []).find((item) => item.id === aiModel)?.description || "Введите ID модели вручную. Доступность и стоимость зависят от провайдера."}</small>
                         {!(AI_MODEL_CATALOG[aiProvider] || []).some((item) => item.id === aiModel) ? <input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /> : null}
                       </label>
                       <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
