@@ -295,7 +295,9 @@ export function StatisticsDashboard({
     scheduled: Number(statusCounts?.scheduled || 0),
   };
   const maxContent = Math.max(1, ...Object.values(counts));
-  const currentSubscriberTotal = currentChannel?.subscriber_count == null ? null : Number(currentChannel.subscriber_count);
+  const currentSubscriberTotal = analytics?.current_subscriber_count != null
+    ? Number(analytics.current_subscriber_count)
+    : null;
   const kpiDefinitions = {
     views: {
       label: t(uiLang, "videoViews"),
@@ -417,6 +419,11 @@ export function StatisticsDashboard({
         {catalogSyncError ? <span className="statistics-error">{t(uiLang, "statisticsCatalogUpdateFailed")}</span> : null}
         {analyticsLoading ? <span>{t(uiLang, "statisticsUpdating")}</span> : null}
         {analyticsError ? <span className="statistics-error">{t(uiLang, analyticsError)}</span> : null}
+        {analytics?.analytics_last_reported_date ? (
+          <span title={t(uiLang, "statisticsLastReportedDateHint")}>
+            {t(uiLang, "statisticsLastReportedDate", { date: analytics.analytics_last_reported_date })}
+          </span>
+        ) : null}
       </div>
 
       <section className="statistics-kpis">
