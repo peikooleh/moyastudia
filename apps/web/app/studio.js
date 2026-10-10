@@ -1665,7 +1665,12 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         body: JSON.stringify({ entity, field, value }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(t(uiLang, result?.detail?.code || "aiImproveFailed"));
+      if (!response.ok) {
+        const detail = result?.detail || {};
+        const base = t(uiLang, detail?.code || "aiImproveFailed");
+        const diagnostic = [detail?.provider_status ? `HTTP ${detail.provider_status}` : "", detail?.provider_message || ""].filter(Boolean).join(" · ");
+        throw new Error(diagnostic ? `${base} (${diagnostic})` : base);
+      }
       if (requestId !== aiRequestRef.current || aiContextRef.current.channelId !== originalChannel ||
           (entity === "video" && aiContextRef.current.videoId !== targetId) ||
           (entity === "playlist" && aiContextRef.current.playlistId !== targetId)) return;
