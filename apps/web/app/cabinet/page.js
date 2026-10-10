@@ -354,7 +354,7 @@ export default function CabinetPage() {
 
   function updateAiKey(value) {
     setAiApiKey(value);
-    const provider = value.startsWith("sk-ant-") ? "anthropic" : value.startsWith("AIza") ? "gemini" : value.startsWith("sk-") ? "openai" : "";
+    const provider = value.startsWith("sk-ant-") ? "anthropic" : value.startsWith("AIza") ? "gemini" : value.startsWith("sk-") ? "" : "";
     if (provider) {
       setAiProvider(provider);
       setAiModel("");
@@ -666,7 +666,7 @@ export default function CabinetPage() {
                     <h2 id="ai-connections-title">{t(uiLang, "aiConnections")}</h2>
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                     <div className="ai-connection-grid">
-                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
+                      <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option><option value="xai">xAI / Grok</option></select></label>
                       <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
                       <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
                     </div>
