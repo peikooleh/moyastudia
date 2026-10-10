@@ -146,10 +146,41 @@ function MetadataLimitNotice({ uiLang, state, characters }) {
   );
 }
 
+function aiModelDisplayName(connection) {
+  const names = {
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
+    "gemini-3.6-pro": "Gemini 3.6 Pro",
+    "openai/gpt-oss-120b": "GPT-OSS 120B",
+    "openai/gpt-oss-20b": "GPT-OSS 20B",
+    "grok-4.3": "Grok 4.3",
+  };
+  return names[connection?.model] || connection?.model || "";
+}
+
 function AIImproveControl({ uiLang, busy, disabled, onImprove, connections, selectedConnectionId, onSelectConnection }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const controlRef = useRef(null);
   const hasConnections = connections.length > 0;
+  const selected = connections.find((connection) => connection.id === selectedConnectionId) || connections[0] || null;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function closeMenu(event) {
+      if (!controlRef.current?.contains(event.target)) setMenuOpen(false);
+    }
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
+
   return (
-    <span className="ai-improve-control">
+    <span className="ai-improve-control" ref={controlRef}>
       <button
         className="ai-improve-btn"
         type="button"
@@ -157,23 +188,43 @@ function AIImproveControl({ uiLang, busy, disabled, onImprove, connections, sele
         title={hasConnections ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")}
         onClick={onImprove}
       >
-        {busy ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}
+        {busy ? t(uiLang, "aiImproving") : t(uiLang, "aiImproveAction")}
       </button>
       {hasConnections ? (
-        <select
-          className="ai-improve-model"
-          value={String(selectedConnectionId || connections[0]?.id || "")}
-          aria-label={t(uiLang, "aiModelForImprove")}
-          title={t(uiLang, "aiModelForImproveHint")}
-          disabled={Boolean(busy)}
-          onChange={(event) => onSelectConnection(Number(event.target.value))}
-        >
-          {connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connection.model}
-            </option>
-          ))}
-        </select>
+        <span className="ai-model-picker">
+          <button
+            className="ai-model-picker-btn"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={t(uiLang, "aiModelForImprove")}
+            title={t(uiLang, "aiModelForImproveHint")}
+            disabled={Boolean(busy)}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span>{aiModelDisplayName(selected)}</span>
+            <span className="ai-model-picker-chevron" aria-hidden="true">⌄</span>
+          </button>
+          {menuOpen ? (
+            <span className="ai-model-picker-menu" role="menu">
+              {connections.map((connection) => (
+                <button
+                  className={`ai-model-picker-option ${connection.id === selected?.id ? "selected" : ""}`}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={connection.id === selected?.id}
+                  key={connection.id}
+                  onClick={() => {
+                    onSelectConnection(connection.id);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {aiModelDisplayName(connection)}
+                </button>
+              ))}
+            </span>
+          ) : null}
+        </span>
       ) : null}
     </span>
   );
