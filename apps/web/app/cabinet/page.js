@@ -408,7 +408,6 @@ export default function CabinetPage() {
           title_prompt: aiTitlePrompt,
           description_prompt: aiDescriptionPrompt,
           tags_prompt: aiTagsPrompt,
-          tags_prompt: aiTagsPrompt,
         }),
       });
       if (!response.ok) throw new Error(t(uiLang, "aiSaveError"));
