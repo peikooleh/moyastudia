@@ -1,3 +1,4 @@
+"use client";
 
 const AI_MODEL_CATALOG = {
   gemini: [
@@ -18,7 +19,6 @@ const AI_MODEL_CATALOG = {
     { id: "grok-4.7", name: "Grok 4.7", description: "Флагманская · платный API" },
   ],
 };
-"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
