@@ -1860,6 +1860,41 @@ def update_channel_video_calendar_status(
 
 
 
+@app.get("/channels/{channel_id}/videos/{video_id}/format-probe")
+def probe_channel_video_format(
+    channel_id: int,
+    video_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Read-only owner probe used to verify whether YouTube exposes source geometry."""
+    video = _catalog_video_or_404(db, user, channel_id, video_id)
+    if video.availability_status != "available" or not video.youtube_video_id:
+        raise HTTPException(409, detail={"code": "video_unavailable"})
+    channel = _channel_or_404(db, user, channel_id)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            details = yt.video_file_details(token, video.youtube_video_id)
+    except LookupError as exc:
+        raise HTTPException(404, detail={"code": "video_not_found_on_youtube"}) from exc
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        status, reasons = _youtube_error_facts(exc)
+        if status in (401, 403):
+            raise HTTPException(
+                409,
+                detail={"code": "youtube_file_details_unavailable", "reasons": sorted(reasons)},
+            ) from exc
+        raise HTTPException(502, detail={"code": "youtube_format_probe_failed"}) from exc
+    return {
+        "videoId": video.id,
+        "youtubeId": video.youtube_video_id,
+        **details,
+    }
+
+
 @app.put(
     "/channels/{channel_id}/videos/{video_id}/thumbnail",
     dependencies=[Depends(require_same_origin)],
