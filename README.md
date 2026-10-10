@@ -20,7 +20,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - Каталог и рабочие операции строятся на реальных данных YouTube, а не на mock-каталоге.
 - Локальные working-изменения отделены от YouTube snapshot; поддерживаемые remote writes требуют включённого серверного Write Mode и явного действия пользователя.
 - MoyaStudia ведёт собственный server-side ledger обращений к YouTube Data API и показывает отслеживаемое использование квоты.
-- В Cabinet можно сохранить per-user AI provider/model/API-key settings; API key хранится зашифрованным и не возвращается в plaintext. Промпты для названия, описания и тегов/ключевых слов являются общими пользовательскими настройками для всех сохранённых AI-моделей. Каждое действие «Улучшить» позволяет выбрать одно из реально подключённых AI-соединений; выбор сохраняется между Studio и Cabinet.
+- В Cabinet можно сохранить per-user AI provider/model/API-key settings; API key хранится зашифрованным и не возвращается в plaintext. Для видео есть два независимых пользовательских набора промптов: обычные видео и Shorts; в каждом отдельно настраиваются название, описание и теги. Наборы общие для всех сохранённых AI-моделей пользователя и переключаются табами в Cabinet. При AI Improve backend использует официальный YouTube Analytics `creatorContentType` (`videoOnDemand` / `shorts`), кэширует результат в видео и выбирает соответствующий набор без эвристик по длительности, геометрии, названию или `#shorts`. Для playlist/channel сохраняется прежняя маршрутизация по общим long-form prompt preferences. Каждое действие «Улучшить» позволяет выбрать одно из реально подключённых AI-соединений; выбор сохраняется между Studio и Cabinet.
 
 ## Что пока намеренно не включено
 
@@ -67,8 +67,8 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - `GET /auth/youtube/login` → callback `GET /auth/youtube/callback`
 - `GET /write-mode`; `PUT /write-mode` — server-authoritative Write Mode
 - `GET /quota/today` — MoyaStudia-tracked YouTube Data API usage
-- `GET /ai-connections`; `PUT /ai-connections`; `DELETE /ai-connections/{id}` — encrypted per-user AI settings и общие title/description/tags prompt preferences
-- `POST /ai/improve` — bounded AI metadata suggestion через явно выбранное `connection_id` (с backward-compatible latest-saved fallback)
+- `GET /ai-connections`; `PUT /ai-connections`; `DELETE /ai-connections/{id}` — encrypted per-user AI settings и отдельные title/description/tags prompt preferences для обычных видео и Shorts
+- `POST /ai/improve` — bounded AI metadata suggestion через явно выбранное `connection_id` (с backward-compatible latest-saved fallback); для video также принимает внутренний `video_id`, owner-scoped определяет/кэширует YouTube `creatorContentType` и маршрутизирует запрос в long-form или Shorts prompt set
 - `GET /channels`, `POST /channels/{id}/refresh-profile`, `PUT /channels/{id}/working-language`, `PUT /channels/{id}/metadata`
 - `DELETE /channels/{id}` — убрать managed channel из MoyaStudia; YouTube-канал не удаляется
 - `GET /google-connections/{connection_id}/available-channels`; `POST /google-connections/{connection_id}/channels`
