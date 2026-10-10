@@ -71,7 +71,7 @@ def _youtube_error_facts(exc: Exception) -> tuple[int | None, set[str]]:
 class AIConnectionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["openai", "gemini", "anthropic", "xai"] | None = None
+    provider: Literal["openai", "gemini", "anthropic", "xai", "groq"] | None = None
     model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, min_length=1, max_length=4096)
     title_prompt: str = Field(default="", max_length=12000)
@@ -670,6 +670,24 @@ def save_ai_connection(
         "description_prompt": row.description_prompt or "",
         "tags_prompt": row.tags_prompt or "",
     }
+
+
+@app.delete("/ai-connections/{connection_id}", dependencies=[Depends(require_same_origin)])
+def delete_ai_connection(
+    connection_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(AIConnection)
+        .filter(AIConnection.id == connection_id, AIConnection.user_id == user.id)
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(404, detail={"code": "ai_connection_not_found"})
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @app.post("/ai/improve", dependencies=[Depends(require_same_origin)])
