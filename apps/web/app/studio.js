@@ -282,7 +282,7 @@ function VideoInspector({
       <section ref={inspectorEditRef} className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveVideoField("title", effectiveTitle)}>{aiBusy === "video:title" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improveVideoField("title", effectiveTitle)}>{aiBusy === "video:title" ? t(uiLang, "aiImproving") : aiImproveLabel}</button></div>
           <textarea
             id="video-working-title"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -297,7 +297,7 @@ function VideoInspector({
         </div>
         <div className="description-metadata-layout">
         <div className={`editor-field description-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveVideoField("description", description)}>{aiBusy === "video:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improveVideoField("description", description)}>{aiBusy === "video:description" ? t(uiLang, "aiImproving") : aiImproveLabel}</button></div>
           <textarea
             id="video-working-description"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -312,7 +312,7 @@ function VideoInspector({
         </div>
         </div>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveVideoField("tags", tags)}>{aiBusy === "video:tags" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improveVideoField("tags", tags)}>{aiBusy === "video:tags" ? t(uiLang, "aiImproving") : aiImproveLabel}</button></div>
           <textarea
             id="video-working-tags"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -600,6 +600,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingLoading, setWorkingLoading] = useState(false);
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const [aiBusy, setAiBusy] = useState("");
+  const [aiModelName, setAiModelName] = useState("");
   const aiRequestRef = useRef(0);
   const aiContextRef = useRef({});
   const videoListRef = useRef(null);
@@ -625,6 +626,17 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   channelIdRef.current = channelId;
   uiLangRef.current = uiLang;
   aiContextRef.current = { channelId, videoId: selectedId, playlistId: selectedPlaylistId };
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/ai-connections")
+      .then((response) => response.ok ? response.json() : [])
+      .then((rows) => { if (!cancelled) setAiModelName(rows?.[0]?.model || ""); })
+      .catch(() => { if (!cancelled) setAiModelName(""); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const aiImproveLabel = aiModelName ? `${t(uiLang, "aiImproveWith")} ${aiModelName}` : t(uiLang, "aiImprove");
   const playlists = playlistsForChannel(playlistState, channelId);
   const visiblePlaylists = playlists.filter((playlist) => {
     const needle = playlistQuery.trim().toLocaleLowerCase();
@@ -2381,7 +2393,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoTitle")}</span>
-                          {playlistEditing ? <button className="ai-improve-btn" type="button" disabled={playlistSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improvePlaylistField("title", effectivePlaylistDraft?.title || "")}>{aiBusy === "playlist:title" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button> : null}
+                          {playlistEditing ? <button className="ai-improve-btn" type="button" disabled={playlistSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improvePlaylistField("title", effectivePlaylistDraft?.title || "")}>{aiBusy === "playlist:title" ? t(uiLang, "aiImproving") : aiImproveLabel}</button> : null}
                         </div>
                         {playlistEditing ? (
                           <>
@@ -2393,7 +2405,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoDescription")}</span>
-                          {playlistEditing ? <button className="ai-improve-btn" type="button" disabled={playlistSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improvePlaylistField("description", effectivePlaylistDraft?.description || "")}>{aiBusy === "playlist:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button> : null}
+                          {playlistEditing ? <button className="ai-improve-btn" type="button" disabled={playlistSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improvePlaylistField("description", effectivePlaylistDraft?.description || "")}>{aiBusy === "playlist:description" ? t(uiLang, "aiImproving") : aiImproveLabel}</button> : null}
                         </div>
                         {playlistEditing ? (
                           <>
