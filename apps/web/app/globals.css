@@ -3950,3 +3950,26 @@ body {
   .statistics-monetization-rows { grid-template-columns: minmax(0, 1fr); }
   .statistics-monetization-badge { top: 10px; right: 10px; }
 }
+
+/* AI connection row: keep Provider and Model controls on the same baseline. */
+.ai-connection-main {
+  align-items: start;
+}
+.ai-connection-main > label {
+  align-content: start;
+}
+.ai-connection-main .ai-model-field {
+  padding-bottom: 0;
+}
+.ai-connection-main .ai-model-description {
+  position: static;
+  display: block;
+  height: 14px;
+  margin-top: 0;
+  line-height: 14px;
+}
+.ai-connection-main > label:first-child::after {
+  content: "";
+  display: block;
+  height: 14px;
+}
