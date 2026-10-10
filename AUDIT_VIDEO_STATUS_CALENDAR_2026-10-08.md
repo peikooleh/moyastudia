@@ -1,3 +1,31 @@
+## Полный кодовый аудит «По ссылке» — 2026-10-10
+
+**Наблюдение:** после выбора украинского канала YouTube Studio показывает 7 unlisted, а MoyaStudia — 2. Смена источника discovery на `search.list(forMine=true, channelId=...)` не устранила реальное расхождение. Не объявлять проблему исправленной на основании mock-тестов.
+
+### Прослежена вся цепочка
+
+1. **OAuth/канал:** `_channel_or_404` выбирает managed Channel, его `youtube_channel_id` и связанную GoogleConnection с зашифрованным refresh token. До сих пор нет живого доказательства, что этот OAuth владеет именно выбранным YouTube channel ID.
+2. **Discovery:** `yt.list_videos` использует `search.list(forMine=true, channelId=<selected>, type=video)`, проходит все `nextPageToken`, отбрасывает результаты с чужим или отсутствующим `snippet.channelId`. Исторически `uploads playlist` возвращал неполные уникальные ID. Новая комбинация `forMine + channelId` проверена по официальной спецификации как допустимая, но полнота реального результата не проверена.
+3. **Details:** `videos.list(part=snippet,status,...,id=...)` возвращает фактический `status.privacyStatus`. Код дополнительно отбрасывает детали, если `snippet.channelId != selected`. Отсутствующий ID получает локальный `availability_status=unavailable`.
+4. **Синхронизация:** `continue_catalog_sync` проходит все страницы даже в incremental, сохраняет `youtube_visibility`, `youtube_scheduled_at` и `availability_status`; reconcile помечает/удаляет отсутствующие в discovery записи. Сбой страницы ставит `STALE/ERROR`, а не завершает успешную сверку. Путь полностью покрыт mock-тестами, но они не доказывают полноту YouTube.
+5. **PostgreSQL/API:** `GET /channels/{id}/videos?visibility=unlisted` фильтрует `availability_status=available` и `youtube_visibility=unlisted`. Глобальные `status_counts` группируют записи SQL CASE; `youtube_scheduled_at IS NOT NULL` имеет приоритет над `unlisted`, поэтому наличие старого publishAt меняет категорию счётчика. `status_counts` считаются по всем видео канала, не только по текущей странице.
+6. **Frontend:** `catalogVideosUrl` передаёт `visibility=unlisted` без переименования; список выводит все `data.items` и `next_cursor`, статистика использует `data.status_counts.unlisted` напрямую. Локального дополнительного фильтра, способного скрыть пять записей, нет. Календарь сейчас не меняем.
+
+**Вывод из исходного кода:** UI не является источником потери пяти записей. Они либо отсутствуют в discovery, либо отбрасываются на details, либо уже в DB имеют другое значение `visibility`/`availability`/`publishAt`, либо текущий runtime не соответствует последнему коду. Какой именно вариант верен, невозможно доказать без фактического ответа YouTube и строк PostgreSQL.
+
+### Инструмент для получения доказательства
+
+Добавлен **только для чтения** `GET /channels/{id}/catalog/audit`:
+- проверяет `channels.list(mine=true)` и выбранный channel ID;
+- независимо собирает все страницы `search.list(forMine=true, channelId=...)`, `search.list(forMine=true)` с локальным фильтром channel ID, `playlistItems.list(uploads)`;
+- для объединения ID этих источников и локального каталога делает прямой `videos.list(part=snippet,status)`;
+- возвращает списки ID на каждом этапе, отфильтрованные чужие каналы, реальные unlisted ID и несоответствия с локальным кешем;
+- поддерживает `?probe_ids=<11-char-video-id>,...` (до 20), чтобы проверить конкретные ID из YouTube Studio, даже если ни один discovery не обнаружил их;
+- не запускает синхронизацию, не меняет записи каталога и ничего не отправляет на YouTube; расходы квоты учитываются. Каждый discovery ограничен десятью страницами (до 500), признак `truncated` указывает неполный результат.
+
+**Для окончательного диагноза:** запустить endpoint в реальном локальном backend после pull/restart, сохранить JSON; сравнить `local.unlistedCount`, `remote.unlistedCount`, `sources.*.unlistedIds`, `mismatches`, `channel.oauthOwnsSelectedChannel`. Если и прямые детали не находят 7, добавить пять отсутствующих video ID в `probe_ids`. Не изменять production sync logic без этого результата.
+
+
 # Аудит достоверности статусов и календаря — 2026-10-08
 
 ## Исходные расхождения (пользовательская проверка)
