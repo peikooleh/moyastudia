@@ -1890,12 +1890,14 @@ def channel_analytics_summary(
 
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        verified_channel = yt.verified_analytics_channel(token, channel.youtube_channel_id)
         summary = yt.channel_analytics_summary(
             token,
             start_date,
             end_date,
             youtube_video_id,
             playlist_id or "",
+            channel_id=channel.youtube_channel_id,
         )
         current_statistics = None
         if youtube_video_id:
@@ -1911,9 +1913,33 @@ def channel_analytics_summary(
             youtube_video_id,
             playlist_id or "",
             dimension,
+            channel_id=channel.youtube_channel_id,
+        )
+        if dimension == "day":
+            recent_daily_series = series
+        elif summary.get("has_data", True):
+            recent_start = max(start, end - timedelta(days=45)).isoformat()
+            recent_daily_series = yt.channel_analytics_timeseries(
+                token,
+                recent_start,
+                end_date,
+                youtube_video_id,
+                playlist_id or "",
+                "day",
+                channel_id=channel.youtube_channel_id,
+            )
+        else:
+            recent_daily_series = []
+        latest_reported_date = max(
+            (point["date"] for point in recent_daily_series if point.get("date")),
+            default=None,
         )
         return {
             **summary,
+            "youtube_channel_id": channel.youtube_channel_id,
+            "oauth_channel_verified": True,
+            "current_subscriber_count": verified_channel["subscriber_count"],
+            "analytics_last_reported_date": latest_reported_date,
             "scope": "video" if video_id is not None else "playlist" if playlist_id else "channel",
             "local_video_id": video_id,
             "playlist_id": playlist_id,
@@ -1923,6 +1949,8 @@ def channel_analytics_summary(
         }
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except LookupError as exc:
+        raise HTTPException(403, detail={"code": "youtube_analytics_channel_mismatch"}) from exc
     except Exception as exc:
         status, reasons = _youtube_error_facts(exc)
         if reasons.intersection({"accessNotConfigured", "serviceDisabled"}):
