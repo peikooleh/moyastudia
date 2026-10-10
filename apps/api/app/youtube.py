@@ -705,6 +705,124 @@ def list_videos(
         "next_page_token": search_response.get("nextPageToken"),
     }
 
+
+def audit_video_discovery(
+    refresh_token: str,
+    youtube_channel_id: str,
+    local_video_ids: list[str],
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    """Read-only, bounded cross-check of independent YouTube video sources.
+
+    Returns ID-level evidence rather than guessing why a video is absent.
+    The scan never changes a video or the catalog.
+    """
+    credentials = creds_from_refresh(refresh_token)
+    service = build("youtube", "v3", credentials=credentials)
+    owned_response = _execute(
+        service.channels().list(part="id", mine=True, maxResults=50),
+        "channels.list", recorder,
+    )
+    owned_ids = [item.get("id") for item in owned_response.get("items") or [] if item.get("id")]
+    channel_response = _execute(
+        service.channels().list(part="contentDetails", id=youtube_channel_id, maxResults=1),
+        "channels.list", recorder,
+    )
+    channel_items = channel_response.get("items") or []
+    uploads_id = (
+        ((channel_items[0].get("contentDetails") or {}).get("relatedPlaylists") or {}).get("uploads")
+        if channel_items and channel_items[0].get("id") == youtube_channel_id else None
+    )
+
+    def scan(operation: str, make_request, extract):
+        token = None
+        seen_tokens = set()
+        ids = []
+        seen_ids = set()
+        rejected = []
+        pages = []
+        truncated = False
+        for _ in range(10):
+            response = _execute(make_request(token), operation, recorder)
+            items = response.get("items") or []
+            pages.append(len(items))
+            for item in items:
+                video_id, owner_id = extract(item)
+                if not video_id:
+                    continue
+                if owner_id and owner_id != youtube_channel_id:
+                    rejected.append({"id": video_id, "channelId": owner_id})
+                    continue
+                if video_id not in seen_ids:
+                    seen_ids.add(video_id)
+                    ids.append(video_id)
+            next_token = response.get("nextPageToken")
+            if not next_token:
+                break
+            if next_token == token or next_token in seen_tokens:
+                raise RuntimeError(f"YouTube {operation} repeated a page token")
+            seen_tokens.add(next_token)
+            token = next_token
+        else:
+            truncated = True
+        return {"ids": ids, "page_sizes": pages, "rejected": rejected, "truncated": truncated}
+
+    def search_request(scoped: bool):
+        def request(token):
+            kwargs = {
+                "part": "snippet", "forMine": True, "type": "video",
+                "order": "date", "maxResults": 50,
+            }
+            if scoped:
+                kwargs["channelId"] = youtube_channel_id
+            if token:
+                kwargs["pageToken"] = token
+            return service.search().list(**kwargs)
+        return request
+
+    def search_item(item):
+        return (item.get("id") or {}).get("videoId"), (item.get("snippet") or {}).get("channelId")
+
+    scoped = scan("search.list", search_request(True), search_item)
+    unscoped = scan("search.list", search_request(False), search_item)
+    uploads = scan(
+        "playlistItems.list",
+        lambda token: service.playlistItems().list(**{
+            "part": "contentDetails", "playlistId": uploads_id, "maxResults": 50,
+            **({"pageToken": token} if token else {}),
+        }),
+        lambda item: ((item.get("contentDetails") or {}).get("videoId"), None),
+    ) if uploads_id else {"ids": [], "page_sizes": [], "rejected": [], "truncated": False}
+
+    all_ids = list(dict.fromkeys(
+        scoped["ids"] + unscoped["ids"] + uploads["ids"] + local_video_ids
+    ))
+    details = {}
+    for offset in range(0, len(all_ids), 50):
+        batch = all_ids[offset:offset + 50]
+        response = _execute(
+            service.videos().list(part="snippet,status", id=",".join(batch)),
+            "videos.list", recorder,
+        )
+        for item in response.get("items") or []:
+            snippet = item.get("snippet") or {}
+            status = item.get("status") or {}
+            details[item["id"]] = {
+                "channelId": snippet.get("channelId"),
+                "title": snippet.get("title") or "",
+                "privacy": status.get("privacyStatus"),
+                "publishAt": status.get("publishAt"),
+                "uploadStatus": status.get("uploadStatus"),
+            }
+    return {
+        "owned_channel_ids": owned_ids,
+        "sources": {"search_scoped": scoped, "search_unscoped": unscoped, "uploads": uploads},
+        "details": details,
+        "requested_ids": all_ids,
+        "uploads_playlist_available": bool(uploads_id),
+    }
+
+
 def create_playlist(
     refresh_token: str,
     *,
