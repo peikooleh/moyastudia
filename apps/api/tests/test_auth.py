@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from cryptography.fernet import Fernet
 from oauthlib.oauth2.rfc6749.parameters import parse_token_response
 
 from app import main
@@ -56,12 +57,90 @@ def test_production_configuration_accepts_https_and_required_secrets(monkeypatch
     monkeypatch.setattr(settings, "frontend_origin", "https://app.example.test")
     monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
     monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
-    monkeypatch.setattr(settings, "database_url", "postgresql://user:password@db.example.test/app")
+    monkeypatch.setattr(settings, "database_url", "postgresql://user:password@db.example.test/app?sslmode=require")
     monkeypatch.setattr(settings, "google_client_id", "client-id")
     monkeypatch.setattr(settings, "google_client_secret", "client-secret")
-    monkeypatch.setattr(settings, "token_encryption_key", "encryption-key")
+    monkeypatch.setattr(settings, "token_encryption_key", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(settings, "allowed_login_emails", "tester@example.test")
 
     settings.validate_runtime_security()
+
+
+def test_production_rejects_insecure_database_transport(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "postgresql://user:pass@db.example.test/app")
+    monkeypatch.setattr(settings, "google_client_id", "test-client")
+    monkeypatch.setattr(settings, "google_client_secret", "test-secret")
+    monkeypatch.setattr(settings, "token_encryption_key", Fernet.generate_key().decode("ascii"))
+    with pytest.raises(RuntimeError, match="PostgreSQL TLS"):
+        settings.validate_runtime_security()
+
+
+def test_production_rejects_invalid_encryption_key_and_callback(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback?debug=1")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://other.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "postgresql://user:pass@db.example.test/app?sslmode=require")
+    monkeypatch.setattr(settings, "google_client_id", "test-client")
+    monkeypatch.setattr(settings, "google_client_secret", "test-secret")
+    monkeypatch.setattr(settings, "token_encryption_key", "not-a-fernet-key")
+    with pytest.raises(RuntimeError, match="TOKEN_ENCRYPTION_KEY"):
+        settings.validate_runtime_security()
+
+
+def test_session_cookie_supports_cross_site_test_deployment(monkeypatch):
+    from starlette.responses import Response
+    from app.security import clear_session_cookie, set_session_cookie
+
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "session_cookie_samesite", "none")
+    response = Response()
+    set_session_cookie(response, "fixture-session")
+    cookie = response.headers["set-cookie"].lower()
+    assert "samesite=none" in cookie
+    assert "secure" in cookie
+    assert "httponly" in cookie
+
+    clear_response = Response()
+    clear_session_cookie(clear_response)
+    assert "samesite=none" in clear_response.headers["set-cookie"].lower()
+
+
+def test_private_test_requires_explicit_login_allowlist(monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "database_url", "postgresql://user:pass@db.example.test/app?sslmode=require")
+    monkeypatch.setattr(settings, "google_client_id", "test-client")
+    monkeypatch.setattr(settings, "google_client_secret", "test-secret")
+    monkeypatch.setattr(settings, "token_encryption_key", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(settings, "deployment_access_mode", "private_test")
+    monkeypatch.setattr(settings, "allowed_login_emails", "")
+    with pytest.raises(RuntimeError, match="ALLOWED_LOGIN_EMAILS"):
+        settings.validate_runtime_security()
+
+
+def test_private_test_rejects_unlisted_google_identity(client, monkeypatch):
+    monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "deployment_access_mode", "private_test")
+    monkeypatch.setattr(settings, "allowed_login_emails", "owner@example.test")
+    monkeypatch.setattr(main.yt, "identity_authorization_url", lambda: ("https://accounts.test", "private-state"))
+    monkeypatch.setattr(main.yt, "exchange_identity_code", lambda *args: SimpleNamespace(id_token="test-id"))
+    monkeypatch.setattr(main.yt, "verify_identity_token", lambda *args: {
+        "sub": "unlisted-user",
+        "email": "unlisted@example.test",
+        "email_verified": True,
+    })
+    assert client.get("/auth/google/login").status_code == 307
+    response = client.get("/auth/google/callback", params={"state": "private-state", "code": "code"})
+    assert response.status_code == 303
+    assert "auth_error=access_restricted" in response.headers["location"]
+    assert client.get("/auth/session").json() == {"authenticated": False}
 
 
 def test_verify_identity_token_uses_one_second_clock_skew(monkeypatch):
@@ -176,6 +255,7 @@ def test_google_login_validates_one_time_state_and_issues_secure_cookie(
         },
     )
     monkeypatch.setattr(settings, "app_environment", "production")
+    monkeypatch.setattr(settings, "deployment_access_mode", "public")
 
     login = client.get("/auth/google/login")
     assert login.status_code == 307
