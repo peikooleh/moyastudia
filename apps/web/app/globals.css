@@ -3973,3 +3973,22 @@ body {
   display: block;
   height: 14px;
 }
+
+/* Keep the AI connection row stable when the custom model ID input appears. */
+.ai-connection-main {
+  align-items: start;
+}
+.ai-connection-main > label:first-child,
+.ai-connection-main > .ai-model-field {
+  grid-row: 1;
+}
+.ai-connection-main > label:first-child {
+  align-self: start;
+}
+.ai-connection-main > label:last-child {
+  grid-row: 2;
+  margin-top: 0;
+}
+.ai-model-field {
+  min-height: calc(var(--control-h) + 54px);
+}
