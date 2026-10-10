@@ -411,13 +411,13 @@ export default function CabinetPage() {
   async function deleteAiConnection() {
     const saved = aiConnections.find((item) => item.provider === aiProvider && item.model === aiModel);
     if (!saved?.id || aiSaving) return;
-    if (!window.confirm("Удалить сохранённый API-ключ и подключение этой модели?")) return;
+    if (!window.confirm(t(uiLang, "aiDeleteConnectionConfirm"))) return;
     setAiSaving(true);
     setAiError("");
     setAiNotice("");
     try {
       const response = await apiFetch(`/ai-connections/${saved.id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error(`Не удалось удалить подключение (HTTP ${response.status})`);
+      if (!response.ok) throw new Error(`${t(uiLang, "aiDeleteConnectionError")} (HTTP ${response.status})`);
       const remaining = aiConnections.filter((item) => item.id !== saved.id);
       setAiConnections(remaining);
       const next = remaining[0];
@@ -430,9 +430,9 @@ export default function CabinetPage() {
       setAiBaseline({ provider: next?.provider || "groq", model: next?.model || "",
         titlePrompt: next?.title_prompt || "", descriptionPrompt: next?.description_prompt || "",
         tagsPrompt: next?.tags_prompt || "" });
-      setAiNotice("API-ключ и подключение удалены.");
+      setAiNotice(t(uiLang, "aiDeleteConnectionSuccess"));
     } catch (error) {
-      setAiError(error.message || "Ошибка удаления подключения");
+      setAiError(error.message || t(uiLang, "aiDeleteConnectionError"));
     } finally {
       setAiSaving(false);
     }
