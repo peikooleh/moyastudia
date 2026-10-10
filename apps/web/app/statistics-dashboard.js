@@ -5,6 +5,7 @@ import { apiFetch } from "../lib/api";
 import { catalogVideosUrl, continueCatalogSyncPage, statisticsCatalogSyncAction } from "../lib/catalog-state.mjs";
 import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
+import { monetizationStorageKey, progressToGoal, publicUploadsInLast90Days, sanitizeQualifiedInput, yppThresholds, YPP_HELP_URL, YPP_CHANGES_URL } from "../lib/monetization.mjs";
 
 const PERIODS = ["7", "28", "90", "lifetime"];
 
@@ -66,6 +67,11 @@ export function StatisticsDashboard({
   const [analyticsError, setAnalyticsError] = useState("");
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [activeKpi, setActiveKpi] = useState("views");
+  const [monetizationOpen, setMonetizationOpen] = useState(false);
+  const [monetizationTier, setMonetizationTier] = useState("early");
+  const [monetizationManual, setMonetizationManual] = useState({});
+  const [monetizationDraft, setMonetizationDraft] = useState({ watchHours: "", shortsViews: "" });
+  const [monetizationEditing, setMonetizationEditing] = useState(false);
   const [catalogVideos, setCatalogVideos] = useState([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState({});
@@ -215,6 +221,45 @@ export function StatisticsDashboard({
     () => channels.find((channel) => String(channel.id) === String(selectedChannelId)) || null,
     [channels, selectedChannelId],
   );
+  const monetizationKey = monetizationStorageKey(loadPrefs(), currentChannel);
+  useEffect(() => {
+    const saved = loadPrefs().monetizationQualified?.[monetizationKey] || {};
+    setMonetizationManual(saved);
+    setMonetizationDraft({
+      watchHours: saved.watchHours == null ? "" : String(saved.watchHours),
+      shortsViews: saved.shortsViews == null ? "" : String(saved.shortsViews),
+    });
+    setMonetizationOpen(false);
+    setMonetizationEditing(false);
+  }, [monetizationKey]);
+
+  useEffect(() => {
+    if (!monetizationOpen) return undefined;
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        setMonetizationOpen(false);
+        setMonetizationEditing(false);
+      }
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [monetizationOpen]);
+
+  function saveMonetizationManual() {
+    if (!monetizationKey) return;
+    const next = {
+      watchHours: sanitizeQualifiedInput(monetizationDraft.watchHours),
+      shortsViews: sanitizeQualifiedInput(monetizationDraft.shortsViews),
+      updatedAt: new Date().toISOString().slice(0, 10),
+    };
+    const prefs = loadPrefs();
+    savePrefs({
+      monetizationQualified: { ...(prefs.monetizationQualified || {}), [monetizationKey]: next },
+    });
+    setMonetizationManual(next);
+    setMonetizationEditing(false);
+  }
+
   const remotePlaylists = useMemo(
     () => (playlists || []).filter((playlist) => !playlist.localOnly),
     [playlists],
@@ -301,6 +346,18 @@ export function StatisticsDashboard({
   const currentSubscriberTotal = analytics?.current_subscriber_count != null
     ? Number(analytics.current_subscriber_count)
     : null;
+  const monetizationThresholds = yppThresholds();
+  const monetizationGoals = monetizationThresholds[monetizationTier];
+  const subscriberProgress = progressToGoal(currentSubscriberTotal, monetizationThresholds.ads.subscribers);
+  const watchProgress = progressToGoal(monetizationManual.watchHours, monetizationThresholds.ads.watchHours);
+  const publicUploads90 = publicUploadsInLast90Days(catalogVideos);
+  const monetizationRows = [
+    { id: "subscribers", label: t(uiLang, "monetizationSubscribers"), value: currentSubscriberTotal, target: monetizationGoals.subscribers, source: t(uiLang, "monetizationYouTubeSource") },
+    { id: "watchHours", label: t(uiLang, "monetizationWatchHours"), value: monetizationManual.watchHours, target: monetizationGoals.watchHours, source: t(uiLang, "monetizationManualSource") },
+    { id: "shortsViews", label: t(uiLang, "monetizationShortsViews"), value: monetizationManual.shortsViews, target: monetizationGoals.shortsViews, source: t(uiLang, "monetizationManualSource") },
+    ...(monetizationTier === "early" ? [{ id: "uploads", label: t(uiLang, "monetizationUploads"), value: catalogSyncing || catalogSyncError ? null : publicUploads90, target: monetizationGoals.uploads, source: t(uiLang, "monetizationCatalogEstimate") }] : []),
+  ];
+  const monetizationPercent = (progress) => progress ? t(uiLang, "monetizationPercent", { count: progress.percent.toLocaleString(locale, { maximumFractionDigits: 1 }) }) : "—";
   const kpiDefinitions = {
     views: {
       label: t(uiLang, "videoViews"),
@@ -430,12 +487,66 @@ export function StatisticsDashboard({
       </div>
 
       <section className="statistics-kpis">
-        {Object.entries(kpiDefinitions).map(([key, metric]) => (
-          <button key={key} type="button" className={`statistics-kpi ${activeKpi === key ? "active" : ""}`} onClick={() => setActiveKpi(key)} aria-pressed={activeKpi === key}>
-            <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small>
-          </button>
-        ))}
+        {Object.entries(kpiDefinitions).map(([key, metric]) => {
+          const monetizationProgress = key === "subscribers" ? subscriberProgress : key === "watchTime" ? watchProgress : null;
+          return (
+            <div key={key} className="statistics-kpi-wrap">
+              <button type="button" className={`statistics-kpi ${activeKpi === key ? "active" : ""}`} onClick={() => setActiveKpi(key)} aria-pressed={activeKpi === key}>
+                <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small>
+              </button>
+              {scope === "channel" && (key === "subscribers" || key === "watchTime") ? (
+                <button type="button" className="statistics-monetization-badge" onClick={() => { setMonetizationOpen((value) => !value); setMonetizationTier("ads"); }} aria-controls="statistics-monetization-panel" aria-expanded={monetizationOpen} title={t(uiLang, "monetizationOpenHint")}>
+                  {t(uiLang, "monetizationBadge")} · {monetizationPercent(monetizationProgress)}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
       </section>
+      {scope === "channel" && monetizationOpen ? (
+        <section id="statistics-monetization-panel" className="statistics-panel statistics-monetization" aria-label={t(uiLang, "monetizationTitle")}>
+          <header className="statistics-monetization-header">
+            <div><small>{t(uiLang, "monetizationTitle")}</small><h2>{t(uiLang, "monetizationSubtitle")}</h2></div>
+            <button type="button" className="statistics-monetization-close" onClick={() => { setMonetizationOpen(false); setMonetizationEditing(false); }} aria-label={t(uiLang, "monetizationClose")}>×</button>
+          </header>
+          <div className="statistics-monetization-tabs" role="group" aria-label={t(uiLang, "monetizationTierLabel")}>
+            <button type="button" className={monetizationTier === "early" ? "active" : ""} aria-pressed={monetizationTier === "early"} onClick={() => setMonetizationTier("early")}>{t(uiLang, "monetizationEarly")}</button>
+            <button type="button" className={monetizationTier === "ads" ? "active" : ""} aria-pressed={monetizationTier === "ads"} onClick={() => setMonetizationTier("ads")}>{t(uiLang, "monetizationAds")}</button>
+          </div>
+          <p className="statistics-monetization-explain">{t(uiLang, "monetizationEitherRoute")}</p>
+          <div className="statistics-monetization-rows">
+            {monetizationRows.map((row) => {
+              const progress = progressToGoal(row.value, row.target);
+              return (
+                <div className="statistics-monetization-row" key={row.id}>
+                  <div className="statistics-monetization-row-top"><strong>{row.label}</strong><span>{monetizationPercent(progress)}</span></div>
+                  <div className="statistics-monetization-numbers">
+                    <span>{progress ? t(uiLang, "monetizationGoalProgress", { current: formatNumber(progress.current, locale), target: formatNumber(row.target, locale), remaining: formatNumber(progress.remaining, locale) }) : t(uiLang, "monetizationNotEntered", { target: formatNumber(row.target, locale) })}</span>
+                    <small>{row.source}</small>
+                  </div>
+                  <div className="statistics-monetization-track" role="progressbar" aria-label={row.label} aria-valuemin={0} aria-valuemax={row.target} aria-valuenow={progress?.current == null ? 0 : Math.min(progress.current, row.target)} aria-valuetext={progress ? monetizationPercent(progress) : t(uiLang, "monetizationUnknown")}><span style={{ width: (progress?.percent || 0) + "%" }} /></div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="statistics-monetization-note">{t(uiLang, "monetizationQualifiedWarning")}</p>
+          {monetizationThresholds.adsChangeUpcoming ? <p className="statistics-monetization-note">{t(uiLang, "monetizationUpcomingChange")}</p> : null}
+          <div className="statistics-monetization-actions">
+            {!monetizationEditing ? (
+              <button type="button" className="statistics-monetization-action" onClick={() => { setMonetizationDraft({ watchHours: monetizationManual.watchHours == null ? "" : String(monetizationManual.watchHours), shortsViews: monetizationManual.shortsViews == null ? "" : String(monetizationManual.shortsViews) }); setMonetizationEditing(true); }}>{t(uiLang, "monetizationEdit")}</button>
+            ) : (
+              <div className="statistics-monetization-form">
+                <label>{t(uiLang, "monetizationWatchHoursInput")}<input type="number" min="0" step="1" value={monetizationDraft.watchHours} onChange={(event) => setMonetizationDraft((prev) => ({ ...prev, watchHours: event.target.value }))} /></label>
+                <label>{t(uiLang, "monetizationShortsInput")}<input type="number" min="0" step="1" value={monetizationDraft.shortsViews} onChange={(event) => setMonetizationDraft((prev) => ({ ...prev, shortsViews: event.target.value }))} /></label>
+                <button type="button" className="statistics-monetization-action" disabled={[monetizationDraft.watchHours, monetizationDraft.shortsViews].some((value) => value !== "" && sanitizeQualifiedInput(value) == null)} onClick={saveMonetizationManual}>{t(uiLang, "monetizationSave")}</button>
+                <button type="button" className="statistics-monetization-action" onClick={() => setMonetizationEditing(false)}>{t(uiLang, "monetizationCancel")}</button>
+              </div>
+            )}
+            {monetizationManual.updatedAt ? <small>{t(uiLang, "monetizationManualUpdated", { date: monetizationManual.updatedAt })}</small> : null}
+          </div>
+          <p className="statistics-monetization-footnote">{t(uiLang, "monetizationLocalOnly")} <a href={YPP_HELP_URL} target="_blank" rel="noopener noreferrer">{t(uiLang, "monetizationOfficialRules")}</a> · <a href={YPP_CHANGES_URL} target="_blank" rel="noopener noreferrer">{t(uiLang, "monetizationRuleChanges")}</a></p>
+        </section>
+      ) : null}
 
       <section className="statistics-panel statistics-trend">
         <header><div><small>{t(uiLang, "statisticsTrend")}</small><h2>{activeMetric.chartTitle}</h2></div><span>{scopeLabel} · {periodLabel}</span></header>
