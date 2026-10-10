@@ -1751,8 +1751,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: var(--bg-soft);
   color: var(--text);
 }
+.ai-connection-main {
+  grid-template-columns: minmax(220px, .8fr) minmax(280px, 1fr);
+  align-items: start;
+}
+.ai-connection-main > label:last-child {
+  grid-column: 1 / -1;
+}
+.ai-model-field {
+  position: relative;
+  padding-bottom: 20px;
+}
+.ai-model-description {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 @media (max-width: 900px) {
   .ai-connection-grid { grid-template-columns: 1fr; }
+  .ai-connection-main > label:last-child { grid-column: 1; }
 }
 
 
