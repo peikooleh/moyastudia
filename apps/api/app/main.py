@@ -656,9 +656,19 @@ def save_ai_connection(
             row.encrypted_api_key = encrypt_refresh_token(api_key)
         except TokenEncryptionError as exc:
             raise HTTPException(503, "API key encryption configuration is invalid") from exc
-    row.title_prompt = payload.title_prompt.strip()
-    row.description_prompt = payload.description_prompt.strip()
-    row.tags_prompt = payload.tags_prompt.strip()
+    # Prompt preferences are user-level settings, not model-level settings.
+    # Keep one shared set across every saved AI connection so switching models
+    # never changes the user's metadata instructions.
+    title_prompt = payload.title_prompt.strip()
+    description_prompt = payload.description_prompt.strip()
+    tags_prompt = payload.tags_prompt.strip()
+    for connection in db.query(AIConnection).filter(AIConnection.user_id == user.id).all():
+        connection.title_prompt = title_prompt
+        connection.description_prompt = description_prompt
+        connection.tags_prompt = tags_prompt
+    row.title_prompt = title_prompt
+    row.description_prompt = description_prompt
+    row.tags_prompt = tags_prompt
     db.commit()
     db.refresh(row)
     return {
