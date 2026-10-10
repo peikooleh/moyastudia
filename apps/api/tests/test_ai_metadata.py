@@ -69,3 +69,20 @@ def test_xai_responses_adapter(monkeypatch):
     monkeypatch.setattr(ai_metadata.httpx, "Client", FakeClient)
     result = ai_metadata._request("xai", "grok-4.3", "secret", "policy", "data")
     assert ai_metadata._parse_output(result, "video", "title") == "German A2"
+
+
+@pytest.mark.parametrize("payload,expected", [
+    ({"error": {"message": "bad request"}}, "bad request"),
+    ({"error": "bad request"}, "bad request"),
+    ({"message": "bad request"}, "bad request"),
+])
+def test_provider_error_message_accepts_common_error_shapes(payload, expected):
+    import httpx
+    response = httpx.Response(400, json=payload, request=httpx.Request("POST", "https://example.test"))
+    assert ai_metadata._provider_error_message(response) == expected
+
+
+def test_provider_error_message_ignores_non_object_json():
+    import httpx
+    response = httpx.Response(400, json="bad request", request=httpx.Request("POST", "https://example.test"))
+    assert ai_metadata._provider_error_message(response) == ""
