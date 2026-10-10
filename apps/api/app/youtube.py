@@ -198,8 +198,9 @@ def channel_analytics_summary(
     if analytics_filter:
         kwargs["filters"] = analytics_filter
     response = _execute(service.reports().query(**kwargs), "reports.query")
+    rows = response.get("rows") or []
+    has_data = bool(rows)
     if playlist_id:
-        rows = response.get("rows") or []
         row = list(rows[0]) if rows else []
         values = row + [0] * 3
         summary = {
@@ -217,6 +218,7 @@ def channel_analytics_summary(
         summary = _analytics_row(response)
     return {
         **summary,
+        "has_data": has_data,
         "start_date": start_date,
         "end_date": end_date,
         "video_id": video_id or None,
