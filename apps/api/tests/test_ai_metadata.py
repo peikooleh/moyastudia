@@ -86,3 +86,27 @@ def test_provider_error_message_ignores_non_object_json():
     import httpx
     response = httpx.Response(400, json="bad request", request=httpx.Request("POST", "https://example.test"))
     assert ai_metadata._provider_error_message(response) == ""
+
+
+def test_groq_gpt_oss_adapter(monkeypatch):
+    import httpx
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            assert kwargs["follow_redirects"] is False
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def post(self, url, headers, json):
+            assert url == "https://api.groq.com/openai/v1/chat/completions"
+            assert headers["Authorization"] == "Bearer secret"
+            assert json["model"] == "openai/gpt-oss-120b"
+            assert json["response_format"] == {"type": "json_object"}
+            return httpx.Response(200, json={"choices": [
+                {"message": {"content": '{"value":"Deutsch A2"}'}}
+            ]}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(ai_metadata.httpx, "Client", FakeClient)
+    result = ai_metadata._request("groq", "openai/gpt-oss-120b", "secret", "policy", "data")
+    assert ai_metadata._parse_output(result, "video", "title") == "Deutsch A2"
