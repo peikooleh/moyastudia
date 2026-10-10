@@ -935,6 +935,43 @@ def test_incremental_sync_refreshes_known_videos_across_all_pages(
         assert changed.youtube_scheduled_at.isoformat() == "2026-10-16T05:00:00"
 
 
+def test_catalog_timestamps_always_include_utc_offset():
+    # SQLite drops tzinfo, but browser dates must still represent UTC instants.
+    naive_utc = datetime(2026, 10, 16, 5, 0)
+    zurich = timezone(timedelta(hours=2))
+    aware_local = datetime(2026, 10, 16, 7, 0, tzinfo=zurich)
+    assert main._catalog_datetime_iso(naive_utc) == "2026-10-16T05:00+00:00"
+    assert main._catalog_datetime_iso(aware_local) == "2026-10-16T05:00+00:00"
+    assert main._catalog_datetime_iso(None) == ""
+
+
+def test_catalog_video_dates_remain_utc_aware_after_sqlite_roundtrip(
+    client, test_database
+):
+    user_id, token = create_account(test_database)
+    channel_id, _, _ = create_channel(test_database, user_id, "date-offset")
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add(
+            Video(
+                channel_id=channel_id,
+                youtube_video_id="timezone-video",
+                youtube_visibility="private",
+                availability_status="available",
+                youtube_scheduled_at=datetime(2026, 10, 16, 5, 0, tzinfo=timezone.utc),
+                youtube_published_at=datetime(2026, 9, 10, 22, 30, tzinfo=timezone.utc),
+            )
+        )
+        db.commit()
+
+    response = client.get(f"/channels/{channel_id}/videos")
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["status"] == "scheduled"
+    assert item["slot"] == "2026-10-16T05:00+00:00"
+    assert item["publishedAt"] == "2026-09-10T22:30+00:00"
+
+
 def test_incremental_refresh_restores_all_seven_unlisted_playlist_videos(
     client, test_database, monkeypatch
 ):
