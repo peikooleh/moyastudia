@@ -1906,35 +1906,31 @@ def probe_channel_creator_content_types(
     channel = _channel_or_404(db, user, channel_id)
     end_date = _utcnow().date()
     start_date = end_date - timedelta(days=days)
+    sample_video_ids = [
+        value for (value,) in db.query(Video.youtube_video_id).filter(
+            Video.channel_id == channel.id,
+            Video.youtube_video_id.is_not(None),
+        ).order_by(Video.id.desc()).limit(8).all()
+    ]
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
-        rows = yt.channel_creator_content_types(
+        diagnostic = yt.channel_creator_content_types(
             token,
             start_date.isoformat(),
             end_date.isoformat(),
             channel.youtube_channel_id,
+            sample_video_ids,
         )
     except TokenEncryptionError as exc:
         raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
         status, reasons = _youtube_error_facts(exc)
-        provider_message = None
-        content = getattr(exc, "content", None)
-        if isinstance(content, bytes):
-            try:
-                payload = json.loads(content.decode("utf-8"))
-                provider_message = (payload.get("error") or {}).get("message")
-            except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
-                provider_message = None
-        raise HTTPException(
-            502,
-            detail={
-                "code": "youtube_creator_content_type_probe_failed",
-                "httpStatus": status,
-                "reasons": sorted(reasons),
-                "providerMessage": provider_message,
-            },
-        ) from exc
+        raise HTTPException(502, detail={
+            "code": "youtube_creator_content_type_probe_failed",
+            "httpStatus": status,
+            "reasons": sorted(reasons),
+        }) from exc
+    rows = diagnostic["items"]
     local = {
         video.youtube_video_id: video
         for video in db.query(Video).filter(
@@ -1958,6 +1954,7 @@ def probe_channel_creator_content_types(
         counts[key] = counts.get(key, 0) + 1
     return {
         "channelId": channel.id,
+        "attempts": diagnostic["attempts"],
         "startDate": start_date.isoformat(),
         "endDate": end_date.isoformat(),
         "counts": counts,
