@@ -900,6 +900,118 @@ def test_catalog_audit_is_owner_scoped(client, test_database, monkeypatch):
     assert client.get(f"/channels/{channel_id}/catalog/audit").status_code == 404
 
 
+def test_youtube_catalog_audit_reports_failed_search_without_losing_other_sources(
+    monkeypatch,
+):
+    from googleapiclient.errors import HttpError
+
+    selected_channel = "youtube-uk"
+    class FakeResource:
+        def __init__(self, name):
+            self.name = name
+
+        def list(self, **kwargs):
+            if self.name == "search" and kwargs.get("channelId"):
+                error = HttpError(
+                    SimpleNamespace(status=403, reason="Forbidden"),
+                    b'{"error":{"code":403,"errors":[{"reason":"insufficientPermissions"}]}}',
+                )
+                return SimpleNamespace(execute=lambda: (_ for _ in ()).throw(error))
+            if self.name == "channels":
+                response = (
+                    {"items": [{"id": selected_channel}]}
+                    if kwargs.get("mine") else {"items": []}
+                )
+            elif self.name == "search":
+                response = {
+                    "items": [{
+                        "id": {"videoId": "unlisted-0"},
+                        "snippet": {"channelId": selected_channel},
+                    }]
+                }
+            elif self.name == "videos":
+                response = {
+                    "items": [{
+                        "id": "unlisted-0",
+                        "snippet": {"channelId": selected_channel},
+                        "status": {"privacyStatus": "unlisted"},
+                    }]
+                }
+            else:
+                raise AssertionError(self.name)
+            return SimpleNamespace(execute=lambda: response)
+
+    class FakeService:
+        def channels(self):
+            return FakeResource("channels")
+        def search(self):
+            return FakeResource("search")
+        def videos(self):
+            return FakeResource("videos")
+        def playlistItems(self):
+            raise AssertionError("uploads playlist is unavailable")
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+    report = youtube.audit_video_discovery("token", selected_channel, [])
+    assert report["errors"]["search.list:scoped"] == {
+        "type": "HttpError", "httpStatus": 403,
+        "youtubeReason": "insufficientPermissions", "youtubeCode": 403,
+    }
+    assert report["sources"]["search_scoped"]["truncated"] is True
+    assert report["sources"]["search_unscoped"]["ids"] == ["unlisted-0"]
+    assert report["details"]["unlisted-0"]["privacy"] == "unlisted"
+
+
+def test_catalog_audit_returns_partial_evidence_and_stage_error(
+    client, test_database, monkeypatch,
+):
+    user_id, token = create_account(test_database, subject="catalog-audit-partial")
+    channel_id, remote_channel_id, _ = create_channel(test_database, user_id, "audit-partial")
+    authorized_client(client, token)
+
+    def fake_audit(*args):
+        return {
+            "owned_channel_ids": [remote_channel_id],
+            "sources": {
+                "search_scoped": {
+                    "ids": [], "page_sizes": [], "rejected": [], "truncated": True,
+                },
+                "search_unscoped": {
+                    "ids": ["unlisted-0"], "page_sizes": [1],
+                    "rejected": [], "truncated": False,
+                },
+                "uploads": {
+                    "ids": [], "page_sizes": [0], "rejected": [], "truncated": False,
+                },
+            },
+            "details": {
+                "unlisted-0": {
+                    "channelId": remote_channel_id, "title": "One",
+                    "privacy": "unlisted", "publishAt": None,
+                    "uploadStatus": "processed",
+                }
+            },
+            "requested_ids": ["unlisted-0"],
+            "uploads_playlist_available": True,
+            "errors": {
+                "search.list:scoped": {
+                    "type": "HttpError", "httpStatus": 403,
+                    "youtubeReason": "insufficientPermissions",
+                }
+            },
+        }
+
+    monkeypatch.setattr(main.yt, "audit_video_discovery", fake_audit)
+    response = client.get(f"/channels/{channel_id}/catalog/audit")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["auditComplete"] is False
+    assert result["auditErrors"]["search.list:scoped"]["httpStatus"] == 403
+    assert result["remote"]["unlistedCount"] == 1
+    assert result["sources"]["search_unscoped"]["unlistedIds"] == ["unlisted-0"]
+
+
 def test_youtube_audit_crosschecks_scoped_and_unscoped_owner_search(monkeypatch):
     selected_channel = "youtube-uk"
     all_ids = [f"unlisted-{index}" for index in range(7)]
