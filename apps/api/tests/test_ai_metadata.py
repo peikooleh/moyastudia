@@ -110,3 +110,32 @@ def test_groq_gpt_oss_adapter(monkeypatch):
     monkeypatch.setattr(ai_metadata.httpx, "Client", FakeClient)
     result = ai_metadata._request("groq", "openai/gpt-oss-120b", "secret", "policy", "data")
     assert ai_metadata._parse_output(result, "video", "title") == "Deutsch A2"
+
+
+def test_improve_uses_prompt_for_matching_field(monkeypatch):
+    from types import SimpleNamespace
+
+    connection = SimpleNamespace(
+        encrypted_api_key="encrypted",
+        provider="openai",
+        model="model",
+        title_prompt="TITLE ONLY",
+        description_prompt="DESCRIPTION ONLY",
+        tags_prompt="TAGS ONLY",
+    )
+    monkeypatch.setattr(ai_metadata, "decrypt_refresh_token", lambda _: "secret")
+    seen = []
+
+    def fake_request(provider, model, key, system, data):
+        seen.append(json.loads(data)["style_preferences_untrusted"])
+        return '{"value":"result"}'
+
+    monkeypatch.setattr(ai_metadata, "_request", fake_request)
+    monkeypatch.setattr(ai_metadata, "_parse_output", lambda text, entity, field: text)
+
+    ai_metadata.improve(connection, "video", "title", "source")
+    ai_metadata.improve(connection, "video", "description", "source")
+    ai_metadata.improve(connection, "video", "tags", "source")
+    ai_metadata.improve(connection, "channel", "keywords", "source")
+
+    assert seen == ["TITLE ONLY", "DESCRIPTION ONLY", "TAGS ONLY", "TAGS ONLY"]
