@@ -240,3 +240,36 @@ def test_ai_prompts_are_shared_across_saved_models(client, test_database):
         assert row["title_prompt"] == "Shared title"
         assert row["description_prompt"] == "Shared description"
         assert row["tags_prompt"] == "Shared tags"
+
+
+def test_ai_improve_can_select_saved_connection(client, test_database, monkeypatch):
+    from app import ai_metadata
+
+    _, token = create_account(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    headers = {"Origin": settings.frontend_origin}
+    first = client.put("/ai-connections", json=_payload(model="model-a"), headers=headers).json()
+    second = client.put("/ai-connections", json=_payload(model="model-b", api_key="second-secret"), headers=headers).json()
+    calls = []
+
+    def fake_request(provider, model, key, system, data):
+        calls.append((provider, model, key))
+        return '{"value":"Selected model result"}'
+
+    monkeypatch.setattr(ai_metadata, "_request", fake_request)
+    result = client.post(
+        "/ai/improve",
+        json={"entity": "video", "field": "title", "value": "Original", "connection_id": first["id"]},
+        headers=headers,
+    )
+    assert result.status_code == 200
+    assert result.json()["model"] == "model-a"
+    assert calls == [("openai", "model-a", "secret-ai-key")]
+
+    missing = client.post(
+        "/ai/improve",
+        json={"entity": "video", "field": "title", "value": "Original", "connection_id": second["id"] + 10000},
+        headers=headers,
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "ai_connection_not_found"
