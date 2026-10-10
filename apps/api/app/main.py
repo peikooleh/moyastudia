@@ -1165,6 +1165,20 @@ def _claim_catalog_page(db: Session, channel_id: int) -> str:
     return lease_token
 
 
+def _catalog_datetime_iso(value: datetime | None) -> str:
+    """Serialize a YouTube instant with an explicit UTC offset.
+
+    SQLite may drop timezone information from DateTime(timezone=True), while
+    PostgreSQL preserves it. The YouTube source timestamps are UTC instants,
+    so naive stored values must be interpreted as UTC, not browser-local time.
+    """
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat(timespec="minutes")
+
+
 def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
@@ -1191,7 +1205,7 @@ def _video_catalog_item(video: Video) -> dict:
         or video.youtube_default_audio_language
         or "",
         "privacy": video.youtube_visibility or "",
-        "slot": scheduled_at.isoformat(timespec="minutes") if scheduled_at else "",
+        "slot": _catalog_datetime_iso(scheduled_at),
         "status": (
             "remote_missing"
             if video.availability_status == "remote_missing"
@@ -1207,7 +1221,7 @@ def _video_catalog_item(video: Video) -> dict:
         "dirty": any(dirty_fields.values()),
         "dirtyFields": dirty_fields,
         "thumb": video.youtube_thumbnail_url or "",
-        "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
+        "publishedAt": _catalog_datetime_iso(published_at),
         "previouslyPublished": bool(
             video.youtube_visibility == "private"
             and scheduled_at is None
