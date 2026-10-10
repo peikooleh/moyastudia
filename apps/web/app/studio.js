@@ -146,6 +146,39 @@ function MetadataLimitNotice({ uiLang, state, characters }) {
   );
 }
 
+function AIImproveControl({ uiLang, busy, disabled, onImprove, connections, selectedConnectionId, onSelectConnection }) {
+  const hasConnections = connections.length > 0;
+  return (
+    <span className="ai-improve-control">
+      <button
+        className="ai-improve-btn"
+        type="button"
+        disabled={disabled || !hasConnections}
+        title={hasConnections ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")}
+        onClick={onImprove}
+      >
+        {busy ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}
+      </button>
+      {hasConnections ? (
+        <select
+          className="ai-improve-model"
+          value={String(selectedConnectionId || connections[0]?.id || "")}
+          aria-label={t(uiLang, "aiModelForImprove")}
+          title={t(uiLang, "aiModelForImproveHint")}
+          disabled={Boolean(busy)}
+          onChange={(event) => onSelectConnection(Number(event.target.value))}
+        >
+          {connections.map((connection) => (
+            <option key={connection.id} value={connection.id}>
+              {connection.model}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </span>
+  );
+}
+
 function VideoInspector({
   uiLang,
   channelId,
@@ -163,7 +196,9 @@ function VideoInspector({
   updateWorkingField,
   improveVideoField,
   aiBusy,
-  aiImproveLabel,
+  aiConnections,
+  selectedAiConnectionId,
+  onSelectAiConnection,
   confirmResetWorkingToSnapshot,
   discardWorkingChanges,
   resolveWorkingConflict,
@@ -283,7 +318,7 @@ function VideoInspector({
       <section ref={inspectorEditRef} className="inspector-edit" aria-labelledby="inspector-edit-title">
         <h3 id="inspector-edit-title">{t(uiLang, workingVideo ? "localDraft" : "readOnlySnapshot")}</h3>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improveVideoField("title", effectiveTitle)}>{aiBusy === "video:title" ? t(uiLang, "aiImproving") : aiImproveLabel}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-title">{t(uiLang, "videoTitle")}</label><AIImproveControl uiLang={uiLang} busy={aiBusy === "video:title"} disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} onImprove={() => improveVideoField("title", effectiveTitle)} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={onSelectAiConnection} /></div>
           <textarea
             id="video-working-title"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -298,7 +333,7 @@ function VideoInspector({
         </div>
         <div className="description-metadata-layout">
         <div className={`editor-field description-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improveVideoField("description", description)}>{aiBusy === "video:description" ? t(uiLang, "aiImproving") : aiImproveLabel}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-description">{t(uiLang, "videoDescription")}</label><AIImproveControl uiLang={uiLang} busy={aiBusy === "video:description"} disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} onImprove={() => improveVideoField("description", description)} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={onSelectAiConnection} /></div>
           <textarea
             id="video-working-description"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -313,7 +348,7 @@ function VideoInspector({
         </div>
         </div>
         <div className={`editor-field ${!workingVideo ? "snapshot-field" : ""}`}>
-          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><button className="ai-improve-btn" type="button" disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improveVideoField("tags", tags)}>{aiBusy === "video:tags" ? t(uiLang, "aiImproving") : aiImproveLabel}</button></div>
+          <div className="editor-field-heading"><label htmlFor="video-working-tags">{t(uiLang, "videoTags")}</label><AIImproveControl uiLang={uiLang} busy={aiBusy === "video:tags"} disabled={!workingVideo || workingLoading || workingSaving || Boolean(aiBusy)} onImprove={() => improveVideoField("tags", tags)} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={onSelectAiConnection} /></div>
           <textarea
             id="video-working-tags"
             title={t(uiLang, "videoMetadataEditHint")}
@@ -601,7 +636,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [workingLoading, setWorkingLoading] = useState(false);
   const [workingDetailReload, setWorkingDetailReload] = useState(0);
   const [aiBusy, setAiBusy] = useState("");
-  const [aiModelName, setAiModelName] = useState("");
+  const [aiConnections, setAiConnections] = useState([]);
+  const [selectedAiConnectionId, setSelectedAiConnectionId] = useState(null);
   const aiRequestRef = useRef(0);
   const aiContextRef = useRef({});
   const videoListRef = useRef(null);
@@ -632,12 +668,29 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     let cancelled = false;
     apiFetch("/ai-connections")
       .then((response) => response.ok ? response.json() : [])
-      .then((rows) => { if (!cancelled) setAiModelName(rows?.[0]?.model || ""); })
-      .catch(() => { if (!cancelled) setAiModelName(""); });
+      .then((rows) => {
+        if (cancelled) return;
+        const connections = Array.isArray(rows) ? rows : [];
+        setAiConnections(connections);
+        const savedId = Number(window.localStorage.getItem("moyastudia.aiConnectionId") || 0);
+        const selected = connections.find((item) => item.id === savedId) || connections[0] || null;
+        setSelectedAiConnectionId(selected?.id || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAiConnections([]);
+          setSelectedAiConnectionId(null);
+        }
+      });
     return () => { cancelled = true; };
   }, []);
 
-  const aiImproveLabel = aiModelName ? `${t(uiLang, "aiImproveWith")} ${aiModelName}` : t(uiLang, "aiImprove");
+  function selectAiConnection(connectionId) {
+    const id = Number(connectionId);
+    if (!aiConnections.some((item) => item.id === id)) return;
+    setSelectedAiConnectionId(id);
+    window.localStorage.setItem("moyastudia.aiConnectionId", String(id));
+  }
   const playlists = playlistsForChannel(playlistState, channelId);
   const visiblePlaylists = playlists.filter((playlist) => {
     const needle = playlistQuery.trim().toLocaleLowerCase();
@@ -1675,7 +1728,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       const response = await apiFetch("/ai/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entity, field, value }),
+        body: JSON.stringify({ entity, field, value, connection_id: selectedAiConnectionId || undefined }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -2300,7 +2353,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             updateWorkingField={updateWorkingField}
             improveVideoField={improveVideoField}
             aiBusy={aiBusy}
-            aiImproveLabel={aiImproveLabel}
+            aiConnections={aiConnections}
+            selectedAiConnectionId={selectedAiConnectionId}
+            onSelectAiConnection={selectAiConnection}
             confirmResetWorkingToSnapshot={confirmResetWorkingToSnapshot}
             discardWorkingChanges={discardWorkingChanges}
             resolveWorkingConflict={resolveWorkingConflict}
@@ -2398,7 +2453,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoTitle")}</span>
-                          {playlistEditing ? <button className="ai-improve-btn" type="button" disabled={playlistSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improvePlaylistField("title", effectivePlaylistDraft?.title || "")}>{aiBusy === "playlist:title" ? t(uiLang, "aiImproving") : aiImproveLabel}</button> : null}
+                          {playlistEditing ? <AIImproveControl uiLang={uiLang} busy={aiBusy === "playlist:title"} disabled={playlistSaving || Boolean(aiBusy)} onImprove={() => improvePlaylistField("title", effectivePlaylistDraft?.title || "")} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={selectAiConnection} /> : null}
                         </div>
                         {playlistEditing ? (
                           <>
@@ -2410,7 +2465,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                       <div className="playlist-metadata-field">
                         <div className="playlist-field-heading">
                           <span>{t(uiLang, "videoDescription")}</span>
-                          {playlistEditing ? <button className="ai-improve-btn" type="button" disabled={playlistSaving || Boolean(aiBusy)} title={aiImproveLabel} onClick={() => improvePlaylistField("description", effectivePlaylistDraft?.description || "")}>{aiBusy === "playlist:description" ? t(uiLang, "aiImproving") : aiImproveLabel}</button> : null}
+                          {playlistEditing ? <AIImproveControl uiLang={uiLang} busy={aiBusy === "playlist:description"} disabled={playlistSaving || Boolean(aiBusy)} onImprove={() => improvePlaylistField("description", effectivePlaylistDraft?.description || "")} connections={aiConnections} selectedConnectionId={selectedAiConnectionId} onSelectConnection={selectAiConnection} /> : null}
                         </div>
                         {playlistEditing ? (
                           <>
