@@ -1918,12 +1918,21 @@ def probe_channel_creator_content_types(
         raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
     except Exception as exc:
         status, reasons = _youtube_error_facts(exc)
+        provider_message = None
+        content = getattr(exc, "content", None)
+        if isinstance(content, bytes):
+            try:
+                payload = json.loads(content.decode("utf-8"))
+                provider_message = (payload.get("error") or {}).get("message")
+            except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+                provider_message = None
         raise HTTPException(
             502,
             detail={
                 "code": "youtube_creator_content_type_probe_failed",
                 "httpStatus": status,
                 "reasons": sorted(reasons),
+                "providerMessage": provider_message,
             },
         ) from exc
     local = {
