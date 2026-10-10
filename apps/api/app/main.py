@@ -2012,7 +2012,6 @@ def continue_catalog_sync(
             if video_ids
             else []
         )
-        existing_ids = {video.youtube_video_id for video in existing_rows}
         videos_by_id = {video["youtube_video_id"]: video for video in page["videos"]}
         rows_by_id = {video.youtube_video_id: video for video in existing_rows}
         now = _utcnow()
@@ -2060,13 +2059,16 @@ def continue_catalog_sync(
             if sync.mode in ("initial", "reconcile"):
                 video.last_seen_generation = sync.generation
 
-        incremental_overlap = sync.mode == "incremental" and bool(
-            existing_ids.intersection(video_ids)
-        )
         sync.uploads_playlist_id = page["uploads_playlist_id"]
         sync.scanned_count += len(video_ids)
         sync.next_page_token = page["next_page_token"]
-        if incremental_overlap or not sync.next_page_token:
+        # Remote video metadata is mutable even for long-known upload IDs:
+        # privacyStatus and publishAt can change without a new upload.  An
+        # overlap with the local catalog therefore cannot terminate an
+        # incremental refresh.  Walk every uploads page so normal refreshes
+        # also converge status/schedule data; reconcile remains responsible
+        # for removing/marking IDs that disappeared remotely.
+        if not sync.next_page_token:
             if sync.mode == "reconcile":
                 db.flush()
                 missing = db.query(Video).filter(
