@@ -71,7 +71,7 @@ def _youtube_error_facts(exc: Exception) -> tuple[int | None, set[str]]:
 class AIConnectionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["openai", "gemini", "anthropic"] | None = None
+    provider: Literal["openai", "gemini", "anthropic", "xai"] | None = None
     model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, min_length=1, max_length=4096)
     title_prompt: str = Field(default="", max_length=12000)
