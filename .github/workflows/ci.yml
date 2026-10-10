@@ -46,5 +46,9 @@ jobs:
         working-directory: apps/web
       - run: npm run lint
         working-directory: apps/web
+      - run: npm run check:deployment
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_URL: https://api.example.test
       - run: npm run build
         working-directory: apps/web
