@@ -77,6 +77,9 @@ class AIConnectionUpdate(BaseModel):
     title_prompt: str = Field(default="", max_length=12000)
     description_prompt: str = Field(default="", max_length=12000)
     tags_prompt: str = Field(default="", max_length=12000)
+    shorts_title_prompt: str = Field(default="", max_length=12000)
+    shorts_description_prompt: str = Field(default="", max_length=12000)
+    shorts_tags_prompt: str = Field(default="", max_length=12000)
 
 
 class AIImproveRequest(BaseModel):
@@ -85,6 +88,7 @@ class AIImproveRequest(BaseModel):
     field: Literal["title", "description", "tags", "keywords"]
     value: str = Field(max_length=12000)
     connection_id: int | None = Field(default=None, gt=0)
+    video_id: int | None = Field(default=None, gt=0)
 
 
 ExternalId = Annotated[str, Field(min_length=1, max_length=256)]
@@ -614,6 +618,9 @@ def list_ai_connections(
             "title_prompt": row.title_prompt or "",
             "description_prompt": row.description_prompt or "",
             "tags_prompt": row.tags_prompt or "",
+            "shorts_title_prompt": row.shorts_title_prompt or "",
+            "shorts_description_prompt": row.shorts_description_prompt or "",
+            "shorts_tags_prompt": row.shorts_tags_prompt or "",
         }
         for row in rows
     ]
@@ -665,13 +672,22 @@ def save_ai_connection(
     title_prompt = payload.title_prompt.strip()
     description_prompt = payload.description_prompt.strip()
     tags_prompt = payload.tags_prompt.strip()
+    shorts_title_prompt = payload.shorts_title_prompt.strip()
+    shorts_description_prompt = payload.shorts_description_prompt.strip()
+    shorts_tags_prompt = payload.shorts_tags_prompt.strip()
     for connection in db.query(AIConnection).filter(AIConnection.user_id == user.id).all():
         connection.title_prompt = title_prompt
         connection.description_prompt = description_prompt
         connection.tags_prompt = tags_prompt
+        connection.shorts_title_prompt = shorts_title_prompt
+        connection.shorts_description_prompt = shorts_description_prompt
+        connection.shorts_tags_prompt = shorts_tags_prompt
     row.title_prompt = title_prompt
     row.description_prompt = description_prompt
     row.tags_prompt = tags_prompt
+    row.shorts_title_prompt = shorts_title_prompt
+    row.shorts_description_prompt = shorts_description_prompt
+    row.shorts_tags_prompt = shorts_tags_prompt
     db.commit()
     db.refresh(row)
     return {
@@ -682,6 +698,9 @@ def save_ai_connection(
         "title_prompt": row.title_prompt or "",
         "description_prompt": row.description_prompt or "",
         "tags_prompt": row.tags_prompt or "",
+        "shorts_title_prompt": row.shorts_title_prompt or "",
+        "shorts_description_prompt": row.shorts_description_prompt or "",
+        "shorts_tags_prompt": row.shorts_tags_prompt or "",
     }
 
 
@@ -721,8 +740,35 @@ def improve_ai_metadata(
         connection = query.order_by(AIConnection.updated_at.desc(), AIConnection.id.desc()).first()
         if connection is None:
             raise HTTPException(409, detail={"code": "ai_not_connected"})
+    video_format = "long"
+    if payload.entity == "video":
+        if payload.video_id is None:
+            raise HTTPException(422, detail={"code": "ai_video_id_required"})
+        video = (
+            db.query(Video).join(Channel).join(GoogleConnection)
+            .filter(Video.id == payload.video_id, GoogleConnection.user_id == user.id)
+            .one_or_none()
+        )
+        if video is None:
+            raise HTTPException(404, detail={"code": "video_not_found"})
+        content_type = video.youtube_content_type
+        if not content_type and video.youtube_video_id:
+            try:
+                token = decrypt_refresh_token(video.channel.google_connection.encrypted_refresh_token)
+                end_date = _utcnow().date()
+                content_type = yt.video_creator_content_type(
+                    token, (end_date - timedelta(days=3650)).isoformat(), end_date.isoformat(),
+                    video.youtube_video_id, video.channel.youtube_channel_id,
+                )
+                video.youtube_content_type = content_type
+                db.commit()
+            except Exception:
+                content_type = None
+        video_format = "short" if content_type == "shorts" else "long" if content_type == "videoOnDemand" else "unknown"
+        if video_format == "unknown":
+            raise HTTPException(409, detail={"code": "youtube_content_type_unavailable"})
     try:
-        value = ai_metadata.improve(connection, payload.entity, payload.field, payload.value)
+        value = ai_metadata.improve(connection, payload.entity, payload.field, payload.value, video_format)
     except TokenEncryptionError as exc:
         raise HTTPException(503, detail={"code": "ai_credentials_unavailable"}) from exc
     except ai_metadata.AIError as exc:
@@ -1320,6 +1366,7 @@ def _video_catalog_item(video: Video) -> dict:
             and published_at is not None
         ),
         "duration": video.youtube_duration or "",
+        "contentType": video.youtube_content_type or "unknown",
         "views": video.youtube_view_count,
         "likes": video.youtube_like_count,
         "comments": video.youtube_comment_count,
