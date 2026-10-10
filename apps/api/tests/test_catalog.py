@@ -935,6 +935,59 @@ def test_incremental_sync_refreshes_known_videos_across_all_pages(
         assert changed.youtube_scheduled_at.isoformat() == "2026-10-16T05:00:00"
 
 
+def test_incremental_refresh_restores_all_seven_unlisted_playlist_videos(
+    client, test_database, monkeypatch
+):
+    user_id, token = create_account(test_database)
+    channel_id, _, _ = create_channel(test_database, user_id)
+    authorized_client(client, token)
+    with test_database() as db:
+        db.add_all(
+            [
+                Video(
+                    channel_id=channel_id,
+                    youtube_video_id=f"playlist-video-{index}",
+                    youtube_visibility="private",
+                    availability_status="available",
+                )
+                for index in range(7)
+            ]
+        )
+        db.commit()
+
+    def list_page(refresh_token, selected_id, **kwargs):
+        page_token = kwargs.get("page_token")
+        ids = (
+            [f"playlist-video-{index}" for index in range(2)]
+            if page_token is None
+            else [f"playlist-video-{index}" for index in range(2, 7)]
+        )
+        details = []
+        for video_id in ids:
+            video = remote_video(video_id, selected_id)
+            video["youtube_visibility"] = "unlisted"
+            details.append(video)
+        return page(
+            selected_id,
+            ids,
+            next_token="next" if page_token is None else None,
+            details=details,
+        )
+
+    monkeypatch.setattr(main.yt, "list_videos", list_page)
+    assert start_sync(client, channel_id, "incremental").status_code == 200
+    assert continue_sync(client, channel_id).json()["state"] == "PARTIAL"
+    assert continue_sync(client, channel_id).json()["state"] == "COMPLETE"
+
+    response = client.get(f"/channels/{channel_id}/videos?visibility=unlisted")
+    assert response.status_code == 200
+    assert response.json()["total"] == 7
+    assert response.json()["status_counts"]["unlisted"] == 7
+    assert {item["youtubeId"] for item in response.json()["items"]} == {
+        f"playlist-video-{index}" for index in range(7)
+    }
+
+
 def test_failed_partial_reconcile_keeps_cache_and_marks_stale(
     client, test_database, monkeypatch
 ):
