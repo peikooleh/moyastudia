@@ -629,6 +629,8 @@ def save_ai_connection(
         raise HTTPException(422, detail={"code": "ai_provider_selection_required"})
     if detected and payload.provider and detected != payload.provider:
         raise HTTPException(422, detail={"code": "ai_provider_key_mismatch"})
+    if payload.model is not None and not payload.model.strip():
+        raise HTTPException(422, detail={"code": "ai_model_required"})
     model = (payload.model or "").strip() or ai_metadata.MODELS[provider]
     if api_key == "":
         api_key = None
