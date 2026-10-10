@@ -1,4 +1,5 @@
 import io
+import json
 
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -179,16 +180,46 @@ def video_current_statistics(refresh_token: str, youtube_video_id: str) -> dict:
         "comments": _optional_int(statistics.get("commentCount")),
     }
 
+def verified_analytics_channel(refresh_token: str, youtube_channel_id: str) -> dict:
+    """Verify OAuth ownership and read the selected channel's current subscriber count."""
+    service = service_for(refresh_token)
+    token = None
+    seen = set()
+    while True:
+        kwargs = {"part": "id,statistics", "mine": True, "maxResults": 50}
+        if token:
+            kwargs["pageToken"] = token
+        response = _execute(service.channels().list(**kwargs), "channels.list")
+        for item in response.get("items") or []:
+            if item.get("id") != youtube_channel_id:
+                continue
+            stats = item.get("statistics") or {}
+            return {
+                "youtube_channel_id": youtube_channel_id,
+                "subscriber_count": _optional_int(stats.get("subscriberCount")),
+                "hidden_subscribers": bool(stats.get("hiddenSubscriberCount")),
+            }
+        next_token = response.get("nextPageToken")
+        if not next_token:
+            break
+        if next_token in seen:
+            raise RuntimeError("YouTube channel pagination token repeated")
+        seen.add(next_token)
+        token = next_token
+    raise LookupError("selected channel is not owned by the current YouTube OAuth connection")
+
+
 def channel_analytics_summary(
     refresh_token: str,
     start_date: str,
     end_date: str,
     video_id: str = "",
     playlist_id: str = "",
+    channel_id: str = "",
 ) -> dict:
     service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
     kwargs = {
-        "ids": "channel==MINE",
+        "ids": f"channel=={channel_id}" if channel_id else "channel==MINE",
         "startDate": start_date,
         "endDate": end_date,
         "metrics": PLAYLIST_ANALYTICS_METRICS if playlist_id else ANALYTICS_METRICS,
@@ -197,8 +228,9 @@ def channel_analytics_summary(
     if analytics_filter:
         kwargs["filters"] = analytics_filter
     response = _execute(service.reports().query(**kwargs), "reports.query")
+    rows = response.get("rows") or []
+    has_data = bool(rows)
     if playlist_id:
-        rows = response.get("rows") or []
         row = list(rows[0]) if rows else []
         values = row + [0] * 3
         summary = {
@@ -216,6 +248,7 @@ def channel_analytics_summary(
         summary = _analytics_row(response)
     return {
         **summary,
+        "has_data": has_data,
         "start_date": start_date,
         "end_date": end_date,
         "video_id": video_id or None,
@@ -230,6 +263,7 @@ def channel_analytics_timeseries(
     video_id: str = "",
     playlist_id: str = "",
     dimension: str = "day",
+    channel_id: str = "",
 ) -> list[dict]:
     service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
     timeseries_metrics = (
@@ -238,7 +272,7 @@ def channel_analytics_timeseries(
         else "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost"
     )
     kwargs = {
-        "ids": "channel==MINE",
+        "ids": f"channel=={channel_id}" if channel_id else "channel==MINE",
         "startDate": start_date,
         "endDate": end_date,
         "metrics": timeseries_metrics,
@@ -619,46 +653,32 @@ def list_videos(
     credentials = creds_from_refresh(refresh_token)
     service = build("youtube", "v3", credentials=credentials)
 
-    uploads_id = uploads_playlist_id
-    if not uploads_id:
-        channel_response = _execute(
-            service.channels().list(
-                part="contentDetails",
-                id=youtube_channel_id,
-                maxResults=1,
-            ),
-            "channels.list",
-            recorder,
-        )
-        channel_items = channel_response.get("items") or []
-        if not channel_items:
-            raise LookupError("YouTube channel is unavailable")
-        uploads_id = (
-            (channel_items[0].get("contentDetails") or {})
-            .get("relatedPlaylists", {})
-            .get("uploads")
-            or ""
-        )
-        if not uploads_id:
-            raise RuntimeError("YouTube uploads playlist is unavailable")
-
-    page_kwargs = {
-        "part": "contentDetails",
-        "playlistId": uploads_id,
+    # The uploads playlist is not a complete owner inventory: the live audit
+    # for channel 18 returned 137 unique upload IDs while owner search returned
+    # 144, including five unlisted and two public videos missing from uploads.
+    # YouTube also rejects forMine=true combined with channelId for this real
+    # account (HTTP 400 badRequest). Query the authenticated owner's inventory
+    # without channelId and enforce the selected channel from snippet.channelId.
+    search_kwargs = {
+        "part": "snippet",
+        "forMine": True,
+        "type": "video",
+        "order": "date",
         "maxResults": page_size,
     }
     if page_token:
-        page_kwargs["pageToken"] = page_token
-    playlist_response = _execute(
-        service.playlistItems().list(**page_kwargs),
-        "playlistItems.list",
+        search_kwargs["pageToken"] = page_token
+    search_response = _execute(
+        service.search().list(**search_kwargs),
+        "search.list",
         recorder,
     )
     video_ids = list(
         dict.fromkeys(
-            (item.get("contentDetails") or {}).get("videoId")
-            for item in playlist_response.get("items") or []
-            if (item.get("contentDetails") or {}).get("videoId")
+            (item.get("id") or {}).get("videoId")
+            for item in search_response.get("items") or []
+            if (item.get("snippet") or {}).get("channelId") == youtube_channel_id
+            and (item.get("id") or {}).get("videoId")
         )
     )
 
@@ -714,11 +734,183 @@ def list_videos(
             )
 
     return {
-        "uploads_playlist_id": uploads_id,
+        "uploads_playlist_id": None,
         "video_ids": video_ids,
         "videos": videos,
-        "next_page_token": playlist_response.get("nextPageToken"),
+        "next_page_token": search_response.get("nextPageToken"),
     }
+
+
+def audit_video_discovery(
+    refresh_token: str,
+    youtube_channel_id: str,
+    local_video_ids: list[str],
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    """Read-only cross-check that reports failures per YouTube API operation.
+
+    A failed source must not erase evidence from the other sources. Only
+    provider error status and reason are exposed, never credentials or URLs.
+    """
+    errors = {}
+
+    def safe_execute(stage: str, request_factory):
+        try:
+            return _execute(request_factory(), stage.split(":")[0], recorder)
+        except Exception as exc:
+            error = {"type": type(exc).__name__}
+            if isinstance(exc, HttpError):
+                error["httpStatus"] = getattr(exc.resp, "status", None)
+                try:
+                    body = json.loads(exc.content.decode("utf-8"))
+                    first = ((body.get("error") or {}).get("errors") or [{}])[0]
+                    error["youtubeReason"] = first.get("reason") or "unknown"
+                    error["youtubeCode"] = (body.get("error") or {}).get("code")
+                except (ValueError, UnicodeError, AttributeError, TypeError):
+                    error["youtubeReason"] = "unknown"
+            errors[stage] = error
+            return None
+
+    try:
+        credentials = creds_from_refresh(refresh_token)
+        service = build("youtube", "v3", credentials=credentials)
+    except Exception as exc:
+        return {
+            "owned_channel_ids": [],
+            "sources": {
+                name: {"ids": [], "page_sizes": [], "rejected": [], "truncated": True}
+                for name in ("search_scoped", "search_unscoped", "uploads")
+            },
+            "details": {}, "requested_ids": local_video_ids,
+            "uploads_playlist_available": False,
+            "errors": {"authentication": {"type": type(exc).__name__}},
+        }
+
+    owned_response = safe_execute(
+        "channels.list:mine",
+        lambda: service.channels().list(part="id", mine=True, maxResults=50),
+    )
+    owned_ids = [
+        item.get("id") for item in (owned_response or {}).get("items") or []
+        if item.get("id")
+    ]
+    channel_response = safe_execute(
+        "channels.list:contentDetails",
+        lambda: service.channels().list(
+            part="contentDetails", id=youtube_channel_id, maxResults=1
+        ),
+    )
+    channel_items = (channel_response or {}).get("items") or []
+    uploads_id = (
+        ((channel_items[0].get("contentDetails") or {}).get("relatedPlaylists") or {}).get("uploads")
+        if channel_items and channel_items[0].get("id") == youtube_channel_id else None
+    )
+
+    def empty_source(truncated=False):
+        return {"ids": [], "page_sizes": [], "rejected": [], "truncated": truncated}
+
+    def scan(stage: str, operation: str, make_request, extract):
+        token = None
+        seen_tokens = set()
+        result = empty_source()
+        seen_ids = set()
+        for page_index in range(10):
+            response = safe_execute(
+                stage, lambda: make_request(token)
+            )
+            if response is None:
+                result["truncated"] = True
+                break
+            items = response.get("items") or []
+            result["page_sizes"].append(len(items))
+            for item in items:
+                video_id, owner_id = extract(item)
+                if not video_id:
+                    continue
+                if owner_id and owner_id != youtube_channel_id:
+                    result["rejected"].append({"id": video_id, "channelId": owner_id})
+                    continue
+                if video_id not in seen_ids:
+                    seen_ids.add(video_id)
+                    result["ids"].append(video_id)
+            next_token = response.get("nextPageToken")
+            if not next_token:
+                break
+            if next_token == token or next_token in seen_tokens:
+                errors[stage] = {"type": "RepeatedPageToken"}
+                result["truncated"] = True
+                break
+            seen_tokens.add(next_token)
+            token = next_token
+        else:
+            result["truncated"] = True
+        return result
+
+    def search_request(scoped: bool):
+        def request(token):
+            kwargs = {
+                "part": "snippet", "forMine": True, "type": "video",
+                "order": "date", "maxResults": 50,
+            }
+            if scoped:
+                kwargs["channelId"] = youtube_channel_id
+            if token:
+                kwargs["pageToken"] = token
+            return service.search().list(**kwargs)
+        return request
+
+    def search_item(item):
+        return (item.get("id") or {}).get("videoId"), (item.get("snippet") or {}).get("channelId")
+
+    scoped = scan("search.list:scoped", "search.list", search_request(True), search_item)
+    unscoped = scan("search.list:unscoped", "search.list", search_request(False), search_item)
+    uploads = (
+        scan(
+            "playlistItems.list:uploads",
+            "playlistItems.list",
+            lambda token: service.playlistItems().list(**{
+                "part": "contentDetails", "playlistId": uploads_id, "maxResults": 50,
+                **({"pageToken": token} if token else {}),
+            }),
+            lambda item: ((item.get("contentDetails") or {}).get("videoId"), None),
+        )
+        if uploads_id else empty_source(truncated=channel_response is None)
+    )
+    all_ids = list(dict.fromkeys(
+        scoped["ids"] + unscoped["ids"] + uploads["ids"] + local_video_ids
+    ))
+    details = {}
+    for offset in range(0, len(all_ids), 50):
+        batch = all_ids[offset:offset + 50]
+        response = safe_execute(
+            f"videos.list:batch_{offset // 50 + 1}",
+            lambda: service.videos().list(part="snippet,status", id=",".join(batch)),
+        )
+        if response is None:
+            continue
+        for item in response.get("items") or []:
+            snippet = item.get("snippet") or {}
+            status = item.get("status") or {}
+            details[item["id"]] = {
+                "channelId": snippet.get("channelId"),
+                "title": snippet.get("title") or "",
+                "privacy": status.get("privacyStatus"),
+                "publishAt": status.get("publishAt"),
+                "uploadStatus": status.get("uploadStatus"),
+            }
+    return {
+        "owned_channel_ids": owned_ids,
+        "sources": {
+            "search_scoped": scoped,
+            "search_unscoped": unscoped,
+            "uploads": uploads,
+        },
+        "details": details,
+        "requested_ids": all_ids,
+        "uploads_playlist_available": bool(uploads_id),
+        "errors": errors,
+    }
+
 
 def create_playlist(
     refresh_token: str,

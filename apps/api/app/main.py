@@ -1165,6 +1165,20 @@ def _claim_catalog_page(db: Session, channel_id: int) -> str:
     return lease_token
 
 
+def _catalog_datetime_iso(value: datetime | None) -> str:
+    """Serialize a YouTube instant with an explicit UTC offset.
+
+    SQLite may drop timezone information from DateTime(timezone=True), while
+    PostgreSQL preserves it. The YouTube source timestamps are UTC instants,
+    so naive stored values must be interpreted as UTC, not browser-local time.
+    """
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat(timespec="minutes")
+
+
 def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
@@ -1191,7 +1205,7 @@ def _video_catalog_item(video: Video) -> dict:
         or video.youtube_default_audio_language
         or "",
         "privacy": video.youtube_visibility or "",
-        "slot": scheduled_at.isoformat(timespec="minutes") if scheduled_at else "",
+        "slot": _catalog_datetime_iso(scheduled_at),
         "status": (
             "remote_missing"
             if video.availability_status == "remote_missing"
@@ -1207,7 +1221,7 @@ def _video_catalog_item(video: Video) -> dict:
         "dirty": any(dirty_fields.values()),
         "dirtyFields": dirty_fields,
         "thumb": video.youtube_thumbnail_url or "",
-        "publishedAt": published_at.isoformat(timespec="minutes") if published_at else "",
+        "publishedAt": _catalog_datetime_iso(published_at),
         "previouslyPublished": bool(
             video.youtube_visibility == "private"
             and scheduled_at is None
@@ -1876,12 +1890,14 @@ def channel_analytics_summary(
 
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        verified_channel = yt.verified_analytics_channel(token, channel.youtube_channel_id)
         summary = yt.channel_analytics_summary(
             token,
             start_date,
             end_date,
             youtube_video_id,
             playlist_id or "",
+            channel_id=channel.youtube_channel_id,
         )
         current_statistics = None
         if youtube_video_id:
@@ -1897,9 +1913,33 @@ def channel_analytics_summary(
             youtube_video_id,
             playlist_id or "",
             dimension,
+            channel_id=channel.youtube_channel_id,
+        )
+        if dimension == "day":
+            recent_daily_series = series
+        elif summary.get("has_data", True):
+            recent_start = max(start, end - timedelta(days=45)).isoformat()
+            recent_daily_series = yt.channel_analytics_timeseries(
+                token,
+                recent_start,
+                end_date,
+                youtube_video_id,
+                playlist_id or "",
+                "day",
+                channel_id=channel.youtube_channel_id,
+            )
+        else:
+            recent_daily_series = []
+        latest_reported_date = max(
+            (point["date"] for point in recent_daily_series if point.get("date")),
+            default=None,
         )
         return {
             **summary,
+            "youtube_channel_id": channel.youtube_channel_id,
+            "oauth_channel_verified": True,
+            "current_subscriber_count": verified_channel["subscriber_count"],
+            "analytics_last_reported_date": latest_reported_date,
             "scope": "video" if video_id is not None else "playlist" if playlist_id else "channel",
             "local_video_id": video_id,
             "playlist_id": playlist_id,
@@ -1909,6 +1949,8 @@ def channel_analytics_summary(
         }
     except TokenEncryptionError as exc:
         raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except LookupError as exc:
+        raise HTTPException(403, detail={"code": "youtube_analytics_channel_mismatch"}) from exc
     except Exception as exc:
         status, reasons = _youtube_error_facts(exc)
         if reasons.intersection({"accessNotConfigured", "serviceDisabled"}):
@@ -1926,6 +1968,146 @@ def catalog_status(
 ):
     channel = _channel_or_404(db, user, channel_id, require_token=False)
     return _catalog_status(db, channel)
+
+
+@app.get("/channels/{channel_id}/catalog/audit")
+def audit_channel_catalog(
+    channel_id: int,
+    probe_ids: str = Query("", max_length=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Compare YouTube discovery, direct video status, and local cache by ID.
+
+    Diagnostic only: no sync, no cache changes, and no YouTube writes.
+    """
+    channel = _channel_or_404(db, user, channel_id)
+    local_rows = (
+        db.query(Video)
+        .filter(Video.channel_id == channel.id, Video.youtube_video_id.is_not(None))
+        .all()
+    )
+    local_by_id = {row.youtube_video_id: row for row in local_rows}
+    probes = [value.strip() for value in probe_ids.split(",") if value.strip()]
+    if len(probes) > 20 or any(
+        len(value) != 11 or not all(char.isalnum() or char in "_-" for char in value)
+        for value in probes
+    ):
+        raise HTTPException(422, detail={"code": "invalid_audit_video_ids"})
+    try:
+        refresh_token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
+            remote = yt.audit_video_discovery(
+                refresh_token, channel.youtube_channel_id, list(dict.fromkeys(list(local_by_id) + probes))
+            )
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        raise HTTPException(
+            502, detail={"code": "youtube_catalog_audit_failed", "reason": _youtube_error_code(exc)}
+        ) from exc
+
+    audit_errors = remote.get("errors") or {}
+    sources = remote["sources"]
+    source_ids = {name: set(data["ids"]) for name, data in sources.items()}
+    details = remote["details"]
+    selected_details = {
+        video_id: item
+        for video_id, item in details.items()
+        if item["channelId"] == channel.youtube_channel_id
+    }
+    all_discovered = set().union(*source_ids.values())
+    remote_unlisted = sorted(
+        video_id for video_id, item in selected_details.items()
+        if item["privacy"] == "unlisted" and not item["publishAt"]
+    )
+    local_unlisted = sorted(
+        video_id for video_id, row in local_by_id.items()
+        if row.availability_status == "available"
+        and row.youtube_visibility == "unlisted"
+        and row.youtube_scheduled_at is None
+    )
+    differences = []
+    for video_id, item in selected_details.items():
+        row = local_by_id.get(video_id)
+        if (
+            row is None
+            or row.youtube_visibility != item["privacy"]
+            or (row.availability_status != "available")
+            or bool(row.youtube_scheduled_at) != bool(item["publishAt"])
+        ):
+            differences.append({
+                "youtubeId": video_id,
+                "title": item["title"],
+                "remotePrivacy": item["privacy"],
+                "remotePublishAt": item["publishAt"],
+                "localPrivacy": row.youtube_visibility if row else None,
+                "localScheduled": _catalog_datetime_iso(row.youtube_scheduled_at) if row else None,
+                "localAvailability": row.availability_status if row else None,
+                "foundBy": sorted(name for name, ids in source_ids.items() if video_id in ids),
+            })
+
+    return {
+        "channel": {
+            "localId": channel.id,
+            "youtubeId": channel.youtube_channel_id,
+            "oauthOwnedChannelIds": remote["owned_channel_ids"],
+            "oauthOwnsSelectedChannel": (
+                None if "channels.list:mine" in audit_errors or "authentication" in audit_errors
+                else channel.youtube_channel_id in remote["owned_channel_ids"]
+            ),
+        },
+        "auditComplete": not bool(audit_errors) and not any(
+            source["truncated"] for source in sources.values()
+        ),
+        "auditErrors": audit_errors,
+        "sync": _catalog_status(db, channel),
+        "local": {
+            "count": len(local_by_id),
+            "unlistedCount": len(local_unlisted),
+            "unlistedIds": local_unlisted,
+        },
+        "sources": {
+            name: {
+                "count": len(data["ids"]),
+                "pageSizes": data["page_sizes"],
+                "truncated": data["truncated"],
+                "rejected": data["rejected"],
+                "missingFromLocal": sorted(ids - set(local_by_id)),
+                "unlistedIds": sorted(ids.intersection(remote_unlisted)),
+            }
+            for name, data in sources.items()
+            for ids in [source_ids[name]]
+        },
+        "remote": {
+            "discoveredCount": len(all_discovered),
+            "directlyReturnedCount": len(selected_details),
+            "notReturnedByVideosList": sorted(all_discovered - set(details)),
+            "wrongChannelFromVideosList": sorted(set(details) - set(selected_details)),
+            "unlistedCount": len(remote_unlisted),
+            "unlistedVideos": [
+                {
+                    "youtubeId": video_id,
+                    "title": selected_details[video_id]["title"],
+                    "foundBy": sorted(name for name, ids in source_ids.items() if video_id in ids),
+                    "localPrivacy": local_by_id[video_id].youtube_visibility if video_id in local_by_id else None,
+                    "localAvailability": local_by_id[video_id].availability_status if video_id in local_by_id else None,
+                }
+                for video_id in remote_unlisted
+            ],
+        },
+        "mismatches": sorted(differences, key=lambda item: item["youtubeId"]),
+        "probes": [
+            {
+                "youtubeId": video_id,
+                "foundBy": sorted(name for name, ids in source_ids.items() if video_id in ids),
+                "direct": details.get(video_id),
+                "localPrivacy": local_by_id[video_id].youtube_visibility if video_id in local_by_id else None,
+            }
+            for video_id in probes
+        ],
+        "localNotDiscovered": sorted(set(local_by_id) - all_discovered),
+    }
 
 
 @app.post(
@@ -2012,7 +2194,6 @@ def continue_catalog_sync(
             if video_ids
             else []
         )
-        existing_ids = {video.youtube_video_id for video in existing_rows}
         videos_by_id = {video["youtube_video_id"]: video for video in page["videos"]}
         rows_by_id = {video.youtube_video_id: video for video in existing_rows}
         now = _utcnow()
@@ -2060,13 +2241,16 @@ def continue_catalog_sync(
             if sync.mode in ("initial", "reconcile"):
                 video.last_seen_generation = sync.generation
 
-        incremental_overlap = sync.mode == "incremental" and bool(
-            existing_ids.intersection(video_ids)
-        )
         sync.uploads_playlist_id = page["uploads_playlist_id"]
         sync.scanned_count += len(video_ids)
         sync.next_page_token = page["next_page_token"]
-        if incremental_overlap or not sync.next_page_token:
+        # Remote video metadata is mutable even for long-known upload IDs:
+        # privacyStatus and publishAt can change without a new upload.  An
+        # overlap with the local catalog therefore cannot terminate an
+        # incremental refresh.  Walk every uploads page so normal refreshes
+        # also converge status/schedule data; reconcile remains responsible
+        # for removing/marking IDs that disappeared remotely.
+        if not sync.next_page_token:
             if sync.mode == "reconcile":
                 db.flush()
                 missing = db.query(Video).filter(

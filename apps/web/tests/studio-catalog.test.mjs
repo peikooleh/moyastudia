@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 
 import {
   accountPrefsForUser,
@@ -12,7 +13,8 @@ import {
 } from "../lib/prefs.js";
 import { requestLogout, requestSessionState } from "../lib/auth-state.mjs";
 import { t } from "../lib/i18n.js";
-import { calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
+import { monetizationStorageKey, progressToGoal, publicUploadsInLast90Days, sanitizeQualifiedInput, yppThresholds } from "../lib/monetization.mjs";
+import { calendarLocalDateKey, calendarWeekCells, calendarWeekStart, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import {
   catalogVideoDetailUrl,
   catalogVideoDisplayTitle,
@@ -39,6 +41,33 @@ import {
   youtubeTagsCharacterCount,
   youtubeVideoCategoryName,
 } from "../lib/catalog-state.mjs";
+
+
+test("calendar groups a UTC-night publication on the next day in Zurich", () => {
+  const result = execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      'import { calendarLocalDateKey } from "./lib/calendar-grid.mjs"; process.stdout.write(calendarLocalDateKey("2026-10-10T23:30:00Z"));',
+    ],
+    { cwd: new URL("../", import.meta.url), env: { ...process.env, TZ: "Europe/Zurich" }, encoding: "utf8" },
+  );
+  assert.equal(result, "2026-10-11");
+});
+
+test("calendar groups ISO timestamps by the browser local day", () => {
+  const timestamp = "2026-10-10T23:30:00Z";
+  const expected = new Date(timestamp);
+  const localKey = [
+    expected.getFullYear(),
+    String(expected.getMonth() + 1).padStart(2, "0"),
+    String(expected.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  assert.equal(calendarLocalDateKey(timestamp), localKey);
+  assert.equal(calendarLocalDateKey("not-a-date"), "");
+});
 
 test("channel labels distinguish equal titles with stable YouTube IDs", () => {
   const first = { id: 7, title: "MOYAMOVA", youtube_channel_id: "UCo_Srxy3jqF4PbuxgldLpWA" };
@@ -309,6 +338,84 @@ test("Cabinet AI labels are localized in English, Russian, and Ukrainian", () =>
   assert.equal(t("uk", "actionCancel"), "Скасувати");
 });
 
+test("YouTube monetization requirements use current and 2027 effective dates", () => {
+  assert.deepEqual(yppThresholds(new Date("2026-10-10T12:00:00Z")).early, {
+    subscribers: 500, watchHours: 3000, shortsViews: 3000000, uploads: 3,
+  });
+  assert.deepEqual(yppThresholds(new Date("2027-01-31T23:59:59Z")).ads, {
+    subscribers: 1000, watchHours: 4000, shortsViews: 10000000,
+  });
+  assert.deepEqual(yppThresholds(new Date("2027-02-01T00:00:00Z")).ads, {
+    subscribers: 1000, watchHours: 8000, shortsViews: 20000000,
+  });
+});
+
+test("Monetization progress distinguishes unavailable qualified data from zero", () => {
+  assert.equal(progressToGoal(null, 4000), null);
+  assert.equal(progressToGoal("", 4000), null);
+  assert.equal(progressToGoal(275, 1000).remaining, 725);
+  assert.ok(Math.abs(progressToGoal(275, 1000).percent - 27.5) < 0.001);
+  assert.equal(progressToGoal(9000, 4000).percent, 100);
+  assert.equal(sanitizeQualifiedInput(""), null);
+  assert.equal(sanitizeQualifiedInput("-1"), null);
+  assert.equal(sanitizeQualifiedInput("4.2"), null);
+  assert.equal(sanitizeQualifiedInput("420"), 420);
+  assert.equal(monetizationStorageKey({ accountUserId: "account-1" }, { youtube_channel_id: "channel-1" }), "account-1:channel-1");
+  assert.equal(monetizationStorageKey({ accountUserId: "" }, { youtube_channel_id: "channel-1" }), "");
+});
+
+test("Recent public upload estimate excludes private, old and unavailable videos", () => {
+  const videos = [
+    { status: "public", availability: "available", publishedAt: "2026-10-01T00:00:00Z" },
+    { status: "private", availability: "available", publishedAt: "2026-10-01T00:00:00Z" },
+    { status: "public", availability: "unavailable", publishedAt: "2026-10-01T00:00:00Z" },
+    { status: "public", availability: "available", publishedAt: "2026-01-01T00:00:00Z" },
+    { status: "public", availability: "available", publishedAt: "" },
+  ];
+  assert.equal(publicUploadsInLast90Days(videos, new Date("2026-10-10T12:00:00Z")), 1);
+});
+
+test("Monetization labels are localized in all UI languages", () => {
+  const keys = [
+    "monetizationTitle", "monetizationSubtitle", "monetizationBadge", "monetizationOpenHint",
+    "monetizationClose", "monetizationTierLabel", "monetizationEarly", "monetizationAds",
+    "monetizationEitherRoute", "monetizationSubscribers", "monetizationWatchHours",
+    "monetizationShortsViews", "monetizationUploads", "monetizationYouTubeSource",
+    "monetizationManualSource", "monetizationCatalogEstimate", "monetizationPercent",
+    "monetizationGoalProgress", "monetizationNotEntered", "monetizationUnknown",
+    "monetizationQualifiedWarning", "monetizationUpcomingChange", "monetizationEdit",
+    "monetizationWatchHoursInput", "monetizationShortsInput", "monetizationSave",
+    "monetizationCancel", "monetizationManualUpdated", "monetizationLocalOnly",
+    "monetizationOfficialRules", "monetizationRuleChanges",
+  ];
+  for (const lang of ["en", "ru", "uk"]) {
+    for (const key of keys) assert.notEqual(t(lang, key), key, lang + ":" + key);
+  }
+  assert.equal(t("ru", "monetizationPercent", { count: "27,5" }), "27,5%");
+});
+
+test("Analytics date and OAuth channel mismatch guidance are localized", () => {
+  assert.equal(t("ru", "statisticsLastReportedDate", { date: "2026-10-08" }), "Последний день с данными Analytics: 2026-10-08");
+  assert.match(t("en", "statisticsLastReportedDateHint"), /not an official data-processing cutoff/);
+  assert.match(t("uk", "statisticsLastReportedDateHint"), /не офіційна дата/);
+  for (const lang of ["en", "ru", "uk"]) {
+    assert.notEqual(t(lang, "youtube_analytics_channel_mismatch"), "youtube_analytics_channel_mismatch");
+  }
+});
+
+test("Analytics pending-data guidance explains successful API response in all UI languages", () => {
+  assert.equal(t("ru", "statisticsAnalyticsDataPending"), "Данные YouTube Analytics ещё не доступны.");
+  assert.match(t("ru", "statisticsAnalyticsDataPendingDetail"), /API ответил успешно/);
+  assert.equal(t("uk", "statisticsAnalyticsDataPending"), "Дані YouTube Analytics ще недоступні.");
+  assert.match(t("uk", "statisticsAnalyticsDataPendingDetail"), /API відповів успішно/);
+  assert.equal(t("en", "statisticsAnalyticsDataPending"), "YouTube Analytics data is not available yet.");
+  assert.match(t("en", "statisticsAnalyticsDataPendingDetail"), /API responded successfully/);
+  assert.equal(
+    t("ru", "statisticsCurrentYouTubeViewsPendingAnalytics", { count: "249" }),
+    "Сейчас на YouTube: 249 · Данные YouTube Analytics ещё не доступны.",
+  );
+});
+
 test("new Studio labels are localized in English, Russian, and Ukrainian", () => {
   const keys = [
     "more", "statisticsTab", "calendarToday", "calendarShowMore", "playlistPageSize", "playlistSelectPage",
@@ -318,7 +425,7 @@ test("new Studio labels are localized in English, Russian, and Ukrainian", () =>
     "statisticsScopePlaylist", "statisticsScopeVideo", "statisticsPeriod", "statisticsPeriodLifetime",
     "statisticsAverageViewDuration", "statisticsSubscribersNet", "statisticsSubscribersTotal", "statisticsSubscribersChange",
     "statisticsViewsOverTime", "statisticsWatchTimeOverTime", "statisticsAverageDurationOverTime", "statisticsSubscribersOverTime", "statisticsShares",
-    "statisticsPlaylistMetricUnavailable", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
+    "statisticsPlaylistMetricUnavailable", "statisticsAnalyticsDataPending", "statisticsAnalyticsDataPendingDetail", "statisticsCurrentYouTubeViewsPendingAnalytics", "statisticsLastReportedDate", "statisticsLastReportedDateHint", "youtube_analytics_channel_mismatch", "statisticsCatalogUpdating", "statisticsCatalogUpdateFailed",
     "youtubeChangesPreview", "youtubeValueBefore", "youtubeValueAfter", "youtubeOrderCurrent", "youtubeOrderChanged",
     "statisticsContentMix", "youtube_analytics_api_disabled", "youtube_analytics_permission_required",
     "youtubeDescriptionByteRule",

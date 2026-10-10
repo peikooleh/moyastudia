@@ -26,7 +26,7 @@ import {
   youtubeMetadataLimit,
   unicodeCharacterCount,
 } from "../lib/catalog-state.mjs";
-import { calendarWeekCells, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
+import { calendarLocalDateKey, calendarWeekCells, calendarWindowRange, shiftCalendarWeek } from "../lib/calendar-grid.mjs";
 import { t } from "../lib/i18n";
 import { usePrefs } from "./providers";
 import { StatisticsDashboard } from "./statistics-dashboard";
@@ -2057,7 +2057,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const cells = calendarWeekCells(month);
   const byDay = {};
   effectiveCalendarVideos.forEach((v) => {
-    const key = (v.slot || (v.privacy !== "private" ? v.publishedAt : "") || "").slice(0, 10);
+    const key = calendarLocalDateKey(v.slot || (v.privacy !== "private" ? v.publishedAt : ""));
     if (!key) return;
     byDay[key] = byDay[key] || [];
     byDay[key].push(v);

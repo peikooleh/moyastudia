@@ -21,3 +21,15 @@ export function calendarWindowRange(anchor) {
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 42);
   return { start: start.toISOString(), end: end.toISOString() };
 }
+
+
+export function calendarLocalDateKey(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
