@@ -780,6 +780,86 @@ def test_channel_playlists_repeated_page_token_fails_instead_of_looping(
     assert page_tokens == [None, "repeat"]
 
 
+def test_owner_search_finds_all_seven_unlisted_videos_missing_from_uploads(
+    monkeypatch,
+):
+    """The uploads playlist can miss videos; owner search is authoritative."""
+    selected_channel = "youtube-uk"
+    calls = []
+    video_ids = [f"unlisted-{index}" for index in range(7)]
+
+    class FakeResource:
+        def __init__(self, resource):
+            self.resource = resource
+
+        def list(self, **kwargs):
+            calls.append((self.resource, kwargs))
+            if self.resource == "search":
+                assert kwargs["forMine"] is True
+                assert kwargs["channelId"] == selected_channel
+                assert kwargs["type"] == "video"
+                if not kwargs.get("pageToken"):
+                    ids = video_ids[:5]
+                    next_token = "second-page"
+                else:
+                    assert kwargs["pageToken"] == "second-page"
+                    ids = video_ids[5:]
+                    next_token = None
+                items = [
+                    {"id": {"videoId": video_id}, "snippet": {"channelId": selected_channel}}
+                    for video_id in ids
+                ]
+                # A stray video from another authorized channel must not enter
+                # this channel's catalog even if the provider returned it.
+                items.append({
+                    "id": {"videoId": "foreign-channel-video"},
+                    "snippet": {"channelId": "youtube-ru"},
+                })
+                return SimpleNamespace(
+                    execute=lambda: {"items": items, "nextPageToken": next_token}
+                )
+            if self.resource == "videos":
+                ids = kwargs["id"].split(",")
+                items = [
+                    {
+                        "id": video_id,
+                        "snippet": {"channelId": selected_channel, "title": video_id},
+                        "status": {"privacyStatus": "unlisted"},
+                    }
+                    for video_id in ids
+                ]
+                return SimpleNamespace(execute=lambda: {"items": items})
+            raise AssertionError("Catalog must not enumerate the uploads playlist")
+
+    class FakeService:
+        def search(self):
+            return FakeResource("search")
+
+        def videos(self):
+            return FakeResource("videos")
+
+        def channels(self):
+            raise AssertionError("Catalog must not request uploads playlist")
+
+        def playlistItems(self):
+            raise AssertionError("Catalog must not enumerate uploads playlist")
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+    first = youtube.list_videos("token", selected_channel, limit=5)
+    second = youtube.list_videos(
+        "token", selected_channel, page_token=first["next_page_token"], limit=5
+    )
+
+    assert first["uploads_playlist_id"] is None
+    assert second["next_page_token"] is None
+    assert first["video_ids"] + second["video_ids"] == video_ids
+    assert [v["youtube_visibility"] for v in first["videos"] + second["videos"]] == [
+        "unlisted"
+    ] * 7
+    assert [name for name, _ in calls] == ["search", "videos", "search", "videos"]
+
+
 @pytest.mark.parametrize(
     ("video_count", "next_token", "expected_state"),
     [
