@@ -106,6 +106,7 @@ export default function CabinetPage() {
   const [aiShortsTitlePrompt, setAiShortsTitlePrompt] = useState("");
   const [aiShortsDescriptionPrompt, setAiShortsDescriptionPrompt] = useState("");
   const [aiShortsTagsPrompt, setAiShortsTagsPrompt] = useState("");
+  const [aiPromptTab, setAiPromptTab] = useState("long");
   const [aiBusy, setAiBusy] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
@@ -784,14 +785,20 @@ export default function CabinetPage() {
                   </section>
                   <aside className="ai-model-settings-column" aria-labelledby="ai-model-settings-title">
                     <h2 id="ai-model-settings-title">{t(uiLang, "aiModelSettings")}</h2>
+                    <div className="ai-prompt-tabs" role="tablist" aria-label={t(uiLang, "aiModelSettings")}>
+                      <button type="button" role="tab" aria-selected={aiPromptTab === "long"} className={aiPromptTab === "long" ? "active" : ""} onClick={() => setAiPromptTab("long")}>{t(uiLang, "aiLongPrompts")}</button>
+                      <button type="button" role="tab" aria-selected={aiPromptTab === "shorts"} className={aiPromptTab === "shorts" ? "active" : ""} onClick={() => setAiPromptTab("shorts")}>{t(uiLang, "aiShortsPrompts")}</button>
+                    </div>
                     <div className="ai-model-settings">
-                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <h3>{t(uiLang, "aiShortsPrompts")}</h3>
-                      <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiShortsTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiShortsTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiShortsDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiShortsDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
-                      <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiShortsTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiShortsTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      {aiPromptTab === "long" ? <>
+                        <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      </> : <>
+                        <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiShortsTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiShortsTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiShortsDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiShortsDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                        <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiShortsTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiShortsTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiShortsTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiShortsTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      </>}
                     </div>
                   </aside>
                   {aiDirty ? (
