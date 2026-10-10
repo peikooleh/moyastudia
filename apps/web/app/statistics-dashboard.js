@@ -301,7 +301,9 @@ export function StatisticsDashboard({
       label: t(uiLang, "videoViews"),
       value: analyticsDataUnavailable ? "—" : analytics ? formatNumber(analytics.views, locale) : "—",
       detail: analyticsDataUnavailable
-        ? t(uiLang, "statisticsAnalyticsDataPending")
+        ? analytics?.current_statistics?.views != null && scope === "video"
+          ? t(uiLang, "statisticsCurrentYouTubeViewsPendingAnalytics", { count: formatNumber(analytics.current_statistics.views, locale) })
+          : t(uiLang, "statisticsAnalyticsDataPending")
         : analytics?.current_statistics?.views != null && scope === "video"
           ? t(uiLang, "statisticsCurrentYouTubeViews", { count: formatNumber(analytics.current_statistics.views, locale), period: periodLabel })
           : periodLabel,
@@ -447,9 +449,9 @@ export function StatisticsDashboard({
         <section className="statistics-panel">
           <header><div><small>{t(uiLang, "statisticsEngagement")}</small><h2>{t(uiLang, "statisticsEngagementTitle")}</h2></div></header>
           <div className="statistics-engagement-grid">
-            <div><span>{t(uiLang, "videoLikes")}</span><strong>{analytics ? formatNullableNumber(analytics.likes, locale) : "—"}</strong></div>
-            <div><span>{t(uiLang, "videoComments")}</span><strong>{analytics ? formatNullableNumber(analytics.comments, locale) : "—"}</strong></div>
-            <div><span>{t(uiLang, "statisticsShares")}</span><strong>{analytics ? formatNullableNumber(analytics.shares, locale) : "—"}</strong></div>
+            <div><span>{t(uiLang, "videoLikes")}</span><strong>{analytics && !analyticsDataUnavailable ? formatNullableNumber(analytics.likes, locale) : "—"}</strong></div>
+            <div><span>{t(uiLang, "videoComments")}</span><strong>{analytics && !analyticsDataUnavailable ? formatNullableNumber(analytics.comments, locale) : "—"}</strong></div>
+            <div><span>{t(uiLang, "statisticsShares")}</span><strong>{analytics && !analyticsDataUnavailable ? formatNullableNumber(analytics.shares, locale) : "—"}</strong></div>
           </div>
         </section>
         <section className="statistics-panel statistics-content">
