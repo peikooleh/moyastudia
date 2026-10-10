@@ -180,16 +180,46 @@ def video_current_statistics(refresh_token: str, youtube_video_id: str) -> dict:
         "comments": _optional_int(statistics.get("commentCount")),
     }
 
+def verified_analytics_channel(refresh_token: str, youtube_channel_id: str) -> dict:
+    """Verify OAuth ownership and read the selected channel's current subscriber count."""
+    service = service_for(refresh_token)
+    token = None
+    seen = set()
+    while True:
+        kwargs = {"part": "id,statistics", "mine": True, "maxResults": 50}
+        if token:
+            kwargs["pageToken"] = token
+        response = _execute(service.channels().list(**kwargs), "channels.list")
+        for item in response.get("items") or []:
+            if item.get("id") != youtube_channel_id:
+                continue
+            stats = item.get("statistics") or {}
+            return {
+                "youtube_channel_id": youtube_channel_id,
+                "subscriber_count": _optional_int(stats.get("subscriberCount")),
+                "hidden_subscribers": bool(stats.get("hiddenSubscriberCount")),
+            }
+        next_token = response.get("nextPageToken")
+        if not next_token:
+            break
+        if next_token in seen:
+            raise RuntimeError("YouTube channel pagination token repeated")
+        seen.add(next_token)
+        token = next_token
+    raise LookupError("selected channel is not owned by the current YouTube OAuth connection")
+
+
 def channel_analytics_summary(
     refresh_token: str,
     start_date: str,
     end_date: str,
     video_id: str = "",
     playlist_id: str = "",
+    channel_id: str = "",
 ) -> dict:
     service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
     kwargs = {
-        "ids": "channel==MINE",
+        "ids": f"channel=={channel_id}" if channel_id else "channel==MINE",
         "startDate": start_date,
         "endDate": end_date,
         "metrics": PLAYLIST_ANALYTICS_METRICS if playlist_id else ANALYTICS_METRICS,
@@ -233,6 +263,7 @@ def channel_analytics_timeseries(
     video_id: str = "",
     playlist_id: str = "",
     dimension: str = "day",
+    channel_id: str = "",
 ) -> list[dict]:
     service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
     timeseries_metrics = (
@@ -241,7 +272,7 @@ def channel_analytics_timeseries(
         else "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost"
     )
     kwargs = {
-        "ids": "channel==MINE",
+        "ids": f"channel=={channel_id}" if channel_id else "channel==MINE",
         "startDate": start_date,
         "endDate": end_date,
         "metrics": timeseries_metrics,
