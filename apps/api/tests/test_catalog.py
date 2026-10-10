@@ -2365,15 +2365,14 @@ def test_video_file_details_returns_owner_source_geometry(monkeypatch):
     result = youtube.video_file_details("token", "short-id")
 
     assert calls == [{"part": "snippet,status,contentDetails,player,fileDetails,processingDetails", "id": "short-id"}]
-    assert result == {
-        "youtube_video_id": "short-id",
-        "duration": "PT42S",
-        "file_details_available": True,
-        "width": 1080,
-        "height": 1920,
-        "rotation": "none",
-        "aspect_ratio": 0.5625,
-    }
+    assert result["youtube_video_id"] == "short-id"
+    assert result["duration"] == "PT42S"
+    assert result["file_details_available"] is True
+    assert result["width"] == 1080
+    assert result["height"] == 1920
+    assert result["rotation"] == "none"
+    assert result["aspect_ratio"] == 0.5625
+    assert result["video_stream_count"] == 1
 
 
 def test_video_file_details_preserves_unknown_geometry(monkeypatch):
