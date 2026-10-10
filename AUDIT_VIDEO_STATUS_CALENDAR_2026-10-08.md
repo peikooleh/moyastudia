@@ -1,3 +1,11 @@
+## Реальный запуск аудита 2026-10-10: youtube_api_error
+
+- Пользователь вызвал `GET /channels/18/catalog/audit` на локальном backend и получил `{"detail":{"code":"youtube_catalog_audit_failed","reason":"youtube_api_error"}}`. **Это не ответ о статусах семи видео**, а сбой диагностического запроса до формирования отчёта.
+- Обнаружен дефект диагностики: первый отказ любого YouTube API (например, отдельного `search.list`) прерывал весь аудит и превращался в общее `youtube_api_error`, скрывая конкретный HTTP статус и reason.
+- Исправлено: источники опрашиваются независимо, сбои возвращаются в `auditErrors` по этапам (`channels.list:mine`, `channels.list:contentDetails`, `search.list:scoped`, `search.list:unscoped`, `playlistItems.list:uploads`, `videos.list:batch_N`); доступны `httpStatus` и безопасный `youtubeReason` без токенов. `auditComplete=false` при любой ошибке или обрыве пагинации; частичные данные сохраняются.
+- После обновления кода и перезапуска backend повторить **тот же URL** `/channels/18/catalog/audit` и получить поля `auditErrors`, `auditComplete`, `sources`, `remote`. Только затем менять синхронизацию.
+- Проверены официальные параметры YouTube `search.list`: `forMine=true` требует `type=video`, а `channelId` является отдельным разрешённым фильтром; документация также предупреждает, что поиск может иметь задержки индексации и неполные результаты. Отдельный фактический HTTP reason определит проблему точнее.
+
 ## Полный кодовый аудит «По ссылке» — 2026-10-10
 
 **Наблюдение:** после выбора украинского канала YouTube Studio показывает 7 unlisted, а MoyaStudia — 2. Смена источника discovery на `search.list(forMine=true, channelId=...)` не устранила реальное расхождение. Не объявлять проблему исправленной на основании mock-тестов.
