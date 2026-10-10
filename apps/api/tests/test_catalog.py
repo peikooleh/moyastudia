@@ -2364,7 +2364,7 @@ def test_video_file_details_returns_owner_source_geometry(monkeypatch):
 
     result = youtube.video_file_details("token", "short-id")
 
-    assert calls == [{"part": "contentDetails,fileDetails", "id": "short-id"}]
+    assert calls == [{"part": "snippet,status,contentDetails,player,fileDetails,processingDetails", "id": "short-id"}]
     assert result == {
         "youtube_video_id": "short-id",
         "duration": "PT42S",
