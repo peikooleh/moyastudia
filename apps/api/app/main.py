@@ -599,7 +599,9 @@ def list_ai_connections(
     rows = (
         db.query(AIConnection)
         .filter(AIConnection.user_id == user.id)
-        .order_by(AIConnection.provider, AIConnection.model)
+        # Keep the first row aligned with /ai/improve: the most recently
+        # saved/used connection is the active AI model shown by the UI.
+        .order_by(AIConnection.updated_at.desc(), AIConnection.id.desc())
         .all()
     )
     return [
