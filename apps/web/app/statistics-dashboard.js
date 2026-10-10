@@ -524,7 +524,7 @@ export function StatisticsDashboard({
                     <span>{progress ? t(uiLang, "monetizationGoalProgress", { current: formatNumber(progress.current, locale), target: formatNumber(row.target, locale), remaining: formatNumber(progress.remaining, locale) }) : t(uiLang, "monetizationNotEntered", { target: formatNumber(row.target, locale) })}</span>
                     <small>{row.source}</small>
                   </div>
-                  <div className="statistics-monetization-track" role="progressbar" aria-label={row.label} aria-valuemin={0} aria-valuemax={row.target} aria-valuenow={progress?.current == null ? 0 : Math.min(progress.current, row.target)} aria-valuetext={progress ? monetizationPercent(progress) : t(uiLang, "monetizationUnknown")}><span style={{ width: (progress?.percent || 0) + "%" }} /></div>
+                  <div className="statistics-monetization-track" role="progressbar" aria-label={row.label} aria-valuemin={0} aria-valuemax={row.target} aria-valuenow={progress ? Math.min(progress.current, row.target) : undefined} aria-valuetext={progress ? monetizationPercent(progress) : t(uiLang, "monetizationUnknown")}><span style={{ width: (progress?.percent || 0) + "%" }} /></div>
                 </div>
               );
             })}
