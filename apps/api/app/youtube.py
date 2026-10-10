@@ -741,6 +741,51 @@ def list_videos(
     }
 
 
+
+def video_file_details(
+    refresh_token: str,
+    youtube_video_id: str,
+    recorder: QuotaRecorder | None = None,
+) -> dict:
+    """Return owner-only source geometry needed to classify a video's physical format."""
+    if not youtube_video_id:
+        raise ValueError("youtube_video_id is required")
+    service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
+    response = _execute(
+        service.videos().list(part="contentDetails,fileDetails", id=youtube_video_id),
+        "videos.list",
+        recorder,
+    )
+    items = response.get("items") or []
+    if not items:
+        raise LookupError("YouTube video details are unavailable")
+    item = items[0]
+    content = item.get("contentDetails") or {}
+    file_details = item.get("fileDetails") or {}
+    streams = file_details.get("videoStreams") or []
+    stream = next(
+        (
+            value
+            for value in streams
+            if isinstance(value, dict)
+            and isinstance(value.get("widthPixels"), int)
+            and isinstance(value.get("heightPixels"), int)
+            and value["widthPixels"] > 0
+            and value["heightPixels"] > 0
+        ),
+        None,
+    )
+    return {
+        "youtube_video_id": item.get("id") or youtube_video_id,
+        "duration": content.get("duration") or "",
+        "file_details_available": bool(file_details),
+        "width": stream.get("widthPixels") if stream else None,
+        "height": stream.get("heightPixels") if stream else None,
+        "rotation": stream.get("rotation") if stream else None,
+        "aspect_ratio": stream.get("aspectRatio") if stream else None,
+    }
+
+
 def audit_video_discovery(
     refresh_token: str,
     youtube_channel_id: str,
