@@ -214,31 +214,66 @@ def channel_creator_content_types(
     start_date: str,
     end_date: str,
     channel_id: str = "",
-) -> list[dict]:
-    """Return YouTube's own content-type classification per video when Analytics has data."""
+    video_ids: list[str] | None = None,
+) -> dict:
+    """Probe documented Analytics reports independently; retain errors for diagnosis."""
     service = build("youtubeAnalytics", "v2", credentials=creds_from_refresh(refresh_token))
-    response = _execute(
-        service.reports().query(
-            ids=f"channel=={channel_id}" if channel_id else "channel==MINE",
-            startDate=start_date,
-            endDate=end_date,
-            metrics="views",
-            dimensions="video,creatorContentType",
-            sort="-views",
-            maxResults=200,
-        ),
-        "reports.query",
-    )
-    result = []
-    for row in response.get("rows") or []:
-        if len(row) < 3:
-            continue
-        result.append({
-            "youtube_video_id": str(row[0]),
-            "creator_content_type": str(row[1]),
-            "views": int(row[2] or 0),
-        })
-    return result
+    common = {
+        "ids": f"channel=={channel_id}" if channel_id else "channel==MINE",
+        "startDate": start_date,
+        "endDate": end_date,
+        "metrics": "views",
+    }
+    attempts = []
+    items = []
+    queries = [
+        ("top_videos_with_type", {"dimensions": "video,creatorContentType", "sort": "-views", "maxResults": 200}),
+        ("top_videos", {"dimensions": "video", "sort": "-views", "maxResults": 20}),
+        ("content_types", {"dimensions": "creatorContentType"}),
+    ]
+    for name, extra in queries:
+        try:
+            response = _execute(service.reports().query(**common, **extra), "reports.query")
+            rows = response.get("rows") or []
+            attempts.append({"report": name, "ok": True, "rowCount": len(rows)})
+            if name == "top_videos_with_type":
+                for row in rows:
+                    if len(row) >= 3:
+                        items.append({
+                            "youtube_video_id": str(row[0]),
+                            "creator_content_type": str(row[1]),
+                            "views": int(row[2] or 0),
+                        })
+        except Exception as exc:
+            attempts.append({
+                "report": name, "ok": False,
+                "status": getattr(getattr(exc, "resp", None), "status", None),
+                "error": str(exc)[:400],
+            })
+    for video_id in (video_ids or [])[:8]:
+        try:
+            response = _execute(
+                service.reports().query(
+                    **common, dimensions="creatorContentType", filters=f"video=={video_id}"
+                ),
+                "reports.query",
+            )
+            rows = response.get("rows") or []
+            attempts.append({"report": "video_content_type", "videoId": video_id, "ok": True, "rowCount": len(rows)})
+            for row in rows:
+                if len(row) >= 2:
+                    items.append({
+                        "youtube_video_id": video_id,
+                        "creator_content_type": str(row[0]),
+                        "views": int(row[1] or 0),
+                    })
+        except Exception as exc:
+            attempts.append({
+                "report": "video_content_type", "videoId": video_id, "ok": False,
+                "status": getattr(getattr(exc, "resp", None), "status", None),
+                "error": str(exc)[:400],
+            })
+    return {"attempts": attempts, "items": items}
 
 
 def channel_analytics_summary(
