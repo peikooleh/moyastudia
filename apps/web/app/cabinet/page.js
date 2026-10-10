@@ -423,13 +423,14 @@ export default function CabinetPage() {
       const next = remaining[0];
       setAiProvider(next?.provider || "groq");
       setAiModel(next?.model || "");
-      setAiTitlePrompt(next?.title_prompt || "");
-      setAiDescriptionPrompt(next?.description_prompt || "");
-      setAiTagsPrompt(next?.tags_prompt || "");
       setAiApiKey("");
       setAiBaseline({ provider: next?.provider || "groq", model: next?.model || "",
-        titlePrompt: next?.title_prompt || "", descriptionPrompt: next?.description_prompt || "",
-        tagsPrompt: next?.tags_prompt || "" });
+        titlePrompt: aiTitlePrompt, descriptionPrompt: aiDescriptionPrompt, tagsPrompt: aiTagsPrompt });
+      if (selectedAiConnectionId === saved.id) {
+        setSelectedAiConnectionId(next?.id || null);
+        if (next?.id) window.localStorage.setItem("moyastudia.aiConnectionId", String(next.id));
+        else window.localStorage.removeItem("moyastudia.aiConnectionId");
+      }
       setAiNotice(t(uiLang, "aiDeleteConnectionSuccess"));
     } catch (error) {
       setAiError(error.message || t(uiLang, "aiDeleteConnectionError"));
@@ -473,7 +474,17 @@ export default function CabinetPage() {
         throw new Error(`${t(uiLang, "aiSaveError")} (${description})`);
       }
       const row = body;
-      setAiConnections((current) => [...current.filter((item) => item.id !== row.id), row]);
+      setAiConnections((current) => [
+        ...current.filter((item) => item.id !== row.id).map((item) => ({
+          ...item,
+          title_prompt: row.title_prompt || "",
+          description_prompt: row.description_prompt || "",
+          tags_prompt: row.tags_prompt || "",
+        })),
+        row,
+      ]);
+      setSelectedAiConnectionId(row.id);
+      window.localStorage.setItem("moyastudia.aiConnectionId", String(row.id));
       setAiApiKey("");
       setAiProvider(row.provider);
       setAiModel(row.model);
