@@ -20,7 +20,7 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - Каталог и рабочие операции строятся на реальных данных YouTube, а не на mock-каталоге.
 - Локальные working-изменения отделены от YouTube snapshot; поддерживаемые remote writes требуют включённого серверного Write Mode и явного действия пользователя.
 - MoyaStudia ведёт собственный server-side ledger обращений к YouTube Data API и показывает отслеживаемое использование квоты.
-- В Cabinet можно сохранить per-user AI provider/model/API-key settings и prompts; API key хранится зашифрованным и не возвращается в plaintext.
+- В Cabinet можно сохранить per-user AI provider/model/API-key settings; API key хранится зашифрованным и не возвращается в plaintext. Промпты для названия, описания и тегов/ключевых слов являются общими пользовательскими настройками для всех сохранённых AI-моделей. Каждое действие «Улучшить» позволяет выбрать одно из реально подключённых AI-соединений; выбор сохраняется между Studio и Cabinet.
 
 ## Что пока намеренно не включено
 
@@ -67,8 +67,8 @@ SaaS для управления YouTube-контентом. MoyaStudia не я�
 - `GET /auth/youtube/login` → callback `GET /auth/youtube/callback`
 - `GET /write-mode`; `PUT /write-mode` — server-authoritative Write Mode
 - `GET /quota/today` — MoyaStudia-tracked YouTube Data API usage
-- `GET /ai-connections`; `PUT /ai-connections`; `DELETE /ai-connections/{id}` — encrypted per-user AI settings
-- `POST /ai/improve` — bounded AI metadata suggestion через выбранное сохранённое подключение
+- `GET /ai-connections`; `PUT /ai-connections`; `DELETE /ai-connections/{id}` — encrypted per-user AI settings и общие title/description/tags prompt preferences
+- `POST /ai/improve` — bounded AI metadata suggestion через явно выбранное `connection_id` (с backward-compatible latest-saved fallback)
 - `GET /channels`, `POST /channels/{id}/refresh-profile`, `PUT /channels/{id}/working-language`, `PUT /channels/{id}/metadata`
 - `DELETE /channels/{id}` — убрать managed channel из MoyaStudia; YouTube-канал не удаляется
 - `GET /google-connections/{connection_id}/available-channels`; `POST /google-connections/{connection_id}/channels`
