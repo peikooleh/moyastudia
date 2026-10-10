@@ -84,6 +84,7 @@ export default function CabinetPage() {
   const [channelShareNotice, setChannelShareNotice] = useState("");
   const migratedChannelLanguages = useRef(new Set());
   const [aiConnections, setAiConnections] = useState([]);
+  const [selectedAiConnectionId, setSelectedAiConnectionId] = useState(null);
   const [aiProvider, setAiProvider] = useState("openai");
   const [aiModel, setAiModel] = useState("");
   const [aiApiKey, setAiApiKey] = useState("");
@@ -322,6 +323,9 @@ export default function CabinetPage() {
       .then((rows) => {
         if (cancelled) return;
         setAiConnections(rows);
+        const savedId = Number(window.localStorage.getItem("moyastudia.aiConnectionId") || 0);
+        const improveConnection = rows.find((item) => item.id === savedId) || rows[0] || null;
+        setSelectedAiConnectionId(improveConnection?.id || null);
         if (rows[0]) {
           setAiProvider(rows[0].provider);
           setAiModel(rows[0].model);
@@ -390,7 +394,7 @@ export default function CabinetPage() {
       const response = await apiFetch("/ai/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entity: "channel", field, value }),
+        body: JSON.stringify({ entity: "channel", field, value, connection_id: selectedAiConnectionId || undefined }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(t(uiLang, data?.detail?.code || "aiImproveFailed"));
@@ -874,12 +878,12 @@ export default function CabinetPage() {
                       {channelEditing ? (
                         <div className="channel-description-editor">
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveChannelField("description", channelDescriptionDraft)}>{aiBusy === "channel:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelDescription")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("description", channelDescriptionDraft)}>{aiBusy === "channel:description" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button>{aiConnections.length ? <select className="ai-improve-model" value={String(selectedAiConnectionId || aiConnections[0]?.id || "")} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onChange={(event) => { const id = Number(event.target.value); setSelectedAiConnectionId(id); window.localStorage.setItem("moyastudia.aiConnectionId", String(id)); }}>{aiConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.model}</option>)}</select> : null}</span></span>
                             <textarea rows={10} maxLength={1000} value={channelDescriptionDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelDescriptionDraft(event.target.value)} />
                           </label>
                           <small>{channelDescriptionDraft.length} / 1000</small>
                           <label>
-                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy)} title={t(uiLang, "aiImprove")} onClick={() => improveChannelField("keywords", channelKeywordsDraft)}>{aiBusy === "channel:keywords" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button></span>
+                            <span className="channel-editor-heading"><span>{t(uiLang, "channelKeywords")}</span><span className="ai-improve-control"><button className="ai-improve-btn" type="button" disabled={channelDescriptionSaving || Boolean(aiBusy) || aiConnections.length === 0} title={aiConnections.length ? t(uiLang, "aiImprove") : t(uiLang, "ai_not_connected")} onClick={() => improveChannelField("keywords", channelKeywordsDraft)}>{aiBusy === "channel:keywords" ? t(uiLang, "aiImproving") : t(uiLang, "aiImprove")}</button>{aiConnections.length ? <select className="ai-improve-model" value={String(selectedAiConnectionId || aiConnections[0]?.id || "")} aria-label={t(uiLang, "aiModelForImprove")} title={t(uiLang, "aiModelForImproveHint")} disabled={Boolean(aiBusy)} onChange={(event) => { const id = Number(event.target.value); setSelectedAiConnectionId(id); window.localStorage.setItem("moyastudia.aiConnectionId", String(id)); }}>{aiConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.model}</option>)}</select> : null}</span></span>
                             <textarea rows={4} maxLength={500} value={channelKeywordsDraft} disabled={channelDescriptionSaving} onChange={(event) => setChannelKeywordsDraft(event.target.value)} />
                           </label>
                           <small>{channelKeywordsDraft.length} / 500</small>
