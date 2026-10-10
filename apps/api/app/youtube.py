@@ -224,7 +224,7 @@ def channel_creator_content_types(
             endDate=end_date,
             metrics="views",
             dimensions="video,creatorContentType",
-            sort="video,creatorContentType",
+            sort="-views",
             maxResults=200,
         ),
         "reports.query",
