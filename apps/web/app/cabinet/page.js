@@ -357,7 +357,7 @@ export default function CabinetPage() {
     const provider = value.startsWith("sk-ant-") ? "anthropic" : value.startsWith("AIza") ? "gemini" : value.startsWith("sk-") ? "openai" : "";
     if (provider) {
       setAiProvider(provider);
-      setAiModel({ openai: "gpt-6-luna", gemini: "gemini-3.6-flash", anthropic: "claude-sonnet-4-5" }[provider]);
+      setAiModel("");
     }
   }
 
@@ -385,11 +385,11 @@ export default function CabinetPage() {
   }
 
   async function saveAiConnection() {
-    if (!aiModel.trim() && !aiApiKey.trim()) {
+    if (!aiProvider && !aiApiKey.trim()) {
       setAiError(t(uiLang, "aiModelRequired"));
       return;
     }
-    const saved = aiConnections.find((item) => item.provider === aiProvider && item.model === aiModel.trim());
+    const saved = aiConnections.find((item) => item.provider === aiProvider && (!aiModel || item.model === aiModel.trim()));
     if (!saved?.has_api_key && !aiApiKey.trim()) {
       setAiError(t(uiLang, "aiApiKeyRequired"));
       return;
@@ -403,17 +403,25 @@ export default function CabinetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider: aiProvider,
-          model: aiModel.trim(),
+          model: aiModel.trim() || null,
           api_key: aiApiKey.trim() || null,
           title_prompt: aiTitlePrompt,
           description_prompt: aiDescriptionPrompt,
           tags_prompt: aiTagsPrompt,
         }),
       });
-      if (!response.ok) throw new Error(t(uiLang, "aiSaveError"));
-      const row = await response.json();
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = body?.detail;
+        const code = typeof detail === "object" ? detail?.code : detail;
+        const description = typeof code === "string" ? code : `HTTP ${response.status}`;
+        throw new Error(`${t(uiLang, "aiSaveError")} (${description})`);
+      }
+      const row = body;
       setAiConnections((current) => [...current.filter((item) => item.id !== row.id), row]);
       setAiApiKey("");
+      setAiProvider(row.provider);
+      setAiModel(row.model);
       setAiBaseline({
         provider: row.provider,
         model: row.model,
@@ -659,7 +667,7 @@ export default function CabinetPage() {
                     <p className="panel-lead">{t(uiLang, "aiConnectionsHint")}</p>
                     <div className="ai-connection-grid">
                       <label title={t(uiLang, "aiProviderHint")}>{t(uiLang, "aiProvider")}<select value={aiProvider} onChange={(event) => selectAiModel(event.target.value, "")}><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option><option value="anthropic">Anthropic</option></select></label>
-                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} readOnly placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
+                      <label title={t(uiLang, "aiModelHint")}>{t(uiLang, "aiModel")}<input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder={t(uiLang, "aiModelPlaceholder")} /></label>
                       <label title={t(uiLang, "aiApiKeyHint")}>{t(uiLang, "aiApiKey")}<input type="password" value={aiApiKey} onChange={(event) => updateAiKey(event.target.value)} placeholder={aiConnections.some((item) => item.provider === aiProvider && item.model === aiModel && item.has_api_key) ? t(uiLang, "aiApiKeySaved") : "••••••••••••"} autoComplete="off" /></label>
                     </div>
                     {aiError ? <p className="selection-error" role="alert">{aiError}</p> : null}
