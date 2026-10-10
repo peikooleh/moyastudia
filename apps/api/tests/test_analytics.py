@@ -1,4 +1,6 @@
-from app import main
+from types import SimpleNamespace
+
+from app import main, youtube
 from app.models import Channel, GoogleConnection, Video
 from app.settings import settings
 from app.tokens import encrypt_refresh_token
@@ -164,3 +166,48 @@ def test_channel_analytics_summary_supports_playlist_scope(client, test_database
     assert response.json()["playlist_id"] == "PL123"
     assert called["playlist_id"] == "PL123"
     assert called["series_playlist_id"] == "PL123"
+
+
+
+def test_youtube_analytics_summary_marks_empty_report_as_unavailable(monkeypatch):
+    class FakeReports:
+        def query(self, **kwargs):
+            return SimpleNamespace(execute=lambda: {"rows": []})
+
+    class FakeAnalytics:
+        def reports(self):
+            return FakeReports()
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeAnalytics())
+
+    result = youtube.channel_analytics_summary(
+        "token", "2026-10-10", "2026-10-10", "video-id"
+    )
+
+    assert result["has_data"] is False
+    assert result["views"] == 0
+    assert result["estimated_minutes_watched"] == 0
+
+
+def test_youtube_analytics_summary_marks_returned_report_row_as_available(monkeypatch):
+    class FakeReports:
+        def query(self, **kwargs):
+            return SimpleNamespace(execute=lambda: {
+                "rows": [[249, 120.0, 30.0, 50.0, 4, 2, 1, 3, 0]]
+            })
+
+    class FakeAnalytics:
+        def reports(self):
+            return FakeReports()
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeAnalytics())
+
+    result = youtube.channel_analytics_summary(
+        "token", "2026-10-01", "2026-10-10", "video-id"
+    )
+
+    assert result["has_data"] is True
+    assert result["views"] == 249
+    assert result["estimated_minutes_watched"] == 120.0
