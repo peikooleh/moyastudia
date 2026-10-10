@@ -1895,6 +1895,67 @@ def probe_channel_video_format(
     }
 
 
+@app.get("/channels/{channel_id}/content-type-probe")
+def probe_channel_creator_content_types(
+    channel_id: int,
+    days: int = Query(3650, ge=1, le=3650),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Read-only probe of YouTube Analytics' own creatorContentType classification."""
+    channel = _channel_or_404(db, user, channel_id)
+    end_date = _utcnow().date()
+    start_date = end_date - timedelta(days=days)
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        rows = yt.channel_creator_content_types(
+            token,
+            start_date.isoformat(),
+            end_date.isoformat(),
+            channel.youtube_channel_id,
+        )
+    except TokenEncryptionError as exc:
+        raise HTTPException(503, detail={"code": "stored_credentials_unavailable"}) from exc
+    except Exception as exc:
+        status, reasons = _youtube_error_facts(exc)
+        raise HTTPException(
+            502,
+            detail={
+                "code": "youtube_creator_content_type_probe_failed",
+                "httpStatus": status,
+                "reasons": sorted(reasons),
+            },
+        ) from exc
+    local = {
+        video.youtube_video_id: video
+        for video in db.query(Video).filter(
+            Video.channel_id == channel.id,
+            Video.youtube_video_id.is_not(None),
+        ).all()
+    }
+    items = []
+    for row in rows:
+        video = local.get(row["youtube_video_id"])
+        items.append({
+            "videoId": video.id if video else None,
+            "youtubeId": row["youtube_video_id"],
+            "creatorContentType": row["creator_content_type"],
+            "views": row["views"],
+            "title": (video.title or video.youtube_title or "") if video else "",
+        })
+    counts = {}
+    for item in items:
+        key = item["creatorContentType"]
+        counts[key] = counts.get(key, 0) + 1
+    return {
+        "channelId": channel.id,
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "counts": counts,
+        "items": items,
+    }
+
+
 @app.get("/channels/{channel_id}/format-probe")
 def probe_channel_video_formats(
     channel_id: int,
