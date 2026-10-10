@@ -84,6 +84,7 @@ class AIImproveRequest(BaseModel):
     entity: Literal["video", "playlist", "channel"]
     field: Literal["title", "description", "tags", "keywords"]
     value: str = Field(max_length=12000)
+    connection_id: int | None = Field(default=None, gt=0)
 
 
 ExternalId = Annotated[str, Field(min_length=1, max_length=256)]
@@ -708,14 +709,16 @@ def improve_ai_metadata(
 ):
     if (payload.entity, payload.field) not in ai_metadata.LIMITS:
         raise HTTPException(422, detail={"code": "ai_field_unsupported"})
-    connection = (
-        db.query(AIConnection)
-        .filter(AIConnection.user_id == user.id)
-        .order_by(AIConnection.updated_at.desc(), AIConnection.id.desc())
-        .first()
-    )
-    if connection is None:
-        raise HTTPException(409, detail={"code": "ai_not_connected"})
+    query = db.query(AIConnection).filter(AIConnection.user_id == user.id)
+    if payload.connection_id is not None:
+        connection = query.filter(AIConnection.id == payload.connection_id).one_or_none()
+        if connection is None:
+            raise HTTPException(404, detail={"code": "ai_connection_not_found"})
+    else:
+        # Backward-compatible default for older clients: most recently saved connection.
+        connection = query.order_by(AIConnection.updated_at.desc(), AIConnection.id.desc()).first()
+        if connection is None:
+            raise HTTPException(409, detail={"code": "ai_not_connected"})
     try:
         value = ai_metadata.improve(connection, payload.entity, payload.field, payload.value)
     except TokenEncryptionError as exc:
