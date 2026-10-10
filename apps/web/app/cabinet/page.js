@@ -347,10 +347,6 @@ export default function CabinetPage() {
     setAiProvider(provider);
     setAiModel(model);
     setAiApiKey("");
-    const saved = aiConnections.find((item) => item.provider === provider && item.model === model);
-    setAiTitlePrompt(saved?.title_prompt || "");
-    setAiDescriptionPrompt(saved?.description_prompt || "");
-    setAiTagsPrompt(saved?.tags_prompt || "");
     setAiNotice("");
     setAiError("");
   }
