@@ -619,46 +619,31 @@ def list_videos(
     credentials = creds_from_refresh(refresh_token)
     service = build("youtube", "v3", credentials=credentials)
 
-    uploads_id = uploads_playlist_id
-    if not uploads_id:
-        channel_response = _execute(
-            service.channels().list(
-                part="contentDetails",
-                id=youtube_channel_id,
-                maxResults=1,
-            ),
-            "channels.list",
-            recorder,
-        )
-        channel_items = channel_response.get("items") or []
-        if not channel_items:
-            raise LookupError("YouTube channel is unavailable")
-        uploads_id = (
-            (channel_items[0].get("contentDetails") or {})
-            .get("relatedPlaylists", {})
-            .get("uploads")
-            or ""
-        )
-        if not uploads_id:
-            raise RuntimeError("YouTube uploads playlist is unavailable")
-
-    page_kwargs = {
-        "part": "contentDetails",
-        "playlistId": uploads_id,
+    # The uploads playlist can omit owner-visible private/unlisted/scheduled
+    # videos. Search the authenticated owner's full video inventory instead.
+    # Restrict the query to this channel so a connection with access to
+    # multiple channels cannot contaminate the selected channel's catalog.
+    search_kwargs = {
+        "part": "snippet",
+        "forMine": True,
+        "channelId": youtube_channel_id,
+        "type": "video",
+        "order": "date",
         "maxResults": page_size,
     }
     if page_token:
-        page_kwargs["pageToken"] = page_token
-    playlist_response = _execute(
-        service.playlistItems().list(**page_kwargs),
-        "playlistItems.list",
+        search_kwargs["pageToken"] = page_token
+    search_response = _execute(
+        service.search().list(**search_kwargs),
+        "search.list",
         recorder,
     )
     video_ids = list(
         dict.fromkeys(
-            (item.get("contentDetails") or {}).get("videoId")
-            for item in playlist_response.get("items") or []
-            if (item.get("contentDetails") or {}).get("videoId")
+            (item.get("id") or {}).get("videoId")
+            for item in search_response.get("items") or []
+            if (item.get("snippet") or {}).get("channelId") == youtube_channel_id
+            and (item.get("id") or {}).get("videoId")
         )
     )
 
@@ -714,10 +699,10 @@ def list_videos(
             )
 
     return {
-        "uploads_playlist_id": uploads_id,
+        "uploads_playlist_id": None,
         "video_ids": video_ids,
         "videos": videos,
-        "next_page_token": playlist_response.get("nextPageToken"),
+        "next_page_token": search_response.get("nextPageToken"),
     }
 
 def create_playlist(
