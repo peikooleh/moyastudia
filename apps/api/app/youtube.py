@@ -783,6 +783,20 @@ def video_file_details(
         "height": stream.get("heightPixels") if stream else None,
         "rotation": stream.get("rotation") if stream else None,
         "aspect_ratio": stream.get("aspectRatio") if stream else None,
+        "file_detail_keys": sorted(file_details.keys()),
+        "video_stream_count": len(streams),
+        "video_streams": [
+            {
+                "width": value.get("widthPixels"),
+                "height": value.get("heightPixels"),
+                "rotation": value.get("rotation"),
+                "aspect_ratio": value.get("aspectRatio"),
+                "codec": value.get("codec"),
+                "frame_rate": value.get("frameRateFps"),
+            }
+            for value in streams
+            if isinstance(value, dict)
+        ],
     }
 
 
