@@ -693,7 +693,12 @@ def improve_ai_metadata(
             status = 409
         if exc.code == "ai_rate_limited":
             status = 429
-        raise HTTPException(status, detail={"code": exc.code}) from exc
+        detail = {"code": exc.code}
+        if exc.provider_status is not None:
+            detail["provider_status"] = exc.provider_status
+        if exc.provider_message:
+            detail["provider_message"] = exc.provider_message
+        raise HTTPException(status, detail=detail) from exc
     return {"value": value, "provider": connection.provider, "model": connection.model}
 
 
