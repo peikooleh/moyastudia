@@ -43,7 +43,15 @@ def _provider_error_message(response):
         body = response.json()
     except ValueError:
         return ""
-    message = body.get("error", {}).get("message") if isinstance(body, dict) else ""
+    if not isinstance(body, dict):
+        return ""
+    error = body.get("error")
+    if isinstance(error, dict):
+        message = error.get("message", "")
+    elif isinstance(error, str):
+        message = error
+    else:
+        message = body.get("message", "")
     if not isinstance(message, str):
         return ""
     # Provider messages can be shown for diagnostics, but never echo credentials or huge payloads.
