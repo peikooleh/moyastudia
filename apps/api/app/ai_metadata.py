@@ -25,9 +25,24 @@ POLICY = (
 )
 
 class AIError(Exception):
-    def __init__(self, code):
+    def __init__(self, code, provider_status=None, provider_message=None):
         self.code = code
+        self.provider_status = provider_status
+        self.provider_message = provider_message
         super().__init__(code)
+
+
+def _provider_error_message(response):
+    try:
+        body = response.json()
+    except ValueError:
+        return ""
+    message = body.get("error", {}).get("message") if isinstance(body, dict) else ""
+    if not isinstance(message, str):
+        return ""
+    # Provider messages can be shown for diagnostics, but never echo credentials or huge payloads.
+    message = re.sub(r"AIza[0-9A-Za-z_-]+|sk-[0-9A-Za-z_-]+", "[redacted]", message)
+    return message.strip()[:500]
 
 
 def infer_provider(key):
@@ -88,12 +103,13 @@ def _request(provider, model, key, system, data):
     try:
         with httpx.Client(timeout=timeout, follow_redirects=False) as client:
             response = client.post(url, headers=headers, json=payload)
+        provider_message = _provider_error_message(response)
         if response.status_code in (401, 403):
-            raise AIError("ai_invalid_credentials")
+            raise AIError("ai_invalid_credentials", response.status_code, provider_message)
         if response.status_code == 429:
-            raise AIError("ai_rate_limited")
+            raise AIError("ai_rate_limited", response.status_code, provider_message)
         if response.status_code >= 400:
-            raise AIError("ai_provider_failed")
+            raise AIError("ai_provider_failed", response.status_code, provider_message)
         body = response.json()
         if provider == "openai":
             return body["choices"][0]["message"]["content"]
