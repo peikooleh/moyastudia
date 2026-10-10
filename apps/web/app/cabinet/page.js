@@ -763,6 +763,7 @@ export default function CabinetPage() {
                     <div className="ai-model-settings">
                       <label>{t(uiLang, "aiTitlePrompt")}<textarea value={aiTitlePrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTitlePrompt(event.target.value)} placeholder={t(uiLang, "aiTitlePromptPlaceholder")} /><small className="ai-prompt-counter">{aiTitlePrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
                       <label>{t(uiLang, "aiDescriptionPrompt")}<textarea value={aiDescriptionPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiDescriptionPrompt(event.target.value)} placeholder={t(uiLang, "aiDescriptionPromptPlaceholder")} /><small className="ai-prompt-counter">{aiDescriptionPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
+                      <label>{t(uiLang, "aiTagsPrompt")}<textarea value={aiTagsPrompt} maxLength={AI_PROMPT_CHAR_LIMIT} onChange={(event) => setAiTagsPrompt(event.target.value)} placeholder={t(uiLang, "aiTagsPromptPlaceholder")} /><small className="ai-prompt-counter">{aiTagsPrompt.length} / {AI_PROMPT_CHAR_LIMIT}</small></label>
                     </div>
                   </aside>
                   {aiDirty ? (
