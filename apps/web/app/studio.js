@@ -268,6 +268,8 @@ function VideoInspector({
       return;
     }
     if (!window.confirm(t(uiLang, "thumbnailUploadConfirm", { name: file.name }))) return;
+    const localPreview = URL.createObjectURL(file);
+    setThumbnailPreview(localPreview);
     setMediaBusy(true);
     setCopyStatus("");
     try {
@@ -278,9 +280,13 @@ function VideoInspector({
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "thumbnailUploadError"));
-      setThumbnailPreview(data.thumbnail_url || URL.createObjectURL(file));
+      // Keep the selected local image visible immediately; YouTube thumbnail URLs can
+      // remain cached for a while after a successful replacement.
+      setThumbnailPreview(localPreview);
       setCopyStatus(t(uiLang, "thumbnailUploadSuccess"));
     } catch (error) {
+      URL.revokeObjectURL(localPreview);
+      setThumbnailPreview("");
       setCopyStatus(String(error.message || error));
     } finally {
       setMediaBusy(false);
@@ -1305,6 +1311,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       return;
     }
     if (!window.confirm(t(uiLang, "playlistThumbnailConfirm", { name: file.name }))) return;
+    const preview = URL.createObjectURL(file);
+    setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: preview } : playlist) }));
     setPlaylistMediaBusy(true);
     setPlaylistIdCopyStatus("");
     try {
@@ -1315,10 +1323,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistThumbnailError"));
-      const preview = URL.createObjectURL(file);
-      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: preview } : playlist) }));
       setPlaylistIdCopyStatus(t(uiLang, "playlistThumbnailSuccess"));
     } catch (error) {
+      URL.revokeObjectURL(preview);
+      // Reloading the playlist catalog will restore the previous YouTube thumbnail.
+      setPlaylistReload((value) => value + 1);
       setPlaylistIdCopyStatus(String(error.message || error));
     } finally {
       setPlaylistMediaBusy(false);
