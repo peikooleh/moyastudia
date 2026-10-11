@@ -49,7 +49,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 alembic upgrade head
 ```
 
-Текущий migration head — `0012_channel_working_language`. В актуальную цепочку также входят:
+Текущий migration head — `0015_realtime_statistics`. В актуальную цепочку также входят:
 
 - `0006_youtube_quota_usage` — server-side YouTube API usage ledger для `/quota/today`;
 - `0007_user_write_mode` — server-authoritative Write Mode, default OFF;
@@ -57,7 +57,10 @@ alembic upgrade head
 - `0009_local_playlist_drafts` — persistent local playlist drafts/membership;
 - `0010_video_working_settings` — дополнительные video working settings;
 - `0011_ai_connections` — encrypted per-user AI provider/model credentials и prompts;
-- `0012_channel_working_language` — постоянный server-side язык канала.
+- `0012_channel_working_language` — постоянный server-side язык канала;
+- `0013_ai_tags_prompt` — AI prompt settings для тегов;
+- `0014_video_content_type_prompts` — routing prompt-наборов по YouTube content type;
+- `0015_realtime_statistics` — snapshots для оперативной статистики.
 
 Приложение не создаёт эти schema changes автоматически, поэтому перед запуском актуального кода выполняйте `alembic upgrade head`.
 
@@ -147,6 +150,10 @@ npm run build
 | Сайт без лого/баннера | перезапуск API + refresh-profile, не путать venv |
 
 Остановка: Ctrl+C в каждом терминале.
+
+## Внешний тестовый deployment
+
+Безопасная схема Vercel + отдельный persistent FastAPI host + изолированная Neon test database описана в `DEPLOYMENT.md`. Production browser обращается к API через first-party `/api` proxy; локальная схема localhost остаётся прежней.
 
 
 ### YouTube write permission
