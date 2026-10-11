@@ -165,7 +165,9 @@ def set_oauth_state_cookie(response, state: str, browser_binding: str) -> None:
         httponly=True,
         secure=settings.is_production,
         samesite="lax",
-        path="/auth",
+        # Production may expose FastAPI behind a public /api prefix (Vercel Services).
+        # Root scope keeps the browser binding available to both /auth and /api/auth callbacks.
+        path="/",
     )
 
 
@@ -175,5 +177,5 @@ def clear_oauth_state_cookie(response, state: str) -> None:
         httponly=True,
         secure=settings.is_production,
         samesite="lax",
-        path="/auth",
+        path="/",
     )
