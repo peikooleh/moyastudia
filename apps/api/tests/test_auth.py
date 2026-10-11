@@ -54,7 +54,7 @@ def test_production_configuration_fails_closed(monkeypatch):
 
 def test_production_configuration_accepts_https_and_required_secrets(monkeypatch):
     monkeypatch.setattr(settings, "app_environment", "production")
-    monkeypatch.setattr(settings, "frontend_origin", "https://app.example.test")
+    monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
     monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://web.example.test/api/auth/google/callback")
     monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://web.example.test/api/auth/youtube/callback")
     monkeypatch.setattr(settings, "database_url", "postgresql://user:password@db.example.test/app?sslmode=require")
