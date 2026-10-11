@@ -188,3 +188,25 @@ def test_improve_unknown_video_format_uses_regular_prompt(monkeypatch):
 
     assert seen[0]["style_preferences_untrusted"] == "LONG TITLE"
     assert seen[0]["video_format"] == "long"
+
+
+def test_improve_retries_output_that_exceeds_youtube_limit(monkeypatch):
+    connection = SimpleNamespace(
+        encrypted_api_key="encrypted", provider="openai", model="model",
+        title_prompt="", description_prompt="", tags_prompt="",
+    )
+    monkeypatch.setattr(ai_metadata, "decrypt_refresh_token", lambda _: "secret")
+    requests = []
+
+    def fake_request(provider, model, key, system, data):
+        requests.append(json.loads(data))
+        if len(requests) == 1:
+            return json.dumps({"value": "x" * 101})
+        return json.dumps({"value": "Short title"})
+
+    monkeypatch.setattr(ai_metadata, "_request", fake_request)
+
+    assert ai_metadata.improve(connection, "video", "title", "source") == "Short title"
+    assert len(requests) == 2
+    assert requests[1]["maximum_utf8_bytes"] == 100
+    assert "previous_output" in requests[1]
