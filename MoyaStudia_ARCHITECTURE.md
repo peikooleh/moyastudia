@@ -8,7 +8,11 @@ Purpose: product/domain reference for implementation agents.
 >
 > Детальный baseline следующей фазы (Write Mode, quota ledger, AI secrets, mutation safety и порядок реализации W1–W9) находится в [WRITE_MODE_DESIGN.md](WRITE_MODE_DESIGN.md). Он дополняет этот документ и также не означает, что функции уже реализованы.
 
-## Current implementation note — 2026-10-07
+## Current implementation note — 2026-10-11
+
+Current post-merge validation is happening on `fix-logo-refresh-2026-10-11` in draft PR #18. The executable code before this documentation update passed the full CI gate at `a13b883`. Playlist custom-thumbnail writes use YouTube `playlistImages` with an explicit staged-save UI; real-channel end-to-end confirmation is still pending. Reads remain based on the documented playlist snapshot returned by YouTube; do not infer that a newly changed Studio custom cover is current when `playlists.list/snippet.thumbnails` still returns an older video-based URL. See [STATUS.md](STATUS.md) for the exact current handoff.
+
+## Historical implementation note — 2026-10-07
 
 This document is the long-form product/architecture specification and contains historical staged plans. The current implementation is more advanced than several of those stage descriptions: Google identity/YouTube OAuth, encrypted tokens, server-authoritative Write Mode, video metadata/status/thumbnail/caption writes, remote playlist mutations, channel metadata writes, catalog snapshot/working state, Statistics/Analytics, quota telemetry and server-side AI connection settings are implemented. Full source-video upload, destructive YouTube video/channel deletion and live AI provider execution are not implemented.
 
