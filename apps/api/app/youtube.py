@@ -503,7 +503,13 @@ def _provider_error_diagnostic(exc: Exception) -> dict:
         for detail in details
         if isinstance(detail, dict) and detail.get("message")
     ]
-    return {"status": status, "reasons": reasons, "message": messages[0] if messages else ""}
+    safe_message = messages[0] if messages else str(exc)[:500]
+    return {
+        "status": status,
+        "reasons": reasons,
+        "message": safe_message,
+        "exceptionType": type(exc).__name__,
+    }
 
 
 def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
