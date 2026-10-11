@@ -7,7 +7,7 @@ import { t } from "../lib/i18n";
 import { loadPrefs, savePrefs } from "../lib/prefs";
 import { monetizationStorageKey, progressToGoal, publicUploadsInLast90Days, sanitizeQualifiedInput, yppThresholds, YPP_HELP_URL, YPP_CHANGES_URL } from "../lib/monetization.mjs";
 
-const PERIODS = ["7", "28", "90", "lifetime"];
+const PERIODS = ["60m", "48h", "7", "28", "90", "lifetime"];
 
 function formatNumber(value, locale) {
   return Number(value || 0).toLocaleString(locale);
@@ -294,38 +294,69 @@ export function StatisticsDashboard({
     }
     const controller = new AbortController();
     const id = ++requestId.current;
+    const realtime = period === "60m" || period === "48h";
     const params = new URLSearchParams();
-    if (period !== "lifetime") params.set("days", period);
+    if (realtime) params.set("window", period);
+    else if (period !== "lifetime") params.set("days", period);
     if (scope === "video") params.set("video_id", videoId);
-    if (scope === "playlist") params.set("playlist_id", playlistId);
+    if (!realtime && scope === "playlist") params.set("playlist_id", playlistId);
 
     setAnalytics(null);
     setAnalyticsLoading(true);
     setAnalyticsError("");
-    apiFetch(`/channels/${selectedChannelId}/analytics/summary?${params.toString()}`, { signal: controller.signal })
+    const load = () => apiFetch(
+      realtime
+        ? `/channels/${selectedChannelId}/analytics/realtime?${params.toString()}`
+        : `/channels/${selectedChannelId}/analytics/summary?${params.toString()}`,
+      { signal: controller.signal },
+    )
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const code = data?.detail?.code || data?.detail || "youtube_analytics_unavailable";
+          const code = data?.detail?.code || data?.detail || (realtime ? "youtube_realtime_unavailable" : "youtube_analytics_unavailable");
           throw new Error(code);
         }
-        return data;
+        return realtime ? {
+          ...data,
+          realtime: true,
+          has_data: true,
+          estimated_minutes_watched: null,
+          average_view_duration: null,
+          average_view_percentage: null,
+          subscribers_gained: null,
+          subscribers_lost: null,
+          current_statistics: scope === "video" ? {
+            views: data.current_views,
+            likes: data.current_likes,
+            comments: data.current_comments,
+          } : null,
+        } : data;
       })
       .then((data) => {
         if (id === requestId.current && !controller.signal.aborted) setAnalytics(data);
       })
       .catch((error) => {
-        if (error.name !== "AbortError" && id === requestId.current) setAnalyticsError(error.message || "youtube_analytics_unavailable");
+        if (error.name !== "AbortError" && id === requestId.current) setAnalyticsError(error.message || (realtime ? "youtube_realtime_unavailable" : "youtube_analytics_unavailable"));
       })
       .finally(() => {
         if (id === requestId.current) setAnalyticsLoading(false);
       });
-    return () => controller.abort();
+
+    load();
+    const timer = realtime ? window.setInterval(load, 5 * 60 * 1000) : null;
+    return () => {
+      if (timer) window.clearInterval(timer);
+      controller.abort();
+    };
   }, [selectedChannelId, scope, videoId, playlistId, period, scopeReady]);
 
   const periodLabel = period === "lifetime"
     ? t(uiLang, "statisticsPeriodLifetime")
-    : t(uiLang, "statisticsPeriodDays", { count: period });
+    : period === "60m"
+      ? t(uiLang, "statisticsPeriod60Minutes")
+      : period === "48h"
+        ? t(uiLang, "statisticsPeriod48Hours")
+        : t(uiLang, "statisticsPeriodDays", { count: period });
   const scopeLabel = scope === "video"
     ? analyticsVideos.find((video) => String(video.id) === String(videoId))?.title || t(uiLang, "statisticsChooseVideo")
     : scope === "playlist"
@@ -466,7 +497,7 @@ export function StatisticsDashboard({
           <select value={period} onChange={(event) => { const next = event.target.value; setPeriod(next); savePrefs({ statisticsPeriod: next }); }} title={t(uiLang, "statisticsPeriodHint")}>
             {PERIODS.map((value) => (
               <option key={value} value={value}>
-                {value === "lifetime" ? t(uiLang, "statisticsPeriodLifetime") : t(uiLang, "statisticsPeriodShort", { count: value })}
+                {value === "lifetime" ? t(uiLang, "statisticsPeriodLifetime") : value === "60m" ? t(uiLang, "statisticsPeriod60Minutes") : value === "48h" ? t(uiLang, "statisticsPeriod48Hours") : t(uiLang, "statisticsPeriodShort", { count: value })}
               </option>
             ))}
           </select>
