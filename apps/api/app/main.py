@@ -53,6 +53,7 @@ from .tokens import (
 from . import quota as quota_service
 from . import youtube as yt
 from . import ai_metadata
+from . import realtime_stats
 
 app = FastAPI(title="MoyaStudia API")
 app.add_middleware(AbuseRateLimitMiddleware, session_cookie_name=settings.session_cookie_name)
@@ -243,6 +244,12 @@ app.add_middleware(
 def on_startup():
     settings.validate_runtime_security()
     database.init_engine()
+    realtime_stats.start_background_collector()
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    realtime_stats.stop_background_collector()
 
 
 @app.get("/health")
