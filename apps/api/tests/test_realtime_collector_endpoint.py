@@ -32,9 +32,13 @@ def test_scheduled_collector_executes_one_pass(monkeypatch):
 
 def test_scheduled_catalog_refresh_rejects_invalid_secret(monkeypatch):
     monkeypatch.setattr(settings, "realtime_collector_secret", "test-secret")
-    response = TestClient(main.app).post(
-        "/internal/catalog-refresh", headers={"Authorization": "Bearer invalid"}
-    )
+    main.app.dependency_overrides[main.get_db] = lambda: object()
+    try:
+        response = TestClient(main.app).post(
+            "/internal/catalog-refresh", headers={"Authorization": "Bearer invalid"}
+        )
+    finally:
+        main.app.dependency_overrides.pop(main.get_db, None)
     assert response.status_code == 401
 
 
