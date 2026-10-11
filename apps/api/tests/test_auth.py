@@ -55,8 +55,8 @@ def test_production_configuration_fails_closed(monkeypatch):
 def test_production_configuration_accepts_https_and_required_secrets(monkeypatch):
     monkeypatch.setattr(settings, "app_environment", "production")
     monkeypatch.setattr(settings, "frontend_origin", "https://app.example.test")
-    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
-    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://web.example.test/api/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://web.example.test/api/auth/youtube/callback")
     monkeypatch.setattr(settings, "database_url", "postgresql://user:password@db.example.test/app?sslmode=require")
     monkeypatch.setattr(settings, "google_client_id", "client-id")
     monkeypatch.setattr(settings, "google_client_secret", "client-secret")
@@ -69,8 +69,8 @@ def test_production_configuration_accepts_https_and_required_secrets(monkeypatch
 def test_production_rejects_insecure_database_transport(monkeypatch):
     monkeypatch.setattr(settings, "app_environment", "production")
     monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
-    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
-    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://web.example.test/api/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://web.example.test/api/auth/youtube/callback")
     monkeypatch.setattr(settings, "database_url", "postgresql://user:pass@db.example.test/app")
     monkeypatch.setattr(settings, "google_client_id", "test-client")
     monkeypatch.setattr(settings, "google_client_secret", "test-secret")
@@ -82,7 +82,7 @@ def test_production_rejects_insecure_database_transport(monkeypatch):
 def test_production_rejects_invalid_encryption_key_and_callback(monkeypatch):
     monkeypatch.setattr(settings, "app_environment", "production")
     monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
-    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback?debug=1")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://web.example.test/api/auth/google/callback?debug=1")
     monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://other.example.test/auth/youtube/callback")
     monkeypatch.setattr(settings, "database_url", "postgresql://user:pass@db.example.test/app?sslmode=require")
     monkeypatch.setattr(settings, "google_client_id", "test-client")
@@ -92,29 +92,47 @@ def test_production_rejects_invalid_encryption_key_and_callback(monkeypatch):
         settings.validate_runtime_security()
 
 
-def test_session_cookie_supports_cross_site_test_deployment(monkeypatch):
+def test_session_cookie_is_secure_first_party_in_production(monkeypatch):
     from starlette.responses import Response
     from app.security import clear_session_cookie, set_session_cookie
 
     monkeypatch.setattr(settings, "app_environment", "production")
-    monkeypatch.setattr(settings, "session_cookie_samesite", "none")
+    monkeypatch.setattr(settings, "session_cookie_samesite", "lax")
     response = Response()
     set_session_cookie(response, "fixture-session")
     cookie = response.headers["set-cookie"].lower()
-    assert "samesite=none" in cookie
+    assert "samesite=lax" in cookie
     assert "secure" in cookie
     assert "httponly" in cookie
 
     clear_response = Response()
     clear_session_cookie(clear_response)
-    assert "samesite=none" in clear_response.headers["set-cookie"].lower()
+    assert "samesite=lax" in clear_response.headers["set-cookie"].lower()
+
+
+def test_oauth_binding_cookie_is_available_under_api_proxy(monkeypatch):
+    from starlette.responses import Response
+    from app.security import clear_oauth_state_cookie, set_oauth_state_cookie
+
+    monkeypatch.setattr(settings, "app_environment", "production")
+    response = Response()
+    set_oauth_state_cookie(response, "proxy-state", "browser-binding")
+    cookie = response.headers["set-cookie"].lower()
+    assert "path=/" in cookie
+    assert "samesite=lax" in cookie
+    assert "secure" in cookie
+    assert "httponly" in cookie
+
+    clear_response = Response()
+    clear_oauth_state_cookie(clear_response, "proxy-state")
+    assert "path=/" in clear_response.headers["set-cookie"].lower()
 
 
 def test_private_test_requires_explicit_login_allowlist(monkeypatch):
     monkeypatch.setattr(settings, "app_environment", "production")
     monkeypatch.setattr(settings, "frontend_origin", "https://web.example.test")
-    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://api.example.test/auth/google/callback")
-    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://api.example.test/auth/youtube/callback")
+    monkeypatch.setattr(settings, "google_identity_redirect_uri", "https://web.example.test/api/auth/google/callback")
+    monkeypatch.setattr(settings, "google_youtube_redirect_uri", "https://web.example.test/api/auth/youtube/callback")
     monkeypatch.setattr(settings, "database_url", "postgresql://user:pass@db.example.test/app?sslmode=require")
     monkeypatch.setattr(settings, "google_client_id", "test-client")
     monkeypatch.setattr(settings, "google_client_secret", "test-secret")
