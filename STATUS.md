@@ -1,3 +1,19 @@
+# Current Handoff — manual validation branch, 2026-10-11
+
+> **Источник истины для текущей ручной проверки.** Рабочая ветка: `fix-logo-refresh-2026-10-11`; draft PR #18 в `main`. База `main`: merge PR #17 `de1b935`. PR #18 **не сливать**, пока пользователь не завершит ручные тесты.
+
+- Текущий проверенный code head перед этой документационной записью: `a13b883`. CI #463 полностью зелёный: API pytest + `pip-audit`; web Node tests + i18n parity + ESLint + `npm audit --omit=dev` + deployment build.
+- Logo в Shell теперь перезагружает текущий route/query вместо навигации на стартовую страницу.
+- AI Improve: Shorts prompt используется только когда официальный YouTube Analytics `creatorContentType` явно вернул `shorts`; неизвестный/недоступный тип не блокирует запрос и использует обычный video prompt без сохранения догадки. Для `ai_output_too_long` выполняется один повторный запрос; prompt содержит безопасные бюджеты размера metadata.
+- Channel branding: Shell обновляет профиль выбранного канала при загрузке; пользователь вручную подтвердил, что актуальные channel avatars после этого подтягиваются.
+- Playlist thumbnail write: frontend держит выбранную картинку как staged local preview и включает общий Save; загрузка на YouTube выполняется только при явном сохранении. Backend проверяет ownership и использует `playlistImages` insert/update; существующее custom image определяется документированным `playlistImages.list?playlistId=...` через авторизованный HTTP transport, потому что discovery metadata установленного google client отклоняет `playlistId` до отправки HTTP-запроса. При update в body передаётся существующий image `id`.
+- **Ручная проверка смены playlist cover остаётся открытой.** Не считать write flow подтверждённым, пока пользователь не проверит его на реальном YouTube. Также наблюдается, что недавно изменённые в YouTube Studio custom covers могут ещё отображаться через `playlists.list/snippet.thumbnails` как старые `i.ytimg.com/vi/<videoId>/...` URL. Причина/срок обновления YouTube не подтверждены; переподключение канала ради этого не требуется.
+- Временная диагностика playlist thumbnail variants и console logging удалена. Публичный playlist contract снова стабилен: `id/title/description/thumb/publishedAt/privacy/itemCount`.
+- Тесты playlist image HTTP lookup покрывают корректное кодирование `playlistId` и сохранение provider HTTP error. Старые write tests приведены к новому lookup/update контракту.
+- Следующий gate: ручные тесты пользователя, особенно playlist thumbnail save. Если они проходят — финальный review PR #18 и merge; если нет — фиксировать фактический HTTP status/detail и исправлять только подтверждённую причину.
+
+---
+
 # Current Handoff — Shorts / long-form AI prompt routing complete, 2026-10-10
 
 - Working branch: `feature-video-format-prompts-2026-10-10`; draft PR #17 targets `main`. PR #16 with the base AI metadata implementation is already merged. Do not use the retained old AI feature branch for new work.
