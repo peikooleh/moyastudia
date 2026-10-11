@@ -513,12 +513,25 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
                 continue
+            # Custom playlist covers live in the playlistImages resource. The
+            # playlists snippet thumbnails can keep showing the generated/old cover.
+            custom_images = _execute(
+                service.playlistImages().list(part="snippet", playlistId=item["id"], maxResults=50),
+                "playlistImages.list",
+                recorder,
+            ).get("items") or []
+            custom_thumb = ""
+            for image in custom_images:
+                image_snippet = image.get("snippet") or {}
+                if image_snippet.get("type") == "custom" and image_snippet.get("thumbnailUrl"):
+                    custom_thumb = image_snippet["thumbnailUrl"]
+                    break
             out.append(
                 {
                     "id": item["id"],
                     "title": snippet.get("title") or "",
                     "description": snippet.get("description") or "",
-                    "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
+                    "thumb": custom_thumb or _pick_thumb(snippet.get("thumbnails") or {}),
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
                     "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
