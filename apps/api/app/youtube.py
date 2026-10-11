@@ -165,6 +165,32 @@ def _analytics_row(response: dict) -> dict:
 
 
 
+def video_current_statistics_many(refresh_token: str, youtube_video_ids: list[str]) -> dict[str, dict]:
+    """Read current counters for videos in quota-efficient batches of up to 50 IDs."""
+    ids = [value for value in dict.fromkeys(youtube_video_ids) if value]
+    if not ids:
+        return {}
+    service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
+    result = {}
+    for offset in range(0, len(ids), 50):
+        batch = ids[offset:offset + 50]
+        response = _execute(
+            service.videos().list(part="statistics", id=",".join(batch), maxResults=50),
+            "videos.list",
+        )
+        for item in response.get("items") or []:
+            video_id = item.get("id")
+            if not video_id:
+                continue
+            statistics = item.get("statistics") or {}
+            result[video_id] = {
+                "views": _optional_int(statistics.get("viewCount")),
+                "likes": _optional_int(statistics.get("likeCount")),
+                "comments": _optional_int(statistics.get("commentCount")),
+            }
+    return result
+
+
 def video_current_statistics(refresh_token: str, youtube_video_id: str) -> dict:
     service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
     response = _execute(
