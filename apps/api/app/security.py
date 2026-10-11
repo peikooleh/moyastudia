@@ -165,7 +165,7 @@ def set_oauth_state_cookie(response, state: str, browser_binding: str) -> None:
         httponly=True,
         secure=settings.is_production,
         samesite="lax",
-        path="/auth",
+        path="/",
     )
 
 
@@ -175,5 +175,5 @@ def clear_oauth_state_cookie(response, state: str) -> None:
         httponly=True,
         secure=settings.is_production,
         samesite="lax",
-        path="/auth",
+        path="/",
     )
