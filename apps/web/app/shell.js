@@ -46,9 +46,16 @@ export function Shell({ children }) {
         if (ch && String(ch.id) !== String(id)) {
           updateRef.current({ selectedChannelId: String(ch.id) });
         }
-        if (ch && ch.has_token && (!ch.banner_url || !ch.thumbnail_url)) {
+        // Channel branding is mutable on YouTube. Refresh the selected channel profile
+        // on shell load instead of only filling previously empty image fields.
+        if (ch && ch.has_token) {
           const res = await apiFetch(`/channels/${ch.id}/refresh-profile`, { method: "POST" });
-          if (res.ok) ch = { ...ch, ...(await res.json()) };
+          if (res.ok) {
+            ch = { ...ch, ...(await res.json()) };
+            if (!cancelled) {
+              setChannels((current) => current.map((item) => item.id === ch.id ? { ...item, ...ch } : item));
+            }
+          }
         }
         if (!cancelled) setChannel(ch);
       })
