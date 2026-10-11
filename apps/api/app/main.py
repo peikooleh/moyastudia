@@ -2164,16 +2164,24 @@ def channel_realtime_statistics(
 
         duration = timedelta(minutes=60) if window == "60m" else timedelta(hours=48)
         cutoff = now - duration
+        scope_filter = (
+            RealtimeStatisticsSnapshot.channel_id == channel.id,
+            RealtimeStatisticsSnapshot.youtube_video_id == youtube_video_id,
+        )
+        baseline = (
+            db.query(RealtimeStatisticsSnapshot)
+            .filter(*scope_filter, RealtimeStatisticsSnapshot.captured_at < cutoff)
+            .order_by(RealtimeStatisticsSnapshot.captured_at.desc())
+            .first()
+        )
         rows = (
             db.query(RealtimeStatisticsSnapshot)
-            .filter(
-                RealtimeStatisticsSnapshot.channel_id == channel.id,
-                RealtimeStatisticsSnapshot.youtube_video_id == youtube_video_id,
-                RealtimeStatisticsSnapshot.captured_at >= cutoff,
-            )
+            .filter(*scope_filter, RealtimeStatisticsSnapshot.captured_at >= cutoff)
             .order_by(RealtimeStatisticsSnapshot.captured_at.asc())
             .all()
         )
+        if baseline is not None:
+            rows.insert(0, baseline)
         if not rows:
             rows = [latest] if latest else []
 
