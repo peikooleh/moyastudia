@@ -1,5 +1,6 @@
 import base64
 import json
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 from urllib.parse import urlencode
@@ -244,13 +245,26 @@ app.add_middleware(
 def on_startup():
     settings.validate_runtime_security()
     database.init_engine()
-    realtime_stats.start_background_collector()
+    if not settings.is_production:
+        realtime_stats.start_background_collector()
 
 
 @app.on_event("shutdown")
 def on_shutdown():
-    realtime_stats.stop_background_collector()
+    if not settings.is_production:
+        realtime_stats.stop_background_collector()
 
+
+
+
+@app.post("/internal/realtime-collect")
+def collect_realtime_scheduled(request: Request):
+    """One bounded collector pass for an external scheduler; no browser session required."""
+    secret = settings.realtime_collector_secret
+    authorization = request.headers.get("authorization", "")
+    if not secret or not hmac.compare_digest(authorization, "Bearer " + secret):
+        raise HTTPException(status_code=401, detail={"code": "unauthorized"})
+    return {"ok": True, "stored": realtime_stats.collect_once()}
 
 @app.get("/health")
 def health():

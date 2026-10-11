@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = ""
+    realtime_collector_secret: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
     google_identity_redirect_uri: str = "http://localhost:8000/auth/google/callback"
