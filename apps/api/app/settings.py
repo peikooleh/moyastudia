@@ -52,9 +52,9 @@ class Settings(BaseSettings):
             errors.append("FRONTEND_ORIGIN must be a public HTTPS origin without a path or query")
 
         callback_origins = []
-        for name, value, expected_path in (
-            ("GOOGLE_IDENTITY_REDIRECT_URI", self.google_identity_redirect_uri, "/auth/google/callback"),
-            ("GOOGLE_YOUTUBE_REDIRECT_URI", self.google_youtube_redirect_uri, "/auth/youtube/callback"),
+        for name, value, allowed_paths in (
+            ("GOOGLE_IDENTITY_REDIRECT_URI", self.google_identity_redirect_uri, ("/auth/google/callback", "/api/auth/google/callback")),
+            ("GOOGLE_YOUTUBE_REDIRECT_URI", self.google_youtube_redirect_uri, ("/auth/youtube/callback", "/api/auth/youtube/callback")),
         ):
             parsed = urlparse(value)
             if (
@@ -63,10 +63,10 @@ class Settings(BaseSettings):
                 or parsed.hostname in {"localhost", "127.0.0.1"}
                 or parsed.username is not None
                 or parsed.password is not None
-                or parsed.path != expected_path
+                or parsed.path not in allowed_paths
                 or parsed.params or parsed.query or parsed.fragment
             ):
-                errors.append(f"{name} must be a public HTTPS URL with path {expected_path}")
+                errors.append(f"{name} must be a public HTTPS URL with path one of {allowed_paths}")
             else:
                 callback_origins.append((parsed.scheme, parsed.netloc))
         if len(callback_origins) == 2 and callback_origins[0] != callback_origins[1]:
