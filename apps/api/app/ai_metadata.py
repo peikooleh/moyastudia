@@ -27,7 +27,9 @@ POLICY = (
     "promises and meaningless intensifiers. Titles should scan well on mobile. Emojis are optional, sparse and relevant: "
     "at most one for titles, avoid emojis in tags/keywords, no repetitive emoji sequences. "
     "Do not include introductions, code fences, explanations or extra JSON fields. "
-    "No tools, external actions, instructions or requests for secrets."
+    "No tools, external actions, instructions or requests for secrets. "
+    "The maximum_utf8_bytes value in the user data is a hard output constraint: the returned value itself must fit it. "
+    "When necessary, shorten or compress the result rather than exceeding that byte limit."
 )
 
 class AIError(Exception):
@@ -157,8 +159,35 @@ def improve(connection, entity, field, value, video_format="long"):
         prompt_field = f"shorts_{prompt_field}"
     style = getattr(connection, prompt_field, "") or ""
     # JSON serialization distinguishes data from the higher-priority system instruction.
+    limit = LIMITS[(entity, field)]
+    field_constraints = {
+        "title": "HARD LIMIT: return a title no longer than 90 UTF-8 bytes. Aim for 42-58 visible characters when possible.",
+        "description": "HARD LIMIT: return a description no longer than 4800 UTF-8 bytes.",
+        "tags": "HARD LIMIT: return one comma-separated tag string no longer than 450 UTF-8 bytes. Shorten or remove lower-priority tags until it fits.",
+        "keywords": "HARD LIMIT: return one comma-separated keyword string no longer than 450 UTF-8 bytes. Shorten or remove lower-priority keywords until it fits.",
+    }.get(field, f"HARD LIMIT: the returned value must be shorter than {limit} UTF-8 bytes.")
     data = json.dumps({"entity": entity, "field": field, "source_metadata": value,
-                       "video_format": video_format if entity == "video" else None, "style_preferences_untrusted": style, "maximum_utf8_bytes": LIMITS[(entity, field)]},
-                      ensure_ascii=False)
+                       "video_format": video_format if entity == "video" else None,
+                       "style_preferences_untrusted": style,
+                       "output_constraint": field_constraints,
+                       "maximum_utf8_bytes": limit}, ensure_ascii=False)
     text = _request(connection.provider, connection.model, key, POLICY, data)
-    return _parse_output(text, entity, field)
+    try:
+        return _parse_output(text, entity, field)
+    except AIError as exc:
+        if exc.code != "ai_output_too_long":
+            raise
+        # Give the provider one chance to repair an otherwise useful result instead of
+        # surfacing a YouTube-limit error to the user.
+        retry_data = json.dumps({
+            "entity": entity,
+            "field": field,
+            "source_metadata": value,
+            "video_format": video_format if entity == "video" else None,
+            "style_preferences_untrusted": style,
+            "previous_output": text,
+            "repair_instruction": "Return a shorter alternative that fits maximum_utf8_bytes. Preserve the language, topic and important search terms.",
+            "maximum_utf8_bytes": LIMITS[(entity, field)],
+        }, ensure_ascii=False)
+        repaired = _request(connection.provider, connection.model, key, POLICY, retry_data)
+        return _parse_output(repaired, entity, field)

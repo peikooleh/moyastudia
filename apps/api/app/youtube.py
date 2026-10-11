@@ -1,5 +1,6 @@
 import io
 import json
+from urllib.parse import urlencode
 
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -164,6 +165,32 @@ def _analytics_row(response: dict) -> dict:
 
 
 
+def video_current_statistics_many(refresh_token: str, youtube_video_ids: list[str]) -> dict[str, dict]:
+    """Read current counters for videos in quota-efficient batches of up to 50 IDs."""
+    ids = [value for value in dict.fromkeys(youtube_video_ids) if value]
+    if not ids:
+        return {}
+    service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
+    result = {}
+    for offset in range(0, len(ids), 50):
+        batch = ids[offset:offset + 50]
+        response = _execute(
+            service.videos().list(part="statistics", id=",".join(batch), maxResults=50),
+            "videos.list",
+        )
+        for item in response.get("items") or []:
+            video_id = item.get("id")
+            if not video_id:
+                continue
+            statistics = item.get("statistics") or {}
+            result[video_id] = {
+                "views": _optional_int(statistics.get("viewCount")),
+                "likes": _optional_int(statistics.get("likeCount")),
+                "comments": _optional_int(statistics.get("commentCount")),
+            }
+    return result
+
+
 def video_current_statistics(refresh_token: str, youtube_video_id: str) -> dict:
     service = build("youtube", "v3", credentials=creds_from_refresh(refresh_token))
     response = _execute(
@@ -197,6 +224,8 @@ def verified_analytics_channel(refresh_token: str, youtube_channel_id: str) -> d
             return {
                 "youtube_channel_id": youtube_channel_id,
                 "subscriber_count": _optional_int(stats.get("subscriberCount")),
+                "view_count": _optional_int(stats.get("viewCount")),
+                "video_count": _optional_int(stats.get("videoCount")),
                 "hidden_subscribers": bool(stats.get("hiddenSubscriberCount")),
             }
         next_token = response.get("nextPageToken")
@@ -376,7 +405,7 @@ def _execute(request, operation: str, recorder: QuotaRecorder | None = None):
 
 
 def _pick_thumb(thumbs: dict) -> str:
-    for key in ("high", "medium", "default", "standard", "maxres"):
+    for key in ("maxres", "standard", "high", "medium", "default"):
         url = (thumbs.get(key) or {}).get("url")
         if url:
             return url
@@ -487,6 +516,49 @@ def list_available_channels(creds: Credentials, recorder: QuotaRecorder | None =
         if not page_token:
             break
     return channels
+
+
+def _provider_error_diagnostic(exc: Exception) -> dict:
+    response = getattr(exc, "resp", None)
+    status = getattr(response, "status", None)
+    details = getattr(exc, "error_details", None) or []
+    reasons = sorted({
+        str(detail.get("reason"))
+        for detail in details
+        if isinstance(detail, dict) and detail.get("reason")
+    })
+    messages = [
+        str(detail.get("message"))[:500]
+        for detail in details
+        if isinstance(detail, dict) and detail.get("message")
+    ]
+    safe_message = messages[0] if messages else str(exc)[:500]
+    return {
+        "status": status,
+        "reasons": reasons,
+        "message": safe_message,
+        "exceptionType": type(exc).__name__,
+    }
+
+
+def _playlist_images_list(service, playlist_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
+    """Read the documented playlistId filter without relying on stale discovery metadata.
+
+    Some googleapiclient discovery documents reject playlistId before an HTTP
+    request is made. Use the same authorized HTTP transport as the service.
+    """
+    url = "https://www.googleapis.com/youtube/v3/playlistImages?" + urlencode({
+        "part": "snippet", "playlistId": playlist_id, "maxResults": 50,
+    })
+
+    class _Request:
+        def execute(self):
+            response, body = service._http.request(url, method="GET")
+            if int(response.status) >= 400:
+                raise HttpError(response, body, uri=url)
+            return json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
+
+    return (_execute(_Request(), "playlistImages.list", recorder).get("items") or [])
 
 
 def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
@@ -1061,13 +1133,11 @@ def set_playlist_thumbnail(
     service = service_for(refresh_token)
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
-    existing = _execute(
-        service.playlistImages().list(part="snippet", playlistId=playlist_id, maxResults=50),
-        "playlistImages.list",
-        recorder,
-    ).get("items") or []
+    existing = _playlist_images_list(service, playlist_id, recorder)
     body = {"snippet": {"playlistId": playlist_id, "type": "custom"}}
     if existing:
+        # YouTube requires the playlistImage resource ID for updates.
+        body["id"] = existing[0]["id"]
         response = _execute(
             service.playlistImages().update(part="snippet", body=body, media_body=media),
             "playlistImages.update",

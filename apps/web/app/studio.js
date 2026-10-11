@@ -268,6 +268,8 @@ function VideoInspector({
       return;
     }
     if (!window.confirm(t(uiLang, "thumbnailUploadConfirm", { name: file.name }))) return;
+    const localPreview = URL.createObjectURL(file);
+    setThumbnailPreview(localPreview);
     setMediaBusy(true);
     setCopyStatus("");
     try {
@@ -278,9 +280,13 @@ function VideoInspector({
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "thumbnailUploadError"));
-      setThumbnailPreview(data.thumbnail_url || URL.createObjectURL(file));
+      // Keep the selected local image visible immediately; YouTube thumbnail URLs can
+      // remain cached for a while after a successful replacement.
+      setThumbnailPreview(localPreview);
       setCopyStatus(t(uiLang, "thumbnailUploadSuccess"));
     } catch (error) {
+      URL.revokeObjectURL(localPreview);
+      setThumbnailPreview("");
       setCopyStatus(String(error.message || error));
     } finally {
       setMediaBusy(false);
@@ -654,6 +660,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [playlistQuickDraft, setPlaylistQuickDraft] = useState({ playlistId: "", privacy: "", positions: {}, basePositions: {} });
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [playlistMediaBusy, setPlaylistMediaBusy] = useState(false);
+  const [playlistThumbnailDraft, setPlaylistThumbnailDraft] = useState(null);
   const [localPlaylistMemberships, setLocalPlaylistMemberships] = useState({});
   const [localPlaylistVideoCache, setLocalPlaylistVideoCache] = useState({});
   const [filter, setFilter] = useState(() => FILTERS.some((item) => item.id === prefs.catalogFilter) ? prefs.catalogFilter : "all");
@@ -1298,25 +1305,41 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   }
 
 
-  async function uploadPlaylistThumbnail(file) {
-    if (!file || !selectedPlaylist || selectedPlaylist.localOnly || playlistMediaBusy) return;
+  function stagePlaylistThumbnail(file) {
+    if (!file || !selectedPlaylist || selectedPlaylist.localOnly) return;
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setPlaylistIdCopyStatus(t(uiLang, "playlistThumbnailError"));
+      return;
+    }
+    if (playlistThumbnailDraft?.preview) URL.revokeObjectURL(playlistThumbnailDraft.preview);
+    setPlaylistThumbnailDraft({ playlistId: selectedPlaylist.id, file, preview: URL.createObjectURL(file) });
+    setPlaylistIdCopyStatus("");
+  }
+
+  async function uploadPlaylistThumbnail() {
+    const draft = playlistThumbnailDraft;
+    if (!draft || draft.playlistId !== selectedPlaylist?.id || selectedPlaylist.localOnly || playlistMediaBusy) return;
     if (!writeMode?.enabled) {
       setPlaylistIdCopyStatus(t(uiLang, "saveToYoutubeWriteModeHint"));
       return;
     }
-    if (!window.confirm(t(uiLang, "playlistThumbnailConfirm", { name: file.name }))) return;
+    if (!window.confirm(t(uiLang, "playlistThumbnailConfirm", { name: draft.file.name }))) return;
     setPlaylistMediaBusy(true);
     setPlaylistIdCopyStatus("");
     try {
       const response = await apiFetch(`/channels/${channelId}/playlists/${encodeURIComponent(selectedPlaylist.id)}/thumbnail`, {
         method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
+        headers: { "Content-Type": draft.file.type },
+        body: draft.file,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || t(uiLang, "playlistThumbnailError"));
-      const preview = URL.createObjectURL(file);
-      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: preview } : playlist) }));
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = data?.detail;
+        const code = typeof detail === "object" && detail ? detail.code : detail;
+        throw new Error(code ? t(uiLang, code) : t(uiLang, "playlistThumbnailError"));
+      }
+      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: draft.preview } : playlist) }));
+      setPlaylistThumbnailDraft(null);
       setPlaylistIdCopyStatus(t(uiLang, "playlistThumbnailSuccess"));
     } catch (error) {
       setPlaylistIdCopyStatus(String(error.message || error));
@@ -2057,6 +2080,8 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     effectivePlaylistDraft.title !== (selectedPlaylist.title || "")
     || effectivePlaylistDraft.description !== (selectedPlaylist.description || "")
   ));
+  const playlistThumbnailDirty = Boolean(selectedPlaylist && playlistThumbnailDraft?.playlistId === selectedPlaylist.id);
+  const playlistSaveDirty = playlistMetadataDirty || playlistThumbnailDirty;
   const playlistItemDate = (item) => (
     item.catalogVideo?.slot
     || item.catalogVideo?.publishedAt
@@ -2489,11 +2514,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             {selectedPlaylist ? (
               <header className="playlist-summary">
                 <div className="playlist-summary-media">
-                  {selectedPlaylist.thumb ? <img src={selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
+                  {(playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb) ? <img src={playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
                   {!selectedPlaylist.localOnly && playlistEditing ? (
                     <label className="btn ghost playlist-thumbnail-action" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistThumbnailHint")}>
                       {t(uiLang, "changeThumbnail")}
-                      <input className="visually-hidden" type="file" accept="image/jpeg,image/png" disabled={playlistMediaBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) uploadPlaylistThumbnail(file); }} />
+                      <input className="visually-hidden" type="file" accept="image/jpeg,image/png" disabled={playlistMediaBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) stagePlaylistThumbnail(file); }} />
                     </label>
                   ) : null}
                 </div>
@@ -2539,7 +2564,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           <div className="playlist-metadata-actions">
                           <button className="btn ghost" type="button" disabled={playlistSaving} onClick={resetPlaylistDraft}>{t(uiLang, "actionCancel")}</button>
                           <span className="youtube-write-tooltip" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistSaveHint")}>
-                            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistMetadataDirty || playlistSaving} onClick={savePlaylistMetadata}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
+                            <button className="btn youtube-write-action" type="button" disabled={!writeMode?.enabled || !playlistSaveDirty || playlistSaving || playlistMediaBusy} onClick={async () => { if (playlistMetadataDirty) await savePlaylistMetadata(); if (playlistThumbnailDirty) await uploadPlaylistThumbnail(); }}>{playlistSaving ? t(uiLang, "workingSaving") : t(uiLang, "saveToYoutube")}</button>
                           </span>
                           </div>
                         </>
