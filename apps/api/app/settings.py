@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     oauth_state_ttl_seconds: int = 600
     provider_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias="PROVIDER_TIMEOUT_SECONDS")
     provider_read_retries: int = Field(default=2, ge=0, le=5, validation_alias="PROVIDER_READ_RETRIES")
+    realtime_collector_enabled: bool = Field(default=True, validation_alias="REALTIME_COLLECTOR_ENABLED")
 
     @property
     def is_production(self) -> bool:
@@ -53,8 +54,8 @@ class Settings(BaseSettings):
 
         callback_origins = []
         for name, value, expected_path in (
-            ("GOOGLE_IDENTITY_REDIRECT_URI", self.google_identity_redirect_uri, "/auth/google/callback"),
-            ("GOOGLE_YOUTUBE_REDIRECT_URI", self.google_youtube_redirect_uri, "/auth/youtube/callback"),
+            ("GOOGLE_IDENTITY_REDIRECT_URI", self.google_identity_redirect_uri, "/api/auth/google/callback"),
+            ("GOOGLE_YOUTUBE_REDIRECT_URI", self.google_youtube_redirect_uri, "/api/auth/youtube/callback"),
         ):
             parsed = urlparse(value)
             if (
@@ -69,8 +70,11 @@ class Settings(BaseSettings):
                 errors.append(f"{name} must be a public HTTPS URL with path {expected_path}")
             else:
                 callback_origins.append((parsed.scheme, parsed.netloc))
-        if len(callback_origins) == 2 and callback_origins[0] != callback_origins[1]:
-            errors.append("Google OAuth callbacks must use the same API origin")
+        frontend_origin = (frontend.scheme, frontend.netloc)
+        if callback_origins and any(origin != frontend_origin for origin in callback_origins):
+            errors.append("Google OAuth callbacks must use FRONTEND_ORIGIN through the /api proxy")
+        if self.session_cookie_samesite != "lax":
+            errors.append("SESSION_COOKIE_SAMESITE must be lax for the first-party production proxy")
 
         database = urlparse(self.database_url)
         ssl_modes = parse_qs(database.query).get("sslmode", [])
