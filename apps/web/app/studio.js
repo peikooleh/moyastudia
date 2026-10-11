@@ -958,6 +958,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
           const diagnostic = imageProbe.playlistImageDiagnostic;
           const facts = [
             diagnostic.status ? `HTTP ${diagnostic.status}` : "",
+            diagnostic.exceptionType || "",
             Array.isArray(diagnostic.reasons) ? diagnostic.reasons.join(", ") : "",
             diagnostic.message || "",
             Number.isInteger(diagnostic.itemCount) ? `items=${diagnostic.itemCount}` : "",
