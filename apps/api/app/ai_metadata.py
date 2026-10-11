@@ -159,9 +159,18 @@ def improve(connection, entity, field, value, video_format="long"):
         prompt_field = f"shorts_{prompt_field}"
     style = getattr(connection, prompt_field, "") or ""
     # JSON serialization distinguishes data from the higher-priority system instruction.
+    limit = LIMITS[(entity, field)]
+    field_constraints = {
+        "title": "HARD LIMIT: return a title no longer than 90 UTF-8 bytes. Aim for 42-58 visible characters when possible.",
+        "description": "HARD LIMIT: return a description no longer than 4800 UTF-8 bytes.",
+        "tags": "HARD LIMIT: return one comma-separated tag string no longer than 450 UTF-8 bytes. Shorten or remove lower-priority tags until it fits.",
+        "keywords": "HARD LIMIT: return one comma-separated keyword string no longer than 450 UTF-8 bytes. Shorten or remove lower-priority keywords until it fits.",
+    }.get(field, f"HARD LIMIT: the returned value must be shorter than {limit} UTF-8 bytes.")
     data = json.dumps({"entity": entity, "field": field, "source_metadata": value,
-                       "video_format": video_format if entity == "video" else None, "style_preferences_untrusted": style, "maximum_utf8_bytes": LIMITS[(entity, field)]},
-                      ensure_ascii=False)
+                       "video_format": video_format if entity == "video" else None,
+                       "style_preferences_untrusted": style,
+                       "output_constraint": field_constraints,
+                       "maximum_utf8_bytes": limit}, ensure_ascii=False)
     text = _request(connection.provider, connection.model, key, POLICY, data)
     try:
         return _parse_output(text, entity, field)
