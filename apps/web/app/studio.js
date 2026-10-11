@@ -1311,6 +1311,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       return;
     }
     if (!window.confirm(t(uiLang, "playlistThumbnailConfirm", { name: file.name }))) return;
+    const previousThumbnail = selectedPlaylist.thumb || "";
     const preview = URL.createObjectURL(file);
     setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: preview } : playlist) }));
     setPlaylistMediaBusy(true);
@@ -1326,8 +1327,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       setPlaylistIdCopyStatus(t(uiLang, "playlistThumbnailSuccess"));
     } catch (error) {
       URL.revokeObjectURL(preview);
-      // Reloading the playlist catalog will restore the previous YouTube thumbnail.
-      setPlaylistReload((value) => value + 1);
+      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: previousThumbnail } : playlist) }));
       setPlaylistIdCopyStatus(String(error.message || error));
     } finally {
       setPlaylistMediaBusy(false);
