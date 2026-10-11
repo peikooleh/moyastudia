@@ -10,7 +10,7 @@ from . import youtube as yt
 logger = logging.getLogger(__name__)
 
 _INTERVAL_SECONDS = 300
-_HEARTBEAT = timedelta(minutes=55)
+_SNAPSHOT_INTERVAL = timedelta(minutes=4)
 _stop_event = threading.Event()
 _thread = None
 
@@ -26,11 +26,10 @@ def _aware(value):
 
 
 def _should_store(latest, views, now):
+    """Persist regular samples; deltas are derived later from adjacent samples."""
     if latest is None:
         return True
-    if int(latest.view_count) != int(views):
-        return True
-    return now - _aware(latest.captured_at) >= _HEARTBEAT
+    return now - _aware(latest.captured_at) >= _SNAPSHOT_INTERVAL
 
 
 def _store_if_needed(db, channel_id, youtube_video_id, counters, now):
