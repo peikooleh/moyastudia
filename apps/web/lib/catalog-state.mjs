@@ -31,7 +31,6 @@ export function mapPlaylistForStudio(playlist) {
     publishedAt: playlist?.publishedAt || "",
     privacy: playlist?.privacy || "",
     itemCount: Number.isInteger(playlist?.itemCount) ? playlist.itemCount : null,
-    playlistImageDiagnostic: playlist?.playlistImageDiagnostic || null,
   };
 }
 
