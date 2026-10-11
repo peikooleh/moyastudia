@@ -1,11 +1,18 @@
 import { URL } from "node:url";
 
-const raw = process.env.NEXT_PUBLIC_API_URL || "";
+const browserApi = process.env.NEXT_PUBLIC_API_URL || "";
+const upstream = process.env.API_UPSTREAM_URL || "";
+
+if (browserApi !== "/api") {
+  console.error("Deployment check failed: NEXT_PUBLIC_API_URL must be /api so browser requests stay first-party.");
+  process.exit(1);
+}
+
 let url;
 try {
-  url = new URL(raw);
+  url = new URL(upstream);
 } catch {
-  console.error("Deployment check failed: NEXT_PUBLIC_API_URL must be an absolute HTTPS API origin.");
+  console.error("Deployment check failed: API_UPSTREAM_URL must be an absolute HTTPS FastAPI origin.");
   process.exit(1);
 }
 
@@ -17,8 +24,8 @@ if (
   (url.pathname !== "/" && url.pathname !== "") ||
   url.search || url.hash
 ) {
-  console.error("Deployment check failed: NEXT_PUBLIC_API_URL must be a public HTTPS origin without path, credentials or query.");
+  console.error("Deployment check failed: API_UPSTREAM_URL must be a public HTTPS origin without path, credentials or query.");
   process.exit(1);
 }
 
-console.log("Deployment frontend API origin check passed.");
+console.log("Deployment frontend proxy configuration check passed.");
