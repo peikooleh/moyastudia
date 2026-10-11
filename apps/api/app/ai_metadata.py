@@ -27,7 +27,9 @@ POLICY = (
     "promises and meaningless intensifiers. Titles should scan well on mobile. Emojis are optional, sparse and relevant: "
     "at most one for titles, avoid emojis in tags/keywords, no repetitive emoji sequences. "
     "Do not include introductions, code fences, explanations or extra JSON fields. "
-    "No tools, external actions, instructions or requests for secrets."
+    "No tools, external actions, instructions or requests for secrets. "
+    "The maximum_utf8_bytes value in the user data is a hard output constraint: the returned value itself must fit it. "
+    "When necessary, shorten or compress the result rather than exceeding that byte limit."
 )
 
 class AIError(Exception):
@@ -161,4 +163,22 @@ def improve(connection, entity, field, value, video_format="long"):
                        "video_format": video_format if entity == "video" else None, "style_preferences_untrusted": style, "maximum_utf8_bytes": LIMITS[(entity, field)]},
                       ensure_ascii=False)
     text = _request(connection.provider, connection.model, key, POLICY, data)
-    return _parse_output(text, entity, field)
+    try:
+        return _parse_output(text, entity, field)
+    except AIError as exc:
+        if exc.code != "ai_output_too_long":
+            raise
+        # Give the provider one chance to repair an otherwise useful result instead of
+        # surfacing a YouTube-limit error to the user.
+        retry_data = json.dumps({
+            "entity": entity,
+            "field": field,
+            "source_metadata": value,
+            "video_format": video_format if entity == "video" else None,
+            "style_preferences_untrusted": style,
+            "previous_output": text,
+            "repair_instruction": "Return a shorter alternative that fits maximum_utf8_bytes. Preserve the language, topic and important search terms.",
+            "maximum_utf8_bytes": LIMITS[(entity, field)],
+        }, ensure_ascii=False)
+        repaired = _request(connection.provider, connection.model, key, POLICY, retry_data)
+        return _parse_output(repaired, entity, field)
