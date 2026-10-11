@@ -277,6 +277,7 @@ def test_youtube_playlist_thumbnail_insert_is_owned_and_uses_custom_image(monkey
             return Resource("playlistImages")
 
     monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: [])
     result = youtube.set_playlist_thumbnail(
         "refresh", "playlist-channel", "playlist-one", b"png", "image/png"
     )
@@ -447,12 +448,14 @@ def test_youtube_playlist_thumbnail_update_existing_image(monkeypatch):
             return Resource("playlistImages")
 
     monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: [{"id": "existing-image"}])
     result = youtube.set_playlist_thumbnail(
         "refresh", "playlist-channel", "playlist-one", b"png", "image/png"
     )
     assert result["id"] == "existing-image"
     image_update = next(call for call in calls if call[0:2] == ("playlistImages", "update"))
     assert image_update[2]["body"] == {
+        "id": "existing-image",
         "snippet": {"playlistId": "playlist-one", "type": "custom"}
     }
     assert image_update[2]["media_body"].mimetype() == "image/png"
