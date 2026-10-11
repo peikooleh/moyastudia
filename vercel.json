@@ -6,19 +6,30 @@
     },
     "api": {
       "root": "apps/api/",
-      "entrypoint": "app.main:app"
+      "entrypoint": "app.main:app",
+      "routes": [
+        {
+          "src": "/api/(.*)",
+          "transforms": [
+            {
+              "type": "request.path",
+              "op": "set",
+              "args": "/$1"
+            }
+          ]
+        }
+      ]
     }
   },
   "rewrites": [
     {
-      "source": "/api/:path*",
+      "source": "/api/(.*)",
       "destination": {
-        "service": "api",
-        "path": "/:path*"
+        "service": "api"
       }
     },
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "destination": {
         "service": "web"
       }
