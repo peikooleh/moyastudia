@@ -953,6 +953,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       .then(({ remoteRows, localRows }) => {
         if (controller.signal.aborted) return;
         const remoteItems = Array.isArray(remoteRows) ? remoteRows.map(mapPlaylistForStudio) : [];
+        console.info("YouTube playlist thumbnail variants", remoteItems.map((item) => ({
+          playlistId: item.id,
+          selectedUrl: item.thumb,
+          variants: item.thumbnailVariants,
+        })));
         const localItems = Array.isArray(localRows) ? localRows.map((row) => ({
           id: row.id, title: row.title, description: "", thumb: "", publishedAt: "", privacy: "private",
           itemCount: row.videoIds?.length || 0, localOnly: true,
