@@ -1068,6 +1068,8 @@ def set_playlist_thumbnail(
     ).get("items") or []
     body = {"snippet": {"playlistId": playlist_id, "type": "custom"}}
     if existing:
+        # YouTube requires the playlistImage resource ID for updates.
+        body["id"] = existing[0]["id"]
         response = _execute(
             service.playlistImages().update(part="snippet", body=body, media_body=media),
             "playlistImages.update",
