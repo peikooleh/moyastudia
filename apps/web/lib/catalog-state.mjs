@@ -28,6 +28,7 @@ export function mapPlaylistForStudio(playlist) {
     title: playlist?.title || "",
     description: playlist?.description || "",
     thumb: playlist?.thumb || "",
+    thumbnailVariants: playlist?.thumbnailVariants || {},
     publishedAt: playlist?.publishedAt || "",
     privacy: playlist?.privacy || "",
     itemCount: Number.isInteger(playlist?.itemCount) ? playlist.itemCount : null,
