@@ -489,6 +489,23 @@ def list_available_channels(creds: Credentials, recorder: QuotaRecorder | None =
     return channels
 
 
+def _provider_error_diagnostic(exc: Exception) -> dict:
+    response = getattr(exc, "resp", None)
+    status = getattr(response, "status", None)
+    details = getattr(exc, "error_details", None) or []
+    reasons = sorted({
+        str(detail.get("reason"))
+        for detail in details
+        if isinstance(detail, dict) and detail.get("reason")
+    })
+    messages = [
+        str(detail.get("message"))[:500]
+        for detail in details
+        if isinstance(detail, dict) and detail.get("message")
+    ]
+    return {"status": status, "reasons": reasons, "message": messages[0] if messages else ""}
+
+
 def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
     service = service_for(refresh_token)
     out = []
@@ -527,10 +544,13 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
                     if image_snippet.get("type") == "custom" and image_snippet.get("thumbnailUrl"):
                         custom_thumb = image_snippet["thumbnailUrl"]
                         break
-            except Exception:
-                # Fall back to playlists.snippet.thumbnails instead of failing the
-                # complete playlist catalog because one optional image lookup failed.
+            except Exception as exc:
+                # Keep the playlist catalog usable, but expose the exact safe provider
+                # facts so the UI can distinguish unsupported/failed image reads.
+                image_diagnostic = _provider_error_diagnostic(exc)
                 custom_thumb = ""
+            else:
+                image_diagnostic = None
             out.append(
                 {
                     "id": item["id"],
@@ -540,6 +560,7 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
                     "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
+                    "playlistImageDiagnostic": image_diagnostic,
                 }
             )
         next_token = resp.get("nextPageToken")
