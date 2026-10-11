@@ -1,18 +1,48 @@
-# Realtime statistics scheduler (Vercel Hobby)
+# Background synchronization and realtime statistics
 
-Vercel Hobby cron cannot run every five minutes. Instead, GitHub Actions triggers a protected API collector on a best-effort five-minute schedule. Scheduled GitHub Actions run only from the default branch; this workflow is inactive until explicitly released to main.
+MoyaStudia Production runs on Vercel Hobby, so persistent in-process background workers are not used in Production. GitHub Actions calls protected internal API endpoints instead. Local development keeps the in-process realtime collector.
 
-## Release checklist (only after owner's explicit approval)
+## Realtime statistics
 
-1. Generate one long random value locally (for example, Python `secrets.token_urlsafe(48)`). Never commit or paste it in chat.
-2. Set Vercel **Production** environment variable `REALTIME_COLLECTOR_SECRET` to this value, as a sensitive/secret value.
-3. Set GitHub repository Actions secret `REALTIME_COLLECTOR_SECRET` to exactly the same value.
-4. Merge the reviewed development PR into main only after explicit owner authorization. Redeploy Production to load the Vercel environment variable and the API endpoint.
-5. Run the `Realtime statistics collection` workflow manually once using Actions > Run workflow; confirm a successful response and new rows in `realtime_statistics_snapshots`.
-6. Observe scheduled runs and the last snapshot time. GitHub Actions schedule is best-effort and may be delayed or dropped under load, so do not claim exact five-minute sampling.
+The workflow `Realtime statistics collection` calls `POST /api/internal/realtime-collect` on a best-effort five-minute schedule.
 
-The endpoint is `POST /api/internal/realtime-collect` with `Authorization: Bearer <secret>`. It requires no browser session, performs one collector pass, and rejects requests when the secret is unset or wrong. Do not make it public or call it from the browser.
+Authentication uses `Authorization: Bearer <REALTIME_COLLECTOR_SECRET>`. The same secret is configured in Vercel Production and GitHub Actions. The endpoint requires no browser session and must never be exposed from frontend code.
 
-In Production, the in-process background thread is disabled because Vercel serverless functions do not provide persistent process execution. Local development continues to use the background thread.
+Each successful collector pass stores a regular counter snapshot when the previous sample is at least about four minutes old, even when the YouTube view count did not change. This produces a usable time series such as `38680 → 38680 → 38687 → 38692`. Realtime views for a window are derived from differences between adjacent stored counters.
 
-Note: A five-minute sample cadence can estimate changes between snapshots, but cannot reconstruct exact YouTube minute-by-minute view counts. Existing YouTube Analytics data remains authoritative after its reporting delay.
+Opening the Statistics page is not required for collection. The page reads the accumulated snapshots and may also obtain the current YouTube counter. A 60-minute window needs roughly one hour of accumulated history before coverage is complete. GitHub Actions scheduling is best-effort, so individual samples may be delayed or skipped.
+
+These counters are operational estimates from current YouTube Data API values. They do not replace delayed YouTube Analytics data and cannot reconstruct exact minute-by-minute YouTube history.
+
+## YouTube catalog refresh
+
+The workflow `Scheduled YouTube catalog refresh` calls `POST /api/internal/catalog-refresh` every 12 hours (currently at 00:17 and 12:17 UTC, best-effort).
+
+Each request advances every active connected channel by one bounded catalog page. The workflow repeats requests until every channel reports complete or the bounded round limit is reached. This mirrors the browser refresh loop without requiring MoyaStudia to remain open.
+
+The first Production manual validation completed three connected channels successfully in three rounds with `pending: 0` and no channel errors.
+
+The scheduled catalog refresh updates cached YouTube content metadata. The manual refresh/full-reconcile controls remain available for on-demand or diagnostic synchronization.
+
+## Production configuration
+
+Required secret:
+
+- Vercel Production: `REALTIME_COLLECTOR_SECRET`
+- GitHub repository Actions: `REALTIME_COLLECTOR_SECRET`
+
+Both values must be identical. Never commit the value or print it in logs.
+
+In Production, the FastAPI realtime background thread is disabled because Vercel serverless execution is not persistent. GitHub Actions owns scheduled execution. In local development the background realtime collector runs approximately every five minutes.
+
+## Validation
+
+After scheduler-related changes, verify:
+
+1. API and web CI are green on `main`.
+2. Vercel Production deployment is healthy.
+3. A manual `Realtime statistics collection` run succeeds.
+4. A manual `Scheduled YouTube catalog refresh` run reaches `pending: 0` with no errors.
+5. Realtime snapshots accumulate over time even across intervals with no view-count change.
+
+Scheduled workflows run from the default branch, so changes to scheduler behavior are not considered released until explicitly merged into `main`.
