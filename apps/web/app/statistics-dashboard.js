@@ -603,7 +603,7 @@ export function StatisticsDashboard({
           ) : <div className="statistics-chart-empty">{scopeReady && !analyticsLoading ? t(uiLang, analyticsDataUnavailable ? "statisticsAnalyticsDataPendingDetail" : activeKpi === "subscribers" && scope === "playlist" ? "statisticsPlaylistMetricUnavailable" : "statisticsNoAnalyticsData") : ""}</div>}
         </div>
         {chartPoints.length ? <ul className="visually-hidden" aria-label={activeMetric.chartTitle}>{chartPoints.map(({ point }) => <li key={point.date}>{activeMetric.seriesTitle(point)}</li>)}</ul> : null}
-        <p>{t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
+        <p>{analytics?.realtime ? t(uiLang, "statisticsRealtimeNote") : t(uiLang, "statisticsAnalyticsNote", { scope: scopeLabel, period: periodLabel })}</p>
       </section>
 
       <div className="statistics-lower-grid">
