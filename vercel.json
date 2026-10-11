@@ -6,19 +6,7 @@
     },
     "api": {
       "root": "apps/api/",
-      "entrypoint": "app.main:app",
-      "routes": [
-        {
-          "src": "/api/(.*)",
-          "transforms": [
-            {
-              "type": "request.path",
-              "op": "set",
-              "args": "/$1"
-            }
-          ]
-        }
-      ]
+      "entrypoint": "vercel_entry:app"
     }
   },
   "rewrites": [
