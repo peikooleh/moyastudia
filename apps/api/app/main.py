@@ -1,7 +1,6 @@
 import base64
 import json
 import hmac
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 from urllib.parse import urlencode
