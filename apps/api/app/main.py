@@ -266,6 +266,72 @@ def collect_realtime_scheduled(request: Request):
         raise HTTPException(status_code=401, detail={"code": "unauthorized"})
     return {"ok": True, "stored": realtime_stats.collect_once()}
 
+def _run_scheduled_catalog_page(db: Session) -> dict:
+    """Advance every connected channel by one catalog page.
+
+    Keeping each invocation bounded mirrors the browser refresh loop and avoids
+    turning a large channel into one long-lived serverless request.
+    """
+    channels = (
+        db.query(Channel)
+        .join(GoogleConnection, Channel.google_connection_id == GoogleConnection.id)
+        .options(selectinload(Channel.google_connection).selectinload(GoogleConnection.user))
+        .filter(
+            GoogleConnection.is_active.is_(True),
+            GoogleConnection.encrypted_refresh_token != "",
+        )
+        .order_by(Channel.id)
+        .all()
+    )
+    results = []
+    pending = 0
+    errors = []
+    for channel in channels:
+        user = channel.google_connection.user
+        try:
+            sync = _catalog_row(db, channel)
+            if sync is None or sync.state in ("COMPLETE", "EMPTY"):
+                status = start_catalog_sync(
+                    channel.id,
+                    CatalogSyncRequest(mode="incremental"),
+                    user=user,
+                    db=db,
+                )
+            else:
+                status = _catalog_status(db, channel)
+
+            if status["state"] in ("LOADING", "PARTIAL", "STALE", "ERROR"):
+                status = continue_catalog_sync(channel.id, user=user, db=db)
+
+            is_pending = status["state"] in ("LOADING", "PARTIAL", "STALE", "ERROR")
+            pending += int(is_pending)
+            results.append(
+                {
+                    "channel_id": channel.id,
+                    "state": status["state"],
+                    "pending": is_pending,
+                }
+            )
+        except HTTPException as exc:
+            db.rollback()
+            errors.append({"channel_id": channel.id, "status_code": exc.status_code})
+
+    return {"channels": results, "pending": pending, "errors": errors}
+
+
+@app.post("/internal/catalog-refresh")
+def refresh_catalog_scheduled(request: Request, db: Session = Depends(get_db)):
+    """Advance scheduled YouTube catalog refresh without a browser session."""
+    secret = settings.realtime_collector_secret
+    authorization = request.headers.get("authorization", "")
+    if not secret or not hmac.compare_digest(authorization, "Bearer " + secret):
+        raise HTTPException(status_code=401, detail={"code": "unauthorized"})
+    result = _run_scheduled_catalog_page(db)
+    if result["errors"]:
+        raise HTTPException(status_code=502, detail={"code": "catalog_refresh_failed", **result})
+    return {"ok": True, **result}
+
+
 @app.get("/health")
 def health():
     db_ok = False
