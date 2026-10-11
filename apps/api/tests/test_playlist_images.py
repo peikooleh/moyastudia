@@ -14,7 +14,7 @@ class FakeHttp:
 
     def request(self, url, method="GET"):
         self.calls.append((url, method))
-        return SimpleNamespace(status=self.status), json.dumps(self.body).encode("utf-8")
+        return SimpleNamespace(status=self.status, reason="Forbidden" if self.status >= 400 else "OK"), json.dumps(self.body).encode("utf-8")
 
 
 def test_playlist_images_list_uses_documented_playlist_id_filter():
