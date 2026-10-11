@@ -244,7 +244,8 @@ app.add_middleware(
 def on_startup():
     settings.validate_runtime_security()
     database.init_engine()
-    realtime_stats.start_background_collector()
+    if settings.realtime_collector_enabled:
+        realtime_stats.start_background_collector()
 
 
 @app.on_event("shutdown")
