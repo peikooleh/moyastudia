@@ -123,6 +123,7 @@ class Channel(Base):
         back_populates="channel", cascade="all, delete-orphan"
     )
     local_playlists: Mapped[list["LocalPlaylist"]] = relationship(back_populates="channel", cascade="all, delete-orphan")
+    realtime_snapshots: Mapped[list["RealtimeStatisticsSnapshot"]] = relationship(back_populates="channel", cascade="all, delete-orphan")
     catalog_sync: Mapped["ChannelCatalogSync | None"] = relationship(
         back_populates="channel", cascade="all, delete-orphan", uselist=False
     )
@@ -185,6 +186,23 @@ class Video(Base):
     )
 
     channel: Mapped[Channel] = relationship(back_populates="videos")
+
+
+class RealtimeStatisticsSnapshot(Base):
+    __tablename__ = "realtime_statistics_snapshots"
+    __table_args__ = (
+        Index("ix_realtime_stats_channel_scope_captured", "channel_id", "youtube_video_id", "captured_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    youtube_video_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    view_count: Mapped[int] = mapped_column(BigInteger)
+    like_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    comment_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    channel: Mapped[Channel] = relationship(back_populates="realtime_snapshots")
 
 
 class LocalPlaylist(Base):
