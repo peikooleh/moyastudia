@@ -198,6 +198,8 @@ def verified_analytics_channel(refresh_token: str, youtube_channel_id: str) -> d
             return {
                 "youtube_channel_id": youtube_channel_id,
                 "subscriber_count": _optional_int(stats.get("subscriberCount")),
+                "view_count": _optional_int(stats.get("viewCount")),
+                "video_count": _optional_int(stats.get("videoCount")),
                 "hidden_subscribers": bool(stats.get("hiddenSubscriberCount")),
             }
         next_token = response.get("nextPageToken")
