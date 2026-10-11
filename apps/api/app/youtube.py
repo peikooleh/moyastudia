@@ -513,19 +513,24 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
                 continue
-            # Custom playlist covers live in the playlistImages resource. The
-            # playlists snippet thumbnails can keep showing the generated/old cover.
-            custom_images = _execute(
-                service.playlistImages().list(part="snippet", playlistId=item["id"], maxResults=50),
-                "playlistImages.list",
-                recorder,
-            ).get("items") or []
+            # Custom playlist covers live in playlistImages. Treat this as optional:
+            # channels without access/support must still be able to load playlists.
             custom_thumb = ""
-            for image in custom_images:
-                image_snippet = image.get("snippet") or {}
-                if image_snippet.get("type") == "custom" and image_snippet.get("thumbnailUrl"):
-                    custom_thumb = image_snippet["thumbnailUrl"]
-                    break
+            try:
+                custom_images = _execute(
+                    service.playlistImages().list(part="snippet", playlistId=item["id"], maxResults=50),
+                    "playlistImages.list",
+                    recorder,
+                ).get("items") or []
+                for image in custom_images:
+                    image_snippet = image.get("snippet") or {}
+                    if image_snippet.get("type") == "custom" and image_snippet.get("thumbnailUrl"):
+                        custom_thumb = image_snippet["thumbnailUrl"]
+                        break
+            except Exception:
+                # Fall back to playlists.snippet.thumbnails instead of failing the
+                # complete playlist catalog because one optional image lookup failed.
+                custom_thumb = ""
             out.append(
                 {
                     "id": item["id"],
