@@ -204,10 +204,10 @@ export function Shell({ children }) {
   return (
     <div className="shell">
       <header className="top app-top">
-        <Link href="/" className="brand">
+        <a href={path || "/"} className="brand" onClick={(event) => { event.preventDefault(); window.location.reload(); }}>
           <img src="/logo.svg" alt="" className="brand-mark" />
           {t(uiLang, "brand")}
-        </Link>
+        </a>
         <nav className="workspace-nav" aria-label={t(uiLang, "studio")}>
           <button
             type="button"
