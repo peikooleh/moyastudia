@@ -953,21 +953,20 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
       .then(({ remoteRows, localRows }) => {
         if (controller.signal.aborted) return;
         const remoteItems = Array.isArray(remoteRows) ? remoteRows.map(mapPlaylistForStudio) : [];
-        const imageFailure = remoteItems.find((item) => item.playlistImageDiagnostic);
-        if (imageFailure) {
-          const diagnostic = imageFailure.playlistImageDiagnostic;
+        const imageProbe = remoteItems.find((item) => item.playlistImageDiagnostic);
+        if (imageProbe) {
+          const diagnostic = imageProbe.playlistImageDiagnostic;
           const facts = [
             diagnostic.status ? `HTTP ${diagnostic.status}` : "",
             Array.isArray(diagnostic.reasons) ? diagnostic.reasons.join(", ") : "",
             diagnostic.message || "",
+            Number.isInteger(diagnostic.itemCount) ? `items=${diagnostic.itemCount}` : "",
           ].filter(Boolean).join(" · ");
-          console.warn("YouTube playlistImages.list failed", {
-            playlistId: imageFailure.id,
-            status: diagnostic.status || null,
-            reasons: diagnostic.reasons || [],
-            message: diagnostic.message || "",
+          console.warn("YouTube playlistImages.list diagnostic", {
+            playlistId: imageProbe.id,
+            ...diagnostic,
           });
-          setErr(`playlistImages.list: ${facts || "YouTube API error"}`);
+          setErr(`playlistImages.list: ${facts || "YouTube API response unavailable"}`);
         }
         const localItems = Array.isArray(localRows) ? localRows.map((row) => ({
           id: row.id, title: row.title, description: "", thumb: "", publishedAt: "", privacy: "private",
