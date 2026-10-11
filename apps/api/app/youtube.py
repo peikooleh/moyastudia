@@ -563,11 +563,6 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
                     "title": snippet.get("title") or "",
                     "description": snippet.get("description") or "",
                     "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
-                    "thumbnailVariants": {
-                        key: {"url": value.get("url") or "", "width": value.get("width"), "height": value.get("height")}
-                        for key, value in (snippet.get("thumbnails") or {}).items()
-                        if isinstance(value, dict)
-                    },
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
                     "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
