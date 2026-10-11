@@ -764,9 +764,10 @@ def improve_ai_metadata(
                 db.commit()
             except Exception:
                 content_type = None
-        video_format = "short" if content_type == "shorts" else "long" if content_type == "videoOnDemand" else "unknown"
-        if video_format == "unknown":
-            raise HTTPException(409, detail={"code": "youtube_content_type_unavailable"})
+        # Use Shorts-specific prompts only when YouTube explicitly classifies the video as Shorts.
+        # Missing/unknown Analytics classification must not block AI improvement; the regular
+        # video prompt is the safe fallback and we do not persist a guessed content type.
+        video_format = "short" if content_type == "shorts" else "long"
     try:
         value = ai_metadata.improve(connection, payload.entity, payload.field, payload.value, video_format)
     except TokenEncryptionError as exc:
