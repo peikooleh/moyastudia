@@ -22,6 +22,7 @@ from .models import (
     GoogleConnection,
     Identity,
     LocalPlaylist,
+    RealtimeStatisticsSnapshot,
     User,
     UserSession,
     Video,
@@ -2098,6 +2099,118 @@ def channel_analytics_summary(
         if status in {401, 403} or reasons.intersection({"insufficientPermissions", "forbidden"}):
             raise HTTPException(403, detail={"code": "youtube_analytics_permission_required"}) from exc
         raise HTTPException(502, detail={"code": "youtube_analytics_unavailable"}) from exc
+
+
+@app.get("/channels/{channel_id}/analytics/realtime")
+def channel_realtime_statistics(
+    channel_id: int,
+    window: Literal["60m", "48h"] = Query(default="60m"),
+    video_id: int | None = Query(default=None, ge=1),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = _channel_or_404(db, user, channel_id)
+    youtube_video_id = None
+    if video_id is not None:
+        video = db.get(Video, video_id)
+        if video is None or video.channel_id != channel.id or not video.youtube_video_id:
+            raise HTTPException(404, detail={"code": "analytics_video_not_found"})
+        youtube_video_id = video.youtube_video_id
+
+    try:
+        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
+        if youtube_video_id:
+            counters = yt.video_current_statistics(token, youtube_video_id)
+        else:
+            channel_counters = yt.verified_analytics_channel(token, channel.youtube_channel_id)
+            counters = {
+                "views": channel_counters.get("view_count"),
+                "likes": None,
+                "comments": None,
+            }
+        if counters.get("views") is None:
+            raise LookupError("current YouTube view count unavailable")
+
+        now = _utcnow()
+        latest = (
+            db.query(RealtimeStatisticsSnapshot)
+            .filter(
+                RealtimeStatisticsSnapshot.channel_id == channel.id,
+                RealtimeStatisticsSnapshot.youtube_video_id == youtube_video_id,
+            )
+            .order_by(RealtimeStatisticsSnapshot.captured_at.desc())
+            .first()
+        )
+        latest_at = latest.captured_at if latest else None
+        if latest_at is not None and latest_at.tzinfo is None:
+            latest_at = latest_at.replace(tzinfo=timezone.utc)
+        if latest_at is None or now - latest_at >= timedelta(minutes=4):
+            db.add(RealtimeStatisticsSnapshot(
+                channel_id=channel.id,
+                youtube_video_id=youtube_video_id,
+                view_count=int(counters["views"]),
+                like_count=counters.get("likes"),
+                comment_count=counters.get("comments"),
+                captured_at=now,
+            ))
+            db.commit()
+
+        duration = timedelta(minutes=60) if window == "60m" else timedelta(hours=48)
+        cutoff = now - duration
+        rows = (
+            db.query(RealtimeStatisticsSnapshot)
+            .filter(
+                RealtimeStatisticsSnapshot.channel_id == channel.id,
+                RealtimeStatisticsSnapshot.youtube_video_id == youtube_video_id,
+                RealtimeStatisticsSnapshot.captured_at >= cutoff,
+            )
+            .order_by(RealtimeStatisticsSnapshot.captured_at.asc())
+            .all()
+        )
+        if not rows:
+            rows = [latest] if latest else []
+
+        series = []
+        previous = None
+        for row in rows:
+            captured = row.captured_at
+            if captured.tzinfo is None:
+                captured = captured.replace(tzinfo=timezone.utc)
+            if previous is not None:
+                series.append({
+                    "date": captured.isoformat(),
+                    "views": max(0, int(row.view_count) - int(previous.view_count)),
+                })
+            previous = row
+
+        first = rows[0] if rows else None
+        last = rows[-1] if rows else None
+        first_at = first.captured_at if first else None
+        if first_at is not None and first_at.tzinfo is None:
+            first_at = first_at.replace(tzinfo=timezone.utc)
+        covered_seconds = max(0, int((now - first_at).total_seconds())) if first_at else 0
+        views_delta = max(0, int(last.view_count) - int(first.view_count)) if first and last else 0
+        return {
+            "scope": "video" if youtube_video_id else "channel",
+            "window": window,
+            "current_views": int(counters["views"]),
+            "views": views_delta,
+            "current_likes": counters.get("likes"),
+            "current_comments": counters.get("comments"),
+            "coverage_seconds": min(covered_seconds, int(duration.total_seconds())),
+            "coverage_complete": covered_seconds >= int(duration.total_seconds()) - 300,
+            "captured_at": now.isoformat(),
+            "series": series,
+        }
+    except TokenEncryptionError as exc:
+        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
+    except LookupError as exc:
+        raise HTTPException(403, detail={"code": "youtube_analytics_channel_mismatch"}) from exc
+    except Exception as exc:
+        status, reasons = _youtube_error_facts(exc)
+        if status in {401, 403} or reasons.intersection({"insufficientPermissions", "forbidden"}):
+            raise HTTPException(403, detail={"code": "youtube_analytics_permission_required"}) from exc
+        raise HTTPException(502, detail={"code": "youtube_realtime_unavailable"}) from exc
 
 
 @app.get("/channels/{channel_id}/catalog/status")
