@@ -1,5 +1,6 @@
 import io
 import json
+from urllib.parse import urlencode
 
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -512,6 +513,26 @@ def _provider_error_diagnostic(exc: Exception) -> dict:
     }
 
 
+def _playlist_images_list(service, playlist_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
+    """Read the documented playlistId filter without relying on stale discovery metadata.
+
+    Some googleapiclient discovery documents reject playlistId before an HTTP
+    request is made. Use the same authorized HTTP transport as the service.
+    """
+    url = "https://www.googleapis.com/youtube/v3/playlistImages?" + urlencode({
+        "part": "snippet", "playlistId": playlist_id, "maxResults": 50,
+    })
+
+    class _Request:
+        def execute(self):
+            response, body = service._http.request(url, method="GET")
+            if int(response.status) >= 400:
+                raise HttpError(response, body, uri=url)
+            return json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
+
+    return (_execute(_Request(), "playlistImages.list", recorder).get("items") or [])
+
+
 def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaRecorder | None = None) -> list[dict]:
     service = service_for(refresh_token)
     out = []
@@ -536,38 +557,15 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
                 continue
-            # playlistImages is useful for write/update identity, but its resource does
-            # not expose an image URL. Keep the read diagnostic separate from the
-            # playlist thumbnail that playlists.list actually renders.
-            custom_thumb = ""
-            custom_images = []
-            try:
-                custom_images = _execute(
-                    service.playlistImages().list(part="snippet", playlistId=item["id"], maxResults=50),
-                    "playlistImages.list",
-                    recorder,
-                ).get("items") or []
-            except Exception as exc:
-                image_diagnostic = _provider_error_diagnostic(exc)
-            else:
-                image_diagnostic = {
-                    "status": 200,
-                    "reasons": [],
-                    "message": "",
-                    "itemCount": len(custom_images),
-                    "imageIds": [str(image.get("id") or "") for image in custom_images],
-                    "imageSnippets": [image.get("snippet") or {} for image in custom_images],
-                }
             out.append(
                 {
                     "id": item["id"],
                     "title": snippet.get("title") or "",
                     "description": snippet.get("description") or "",
-                    "thumb": custom_thumb or _pick_thumb(snippet.get("thumbnails") or {}),
+                    "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
                     "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
-                    "playlistImageDiagnostic": image_diagnostic,
                 }
             )
         next_token = resp.get("nextPageToken")
@@ -1107,11 +1105,7 @@ def set_playlist_thumbnail(
     service = service_for(refresh_token)
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
-    existing = _execute(
-        service.playlistImages().list(part="snippet", playlistId=playlist_id, maxResults=50),
-        "playlistImages.list",
-        recorder,
-    ).get("items") or []
+    existing = _playlist_images_list(service, playlist_id, recorder)
     body = {"snippet": {"playlistId": playlist_id, "type": "custom"}}
     if existing:
         # YouTube requires the playlistImage resource ID for updates.
