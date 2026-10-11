@@ -530,27 +530,28 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
                 continue
-            # Custom playlist covers live in playlistImages. Treat this as optional:
-            # channels without access/support must still be able to load playlists.
+            # playlistImages is useful for write/update identity, but its resource does
+            # not expose an image URL. Keep the read diagnostic separate from the
+            # playlist thumbnail that playlists.list actually renders.
             custom_thumb = ""
+            custom_images = []
             try:
                 custom_images = _execute(
                     service.playlistImages().list(part="snippet", playlistId=item["id"], maxResults=50),
                     "playlistImages.list",
                     recorder,
                 ).get("items") or []
-                for image in custom_images:
-                    image_snippet = image.get("snippet") or {}
-                    if image_snippet.get("type") == "custom" and image_snippet.get("thumbnailUrl"):
-                        custom_thumb = image_snippet["thumbnailUrl"]
-                        break
             except Exception as exc:
-                # Keep the playlist catalog usable, but expose the exact safe provider
-                # facts so the UI can distinguish unsupported/failed image reads.
                 image_diagnostic = _provider_error_diagnostic(exc)
-                custom_thumb = ""
             else:
-                image_diagnostic = None
+                image_diagnostic = {
+                    "status": 200,
+                    "reasons": [],
+                    "message": "",
+                    "itemCount": len(custom_images),
+                    "imageIds": [str(image.get("id") or "") for image in custom_images],
+                    "imageSnippets": [image.get("snippet") or {} for image in custom_images],
+                }
             out.append(
                 {
                     "id": item["id"],
