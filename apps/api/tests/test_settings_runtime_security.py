@@ -17,7 +17,7 @@ def production_settings(**overrides):
         "ALLOWED_LOGIN_EMAILS": "owner@example.com",
     }
     values.update(overrides)
-    return Settings.model_validate(values)
+    return Settings(_env_file=None, **{key.lower(): value for key, value in values.items()})
 
 
 def test_production_security_accepts_api_prefixed_oauth_callbacks():
