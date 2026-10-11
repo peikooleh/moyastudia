@@ -280,6 +280,13 @@ export function StatisticsDashboard({
   const scopeReady = scope === "channel" || (scope === "video" && videoId) || (scope === "playlist" && playlistId);
 
   useEffect(() => {
+    if (scope === "playlist" && (period === "60m" || period === "48h")) {
+      setPeriod("7");
+      savePrefs({ statisticsPeriod: "7" });
+    }
+  }, [scope, period]);
+
+  useEffect(() => {
     setVideoId("");
     setPlaylistId("");
     setScope("channel");
@@ -393,20 +400,22 @@ export function StatisticsDashboard({
     views: {
       label: t(uiLang, "videoViews"),
       value: analyticsDataUnavailable ? "—" : analytics ? formatNumber(analytics.views, locale) : "—",
-      detail: analyticsDataUnavailable
-        ? analytics?.current_statistics?.views != null && scope === "video"
-          ? t(uiLang, "statisticsCurrentYouTubeViewsPendingAnalytics", { count: formatNumber(analytics.current_statistics.views, locale) })
-          : t(uiLang, "statisticsAnalyticsDataPending")
-        : analytics?.current_statistics?.views != null && scope === "video"
-          ? t(uiLang, "statisticsCurrentYouTubeViews", { count: formatNumber(analytics.current_statistics.views, locale), period: periodLabel })
-          : periodLabel,
+      detail: analytics?.realtime
+        ? `${t(uiLang, "statisticsRealtimeCurrentViews", { count: formatNumber(analytics.current_views, locale) })} · ${analytics.coverage_complete ? periodLabel : t(uiLang, "statisticsRealtimeCollecting")}`
+        : analyticsDataUnavailable
+          ? analytics?.current_statistics?.views != null && scope === "video"
+            ? t(uiLang, "statisticsCurrentYouTubeViewsPendingAnalytics", { count: formatNumber(analytics.current_statistics.views, locale) })
+            : t(uiLang, "statisticsAnalyticsDataPending")
+          : analytics?.current_statistics?.views != null && scope === "video"
+            ? t(uiLang, "statisticsCurrentYouTubeViews", { count: formatNumber(analytics.current_statistics.views, locale), period: periodLabel })
+            : periodLabel,
       seriesValue: (point) => Number(point.views || 0),
       seriesTitle: (point) => `${point.date}: ${formatNumber(point.views, locale)}`,
       chartTitle: t(uiLang, "statisticsViewsOverTime"),
     },
     watchTime: {
       label: t(uiLang, "statisticsWatchTime"),
-      value: analyticsDataUnavailable ? "—" : analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—",
+      value: analytics?.realtime ? "—" : analyticsDataUnavailable ? "—" : analytics ? t(uiLang, "statisticsWatchTimeValue", { count: Math.round(Number(analytics.estimated_minutes_watched || 0) / 60) }) : "—",
       detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : periodLabel,
       seriesValue: (point) => Number(point.estimated_minutes_watched || 0),
       seriesTitle: (point) => `${point.date}: ${t(uiLang, "statisticsWatchTimeValue", { count: (Number(point.estimated_minutes_watched || 0) / 60).toFixed(1) })}`,
@@ -414,7 +423,7 @@ export function StatisticsDashboard({
     },
     averageDuration: {
       label: t(uiLang, "statisticsAverageViewDuration"),
-      value: analyticsDataUnavailable ? "—" : analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—",
+      value: analytics?.realtime ? "—" : analyticsDataUnavailable ? "—" : analytics ? formatDuration(analytics.average_view_duration, uiLang) : "—",
       detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : analytics?.average_view_percentage != null ? t(uiLang, "statisticsAverageViewed", { count: Number(analytics.average_view_percentage).toFixed(1) }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
       seriesValue: (point) => point.average_view_duration == null ? null : Number(point.average_view_duration),
       seriesTitle: (point) => `${point.date}: ${formatDuration(point.average_view_duration, uiLang)}`,
@@ -422,7 +431,7 @@ export function StatisticsDashboard({
     },
     subscribers: {
       label: t(uiLang, scope === "channel" ? "statisticsSubscribersTotal" : "statisticsSubscribersChange"),
-      value: analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : analyticsDataUnavailable ? "—" : formatNullableNumber(netSubscribers, locale)) : "—",
+      value: analytics?.realtime ? "—" : analytics ? (scope === "channel" ? formatNullableNumber(currentSubscriberTotal, locale) : analyticsDataUnavailable ? "—" : formatNullableNumber(netSubscribers, locale)) : "—",
       detail: analyticsDataUnavailable ? t(uiLang, "statisticsAnalyticsDataPending") : analytics && subscriberMetricsAvailable ? t(uiLang, "statisticsSubscribersDetail", { gained: analytics.subscribers_gained, lost: analytics.subscribers_lost }) : analytics && scope === "playlist" ? t(uiLang, "statisticsPlaylistMetricUnavailable") : periodLabel,
       seriesValue: (point) => point.subscribers_gained == null || point.subscribers_lost == null ? null : Number(point.subscribers_gained) - Number(point.subscribers_lost),
       seriesTitle: (point) => `${point.date}: ${Number(point.subscribers_gained || 0) - Number(point.subscribers_lost || 0)} (${t(uiLang, "statisticsSubscribersDetail", { gained: point.subscribers_gained || 0, lost: point.subscribers_lost || 0 })})`,
@@ -495,7 +504,7 @@ export function StatisticsDashboard({
         <label className="statistics-control statistics-period-control">
           <span>{t(uiLang, "statisticsPeriod")}</span>
           <select value={period} onChange={(event) => { const next = event.target.value; setPeriod(next); savePrefs({ statisticsPeriod: next }); }} title={t(uiLang, "statisticsPeriodHint")}>
-            {PERIODS.map((value) => (
+            {PERIODS.filter((value) => scope !== "playlist" || (value !== "60m" && value !== "48h")).map((value) => (
               <option key={value} value={value}>
                 {value === "lifetime" ? t(uiLang, "statisticsPeriodLifetime") : value === "60m" ? t(uiLang, "statisticsPeriod60Minutes") : value === "48h" ? t(uiLang, "statisticsPeriod48Hours") : t(uiLang, "statisticsPeriodShort", { count: value })}
               </option>
