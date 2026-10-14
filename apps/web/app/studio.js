@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/api";
 import {
   catalogVideosUrl,
+  calendarQueueVideosUrl,
   catalogVideoDisplayTitle,
   catalogVideoDetailUrl,
   catalogVideoWorkingUrl,
@@ -620,6 +621,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const channelId = String(prefs.selectedChannelId || "");
   const [videos, setVideos] = useState([]);
   const [calendarVideos, setCalendarVideos] = useState([]);
+  const [calendarQueueSource, setCalendarQueueSource] = useState([]);
   const [playlistState, setPlaylistState] = useState({
     channelId: "",
     items: [],
@@ -805,6 +807,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setSyncBusy(false);
     setCatalogStatus({ state: "NOT_IMPORTED", video_count: 0 });
     setCalendarVideos([]);
+    setCalendarQueueSource([]);
     setCalendarCursor(null);
     setCalendarDrafts({});
     setCalendarSaveStatus("");
@@ -1120,6 +1123,21 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         if (controller.signal.aborted) return;
         setCalendarVideos(items);
         setCalendarCursor(null);
+
+        const queueItems = [];
+        let queueCursor = null;
+        do {
+          const queueResponse = await apiFetch(
+            calendarQueueVideosUrl(channelId, queueCursor),
+            { signal: controller.signal },
+          );
+          const queueData = await queueResponse.json();
+          if (!queueResponse.ok) throw new Error(apiErrorMessage(queueData.detail, t(uiLangRef.current, "studioCalendarLoadError")));
+          if (controller.signal.aborted) return;
+          queueItems.push(...(queueData.items || []));
+          queueCursor = queueData.next_cursor || null;
+        } while (queueCursor);
+        if (!controller.signal.aborted) setCalendarQueueSource(queueItems);
       } catch (error) {
         if (!controller.signal.aborted) setErr(String(error.message || error));
       } finally {
@@ -2116,7 +2134,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const visiblePlaylistItems = playlistPageItems(filteredPlaylistItems, playlistPage, playlistPageSize);
   const hasNextPlaylistPage = Boolean(currentPlaylistContents?.nextPageToken)
     || filteredPlaylistItems.length > (playlistPage + 1) * playlistPageSize;
-  const effectiveCalendarVideos = calendarVideos.map((video) => {
+  const calendarVideoMap = new Map(calendarVideos.map((video) => [video.id, video]));
+  calendarQueueSource.forEach((video) => {
+    if (!calendarVideoMap.has(video.id)) calendarVideoMap.set(video.id, video);
+  });
+  const effectiveCalendarVideos = [...calendarVideoMap.values()].map((video) => {
     const draft = calendarDrafts[video.id];
     if (!draft) return video;
     return {
@@ -2232,7 +2254,13 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.detail?.code || data?.detail || t(uiLang, "calendarSaveError"));
         completed += 1;
-        setCalendarVideos((current) => current.map((video) => video.id === Number(videoId) ? { ...video, ...data } : video));
+        setCalendarVideos((current) => {
+          const withoutSaved = current.filter((video) => video.id !== Number(videoId));
+          return data.slot || data.privacy !== "private" ? [...withoutSaved, data] : withoutSaved;
+        });
+        setCalendarQueueSource((current) => current
+          .map((video) => video.id === Number(videoId) ? { ...video, ...data } : video)
+          .filter((video) => video.privacy === "private" && !video.slot && !video.previouslyPublished));
         setCalendarDrafts((current) => {
           const next = { ...current };
           delete next[videoId];
