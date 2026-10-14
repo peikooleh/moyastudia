@@ -10,6 +10,10 @@ export function catalogVideosUrl(channelId, options = {}) {
   return `/channels/${channelId}/videos?${params.toString()}`;
 }
 
+export function calendarQueueVideosUrl(channelId, cursor = null) {
+  return catalogVideosUrl(channelId, { cursor, filter: "private", sort: "date_desc" });
+}
+
 export function catalogVideoDetailUrl(channelId, videoId) {
   return `/channels/${channelId}/videos/${videoId}`;
 }
