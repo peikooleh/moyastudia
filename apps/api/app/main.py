@@ -2572,7 +2572,10 @@ def continue_catalog_sync(
                     and remote_scheduled_at is None
                 ):
                     video.internal_status = "previously_published"
-                elif remote_visibility in ("public", "unlisted"):
+                elif (
+                    previous_visibility == "private"
+                    and remote_visibility in ("public", "unlisted")
+                ):
                     video.internal_status = "previously_published"
                 for field in (
                     "youtube_title",
