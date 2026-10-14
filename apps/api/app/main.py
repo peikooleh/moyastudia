@@ -1452,7 +1452,7 @@ def _video_catalog_item(video: Video) -> dict:
         "previouslyPublished": bool(
             video.youtube_visibility == "private"
             and scheduled_at is None
-            and published_at is not None
+            and video.internal_status == "previously_published"
         ),
         "duration": video.youtube_duration or "",
         "contentType": video.youtube_content_type or "unknown",
@@ -1928,7 +1928,7 @@ def update_channel_video_calendar_status(
         publish_at is not None
         and video.youtube_visibility == "private"
         and video.youtube_scheduled_at is None
-        and video.youtube_published_at is not None
+        and video.internal_status == "previously_published"
     ):
         raise HTTPException(422, detail={"code": "youtube_previously_published_cannot_schedule"})
     if publish_at is not None:
@@ -1990,6 +1990,8 @@ def update_channel_video_calendar_status(
 
     video.youtube_visibility = remote["privacy"]
     video.youtube_scheduled_at = _parse_youtube_datetime(remote.get("publishAt"))
+    if remote["privacy"] in ("public", "unlisted"):
+        video.internal_status = "previously_published"
     db.commit()
     db.refresh(video)
     return _video_catalog_item(video)
@@ -2561,6 +2563,17 @@ def continue_catalog_sync(
                 video.availability_status = "unavailable"
             else:
                 video.availability_status = "available"
+                previous_visibility = video.youtube_visibility
+                remote_visibility = remote["youtube_visibility"]
+                remote_scheduled_at = _parse_youtube_datetime(remote["youtube_scheduled_at"])
+                if (
+                    previous_visibility in ("public", "unlisted")
+                    and remote_visibility == "private"
+                    and remote_scheduled_at is None
+                ):
+                    video.internal_status = "previously_published"
+                elif remote_visibility in ("public", "unlisted"):
+                    video.internal_status = "previously_published"
                 for field in (
                     "youtube_title",
                     "youtube_description",
@@ -2582,9 +2595,7 @@ def continue_catalog_sync(
                 video.youtube_published_at = _parse_youtube_datetime(
                     remote["youtube_published_at"]
                 )
-                video.youtube_scheduled_at = _parse_youtube_datetime(
-                    remote["youtube_scheduled_at"]
-                )
+                video.youtube_scheduled_at = remote_scheduled_at
             video.last_synced_at = now
             if sync.mode in ("initial", "reconcile"):
                 video.last_seen_generation = sync.generation
