@@ -186,6 +186,7 @@ def test_calendar_rejects_rescheduling_previously_published_private_video(client
     with test_database() as db:
         video = db.get(Video, video_id)
         video.youtube_published_at = main._parse_youtube_datetime("2026-10-07T10:31:00Z")
+        video.internal_status = "previously_published"
         db.commit()
 
     monkeypatch.setattr(
@@ -201,3 +202,49 @@ def test_calendar_rejects_rescheduling_previously_published_private_video(client
 
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "youtube_previously_published_cannot_schedule"
+
+
+def test_fresh_private_upload_with_published_at_can_be_scheduled(client, test_database, monkeypatch):
+    token, channel_id, video_id = _calendar_fixture(test_database)
+    client.cookies.set(settings.session_cookie_name, token)
+    with test_database() as db:
+        video = db.get(Video, video_id)
+        video.youtube_published_at = main._parse_youtube_datetime("2026-10-14T14:42:00Z")
+        video.internal_status = None
+        db.commit()
+
+    monkeypatch.setattr(
+        main.yt,
+        "update_video_calendar_status",
+        lambda *args, **kwargs: {"privacy": "private", "publishAt": "2099-01-02T15:30:00Z"},
+    )
+    response = client.put(
+        f"/channels/{channel_id}/videos/{video_id}/calendar-status",
+        headers={"Origin": settings.frontend_origin},
+        json={"privacy": "private", "publishAt": "2099-01-02T15:30:00Z"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "scheduled"
+
+
+def test_calendar_catalog_item_uses_visibility_history_not_upload_timestamp(test_database):
+    with test_database() as db:
+        fresh = Video(
+            channel_id=1,
+            youtube_video_id="fresh-private",
+            youtube_visibility="private",
+            youtube_published_at=main._parse_youtube_datetime("2026-10-14T14:42:00Z"),
+            availability_status="available",
+        )
+        historical = Video(
+            channel_id=1,
+            youtube_video_id="historical-private",
+            youtube_visibility="private",
+            youtube_published_at=main._parse_youtube_datetime("2026-10-07T10:31:00Z"),
+            availability_status="available",
+            internal_status="previously_published",
+        )
+
+        assert main._video_catalog_item(fresh)["previouslyPublished"] is False
+        assert main._video_catalog_item(historical)["previouslyPublished"] is True

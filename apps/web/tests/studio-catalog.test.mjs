@@ -20,6 +20,7 @@ import {
   catalogVideoDisplayTitle,
   catalogVideosUrl,
   catalogVideoWorkingUrl,
+  calendarQueueVideosUrl,
   continueCatalogSyncPage,
   finishCatalogSync,
   isCurrentCatalogRequest,
@@ -579,4 +580,16 @@ test("calendar week shift crosses month and year boundaries without skipping day
   const range = calendarWindowRange(yearEnd);
   assert.equal(new Date(range.start).getTime(), calendarWeekStart(yearEnd).getTime());
   assert.equal((new Date(range.end).getTime() - new Date(range.start).getTime()) / 86400000, 42);
+});
+
+
+test("calendar queue loads private unscheduled videos independently of visible date range", () => {
+  assert.equal(
+    calendarQueueVideosUrl("17"),
+    "/channels/17/videos?limit=50&sort=date_desc&visibility=private",
+  );
+  assert.equal(
+    calendarQueueVideosUrl("17", "next-token"),
+    "/channels/17/videos?limit=50&sort=date_desc&cursor=next-token&visibility=private",
+  );
 });
