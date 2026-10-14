@@ -528,7 +528,7 @@ function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", wri
   );
 }
 
-function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave, drafts = {}, videos = [], bulkSelected = new Set(), bulkTime = "", bulkPrivacy = "", onBulkToggle = () => {}, onBulkSelectAll = () => {}, onBulkClear = () => {}, onBulkTimeChange = () => {}, onBulkPrivacyChange = () => {}, onBulkApplyTime = () => {}, onBulkApplyPrivacy = () => {} }) {
+function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave, drafts = {}, videos = [], bulkSelected = new Set(), bulkTime = "", onBulkToggle = () => {}, onBulkSelectAll = () => {}, onBulkClear = () => {}, onBulkTimeChange = () => {}, onBulkApplyTime = () => {} }) {
   const [linkStatus, setLinkStatus] = useState("");
   if (!selected) {
     return (
@@ -638,8 +638,6 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
           <div className="calendar-bulk-controls">
             <label><span>{t(uiLang, "calendarTime")}</span><input type="time" value={bulkTime} onChange={(event) => onBulkTimeChange(event.target.value)} /></label>
             <button className="btn ghost" type="button" disabled={!bulkSelected.size || !bulkTime} onClick={onBulkApplyTime}>{t(uiLang, "calendarApplySelected")}</button>
-            <label><span>{t(uiLang, "videoVisibility")}</span><select value={bulkPrivacy} onChange={(event) => onBulkPrivacyChange(event.target.value)}><option value="">{t(uiLang, "calendarMixedStatus")}</option><option value="public">{t(uiLang, "filterPublic")}</option><option value="unlisted">{t(uiLang, "filterUnlisted")}</option><option value="private">{t(uiLang, "filterPrivate")}</option></select></label>
-            <button className="btn ghost" type="button" disabled={!bulkSelected.size || !bulkPrivacy} onClick={onBulkApplyPrivacy}>{t(uiLang, "calendarApplySelected")}</button>
           </div>
         </div>
       ) : null}
@@ -748,7 +746,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [calendarQueueQuery, setCalendarQueueQuery] = useState("");
   const [calendarBulkSelected, setCalendarBulkSelected] = useState(() => new Set());
   const [calendarBulkTime, setCalendarBulkTime] = useState("");
-  const [calendarBulkPrivacy, setCalendarBulkPrivacy] = useState("");
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -2304,24 +2301,6 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCalendarSaveStatus(invalid ? t(uiLang, "calendarFutureOnly") : "");
   }
 
-  function applyCalendarBulkPrivacy() {
-    if (!calendarBulkPrivacy || !calendarBulkSelected.size) return;
-    setCalendarDrafts((current) => {
-      const next = { ...current };
-      calendarBulkSelected.forEach((videoId) => {
-        const draft = next[videoId];
-        if (!draft) return;
-        next[videoId] = {
-          ...draft,
-          privacy: calendarBulkPrivacy,
-          publishAt: calendarBulkPrivacy === "private" ? draft.publishAt : null,
-        };
-      });
-      return next;
-    });
-    setCalendarSaveStatus("");
-  }
-
   function discardCalendarChanges() {
     setCalendarDrafts({});
     setCalendarSaveStatus("");
@@ -3175,14 +3154,11 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               videos={effectiveCalendarVideos}
               bulkSelected={calendarBulkSelected}
               bulkTime={calendarBulkTime}
-              bulkPrivacy={calendarBulkPrivacy}
               onBulkToggle={toggleCalendarBulkSelection}
               onBulkSelectAll={selectAllCalendarDrafts}
               onBulkClear={clearCalendarBulkSelection}
               onBulkTimeChange={setCalendarBulkTime}
-              onBulkPrivacyChange={setCalendarBulkPrivacy}
               onBulkApplyTime={applyCalendarBulkTime}
-              onBulkApplyPrivacy={applyCalendarBulkPrivacy}
             />
           )}
         </main>
