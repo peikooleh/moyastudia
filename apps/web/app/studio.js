@@ -528,7 +528,7 @@ function YoutubeStagedSave({ uiLang, count = 1, saving = false, status = "", wri
   );
 }
 
-function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave }) {
+function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, onDate, onTime, pendingCount, saving, saveStatus, writeMode, onDiscard, onSave, drafts = {}, videos = [], bulkSelected = new Set(), bulkTime = "", bulkPrivacy = "", onBulkToggle = () => {}, onBulkSelectAll = () => {}, onBulkClear = () => {}, onBulkTimeChange = () => {}, onBulkPrivacyChange = () => {}, onBulkApplyTime = () => {}, onBulkApplyPrivacy = () => {} }) {
   const [linkStatus, setLinkStatus] = useState("");
   if (!selected) {
     return (
@@ -610,6 +610,39 @@ function CalendarEventDetails({ uiLang, selected, workingVideo, draft, onStage, 
           </button>
         ) : null}
       </div>
+      {pendingCount ? (
+        <div className="calendar-bulk-editor">
+          <div className="calendar-bulk-head">
+            <strong>{t(uiLang, "calendarPreparedVideos")}</strong>
+            <div>
+              <button className="text-button" type="button" onClick={onBulkSelectAll}>{t(uiLang, "calendarSelectAll")}</button>
+              <button className="text-button" type="button" onClick={onBulkClear}>{t(uiLang, "calendarClearSelection")}</button>
+            </div>
+          </div>
+          <div className="calendar-bulk-list">
+            {Object.keys(drafts).map(Number).map((videoId) => {
+              const video = videos.find((item) => item.id === videoId);
+              const prepared = drafts[videoId];
+              if (!video || !prepared) return null;
+              const date = prepared.publishAt ? new Date(prepared.publishAt) : null;
+              const time = date && !Number.isNaN(date.getTime()) ? `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}` : "—";
+              return (
+                <label key={videoId}>
+                  <input type="checkbox" checked={bulkSelected.has(videoId)} onChange={(event) => onBulkToggle(videoId, event.target.checked)} />
+                  <span>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
+                  <small>{time} · {statusLabel(uiLang, prepared.publishAt ? "scheduled" : prepared.privacy)}</small>
+                </label>
+              );
+            })}
+          </div>
+          <div className="calendar-bulk-controls">
+            <label><span>{t(uiLang, "calendarTime")}</span><input type="time" value={bulkTime} onChange={(event) => onBulkTimeChange(event.target.value)} /></label>
+            <button className="btn ghost" type="button" disabled={!bulkSelected.size || !bulkTime} onClick={onBulkApplyTime}>{t(uiLang, "calendarApplySelected")}</button>
+            <label><span>{t(uiLang, "videoVisibility")}</span><select value={bulkPrivacy} onChange={(event) => onBulkPrivacyChange(event.target.value)}><option value="">{t(uiLang, "calendarMixedStatus")}</option><option value="public">{t(uiLang, "filterPublic")}</option><option value="unlisted">{t(uiLang, "filterUnlisted")}</option><option value="private">{t(uiLang, "filterPrivate")}</option></select></label>
+            <button className="btn ghost" type="button" disabled={!bulkSelected.size || !bulkPrivacy} onClick={onBulkApplyPrivacy}>{t(uiLang, "calendarApplySelected")}</button>
+          </div>
+        </div>
+      ) : null}
       {pendingCount ? <YoutubeStagedSave uiLang={uiLang} count={pendingCount} saving={saving} status={saveStatus} writeMode={writeMode} onDiscard={onDiscard} onSave={onSave} /> : saveStatus ? <p className="calendar-save-status">{saveStatus}</p> : null}
       {workingVideo?.conflict ? <p className="calendar-conflict">{t(uiLang, "workingConflict")}</p> : null}
     </aside>
@@ -713,6 +746,9 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
   const [calendarContext, setCalendarContext] = useState(null);
   const [calendarQueueOpen, setCalendarQueueOpen] = useState(false);
   const [calendarQueueQuery, setCalendarQueueQuery] = useState("");
+  const [calendarBulkSelected, setCalendarBulkSelected] = useState(() => new Set());
+  const [calendarBulkTime, setCalendarBulkTime] = useState("");
+  const [calendarBulkPrivacy, setCalendarBulkPrivacy] = useState("");
   const syncBusyRef = useRef(false);
   const channelRequestId = useRef(0);
   const catalogRequestId = useRef(0);
@@ -810,6 +846,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     setCalendarQueueSource([]);
     setCalendarCursor(null);
     setCalendarDrafts({});
+    setCalendarBulkSelected(new Set());
     setCalendarSaveStatus("");
     setCalendarContext(null);
     setLoadingCalendar(false);
@@ -2228,6 +2265,63 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
     stageCalendarChange(video, { privacy: "private", publishAt: date.toISOString() });
   }
 
+  function toggleCalendarBulkSelection(videoId, checked) {
+    setCalendarBulkSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(Number(videoId));
+      else next.delete(Number(videoId));
+      return next;
+    });
+  }
+
+  function selectAllCalendarDrafts() {
+    setCalendarBulkSelected(new Set(Object.keys(calendarDrafts).map(Number)));
+  }
+
+  function clearCalendarBulkSelection() {
+    setCalendarBulkSelected(new Set());
+  }
+
+  function applyCalendarBulkTime() {
+    if (!calendarBulkTime || !calendarBulkSelected.size) return;
+    const [hours, minutes] = calendarBulkTime.split(":").map(Number);
+    let invalid = false;
+    setCalendarDrafts((current) => {
+      const next = { ...current };
+      calendarBulkSelected.forEach((videoId) => {
+        const draft = next[videoId];
+        if (!draft?.publishAt) return;
+        const date = new Date(draft.publishAt);
+        date.setHours(hours, minutes, 0, 0);
+        if (date.getTime() <= Date.now()) {
+          invalid = true;
+          return;
+        }
+        next[videoId] = { ...draft, privacy: "private", publishAt: date.toISOString() };
+      });
+      return next;
+    });
+    setCalendarSaveStatus(invalid ? t(uiLang, "calendarFutureOnly") : "");
+  }
+
+  function applyCalendarBulkPrivacy() {
+    if (!calendarBulkPrivacy || !calendarBulkSelected.size) return;
+    setCalendarDrafts((current) => {
+      const next = { ...current };
+      calendarBulkSelected.forEach((videoId) => {
+        const draft = next[videoId];
+        if (!draft) return;
+        next[videoId] = {
+          ...draft,
+          privacy: calendarBulkPrivacy,
+          publishAt: calendarBulkPrivacy === "private" ? draft.publishAt : null,
+        };
+      });
+      return next;
+    });
+    setCalendarSaveStatus("");
+  }
+
   function discardCalendarChanges() {
     setCalendarDrafts({});
     setCalendarSaveStatus("");
@@ -2960,7 +3054,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
                           setCalendarContext(null);
                         }}
                       >
-                        <span className="cal-event-title">{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
+                        <span className="cal-event-title">{video.slot ? <small className="cal-event-time">{new Date(video.slot).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small> : null}{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</span>
                         <span className="calendar-hover-card" aria-hidden="true">
                           {video.thumb ? <img src={video.thumb} alt="" /> : null}
                           <strong>{catalogVideoDisplayTitle(video) || t(uiLang, "untitledVideo")}</strong>
@@ -3077,6 +3171,18 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
               writeMode={writeMode}
               onDiscard={discardCalendarChanges}
               onSave={saveCalendarChanges}
+              drafts={calendarDrafts}
+              videos={effectiveCalendarVideos}
+              bulkSelected={calendarBulkSelected}
+              bulkTime={calendarBulkTime}
+              bulkPrivacy={calendarBulkPrivacy}
+              onBulkToggle={toggleCalendarBulkSelection}
+              onBulkSelectAll={selectAllCalendarDrafts}
+              onBulkClear={clearCalendarBulkSelection}
+              onBulkTimeChange={setCalendarBulkTime}
+              onBulkPrivacyChange={setCalendarBulkPrivacy}
+              onBulkApplyTime={applyCalendarBulkTime}
+              onBulkApplyPrivacy={applyCalendarBulkPrivacy}
             />
           )}
         </main>
