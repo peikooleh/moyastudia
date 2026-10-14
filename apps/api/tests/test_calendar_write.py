@@ -186,6 +186,7 @@ def test_calendar_rejects_rescheduling_previously_published_private_video(client
     with test_database() as db:
         video = db.get(Video, video_id)
         video.youtube_published_at = main._parse_youtube_datetime("2026-10-07T10:31:00Z")
+        video.internal_status = "previously_published"
         db.commit()
 
     monkeypatch.setattr(
