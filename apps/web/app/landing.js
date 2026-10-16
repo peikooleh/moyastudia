@@ -175,6 +175,7 @@ function DemoWorkspace({ uiLang }) {
           <span>{t(uiLang, "statistics")}</span>
         </nav>
         <aside className="demo-video-list">
+          <div className="demo-sync-mini"><b>{t(uiLang, "landDemoSynced")}</b><span>36</span></div>
           <div className="demo-pane-title">{t(uiLang, "videos")} <span>24</span></div>
           <div className="demo-search">{t(uiLang, "searchVideos")}</div>
           {DEMO.videos.map((video, i) => (
@@ -187,7 +188,7 @@ function DemoWorkspace({ uiLang }) {
         <section className="demo-video-editor">
           <div className="demo-video-head">
             <DemoThumb code="KYOTO" variant="sunset" large />
-            <div className="demo-video-summary"><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
+            <div className="demo-video-summary"><h3>{t(uiLang, "landDemoVideo1")}</h3><div className="demo-video-facts"><span><b>{t(uiLang, "landDemoStatusLabel")}</b>{t(uiLang, "filterScheduled")}</span><span><b>{t(uiLang, "landDemoPublishedLabel")}</b>18.10.2026 · 17:00</span><span><b>{t(uiLang, "landDemoDurationLabel")}</b>12:34</span></div><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
           </div>
           <div className="demo-editor-cols">
             <div>
