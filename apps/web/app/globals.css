@@ -4583,3 +4583,48 @@ html { scroll-behavior:smooth; }
 @media(max-width:600px){
  .land-back-top{right:14px;bottom:14px;width:40px;height:40px}
 }
+
+
+/* Full-page landing refinement */
+.land-hero-copy h1{font-size:clamp(44px,3.35vw,58px);max-width:590px}
+.land-lead{font-size:17px}
+.land-v2 main>.land-section{padding-top:46px;padding-bottom:46px}
+#features.land-section{border-top:0;padding-top:46px}
+.land-feature-grid-render{grid-template-columns:repeat(3,1fr)}
+.land-feature-grid-render .land-feature-card{min-height:150px}
+.land-product{align-items:center;gap:54px;background:color-mix(in srgb,var(--panel) 62%,var(--bg));max-width:none;padding-left:max(34px,calc((100vw - 1220px)/2));padding-right:max(34px,calc((100vw - 1220px)/2))}
+.land-product-copy p,.land-security-v2>div>p,.land-ai-section>div>p{font-size:14px;line-height:1.55}
+.land-calendar-demo{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 22px 55px rgba(20,45,28,.10)}
+.demo-calendar-head{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.demo-calendar-head b{font-size:15px}.demo-calendar-head span{font-size:12px}.demo-calendar-head button{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:7px 12px}
+.demo-calendar-week,.demo-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.demo-calendar-week span{padding:8px;text-align:center;font-size:9px;color:var(--muted);border-bottom:1px solid var(--line)}
+.demo-calendar-grid>div{position:relative;min-height:72px;padding:7px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.demo-calendar-grid>div:nth-child(7n){border-right:0}.demo-calendar-grid small{font-size:8px;color:var(--muted)}
+.demo-calendar-grid span{display:block;margin-top:8px;padding:5px 6px;border-left:2px solid var(--accent);border-radius:3px;background:var(--bg-hover);font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.demo-calendar-grid span b{font-weight:700}
+.land-ai-section{align-items:center;background:var(--bg)}
+.land-ai-side{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(300px,1fr);gap:28px;align-items:center}
+.land-ai-demo{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 14px 38px rgba(20,45,28,.07)}
+.land-ai-demo-head{display:flex;gap:10px;align-items:center;margin-bottom:14px}.land-ai-demo-head>span{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:var(--accent);color:white;font-weight:700}.land-ai-demo-head b{font-size:12px}
+.land-ai-demo label{display:block;margin:9px 0}.land-ai-demo label>span{display:block;margin-bottom:4px;font-size:9px;color:var(--muted)}.land-ai-demo label>div{display:flex;justify-content:space-between;padding:9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-size:10px}
+.land-ai-demo button{width:100%;margin-top:4px;padding:9px;border:1px solid var(--accent);border-radius:7px;background:var(--bg);color:var(--accent);font-weight:700}.land-ai-demo>small{display:block;margin-top:10px;font-size:8px;line-height:1.4;color:var(--muted)}
+#workflow.land-section{padding-top:40px;padding-bottom:40px}
+.land-steps article{padding-top:18px;padding-bottom:18px}.land-steps p{font-size:12px;line-height:1.5}
+.land-security-v2{padding-top:44px!important;padding-bottom:44px!important;background:color-mix(in srgb,var(--panel) 62%,var(--bg));max-width:none;padding-left:max(34px,calc((100vw - 1220px)/2));padding-right:max(34px,calc((100vw - 1220px)/2))}
+.land-security-list p{font-size:12px;line-height:1.45}
+.land-final{max-width:1040px;padding:40px 32px;margin-top:34px;margin-bottom:34px}
+.land-final h2{font-size:34px;max-width:760px;margin-inline:auto}.land-final p{font-size:13px}
+.land-back-top{right:24px;bottom:24px}
+@media(max-width:1000px){
+ .land-feature-grid-render{grid-template-columns:repeat(2,1fr)}
+ .land-ai-side{grid-template-columns:1fr}
+ .land-product,.land-security-v2{padding-left:24px;padding-right:24px}
+}
+@media(max-width:600px){
+ .land-feature-grid-render{grid-template-columns:1fr}
+ .land-v2 main>.land-section{padding-top:36px;padding-bottom:36px}
+ .land-product,.land-security-v2{padding-left:16px;padding-right:16px}
+ .demo-calendar-grid>div{min-height:54px;padding:4px}.demo-calendar-grid span{font-size:7px;padding:4px}
+ .land-final{margin:24px 16px;padding:30px 18px}.land-final h2{font-size:28px}
+}
