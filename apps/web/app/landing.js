@@ -146,19 +146,12 @@ export function Landing({ authError = "" }) {
 
 const DEMO = {
   videos: [
-    { code: "ALPS", time: "17:00", views: "128 740", variant: "alps" },
-    { code: "CITY", time: "16:30", views: "64 320", variant: "city" },
-    { code: "48H", time: "14:20", views: "95 680", variant: "lake" },
-    { code: "ROAD", time: "12:00", views: "42 190", variant: "road" },
-    { code: "FALLS", time: "11:15", views: "38 450", variant: "falls" },
-    { code: "SUN", time: "10:00", views: "71 230", variant: "sunset" },
-  ],
-  bars: [28,38,31,52,44,67,61,76,58,82,71,91],
-  calendar: [
-    ["", "17:00", "", "09:00", "", "18:30", ""],
-    ["12:00", "", "17:00", "", "09:00", "", "18:30"],
-    ["", "09:00", "", "17:00", "", "12:00", ""],
-    ["18:30", "", "09:00", "", "17:00", "", ""],
+    { code: "KYOTO", time: "17:00", views: "86 420", variant: "sunset" },
+    { code: "TOKYO", time: "16:30", views: "51 880", variant: "city" },
+    { code: "FUJI", time: "14:20", views: "74 160", variant: "alps" },
+    { code: "SEOUL", time: "12:00", views: "39 740", variant: "road" },
+    { code: "BALI", time: "11:15", views: "32 610", variant: "falls" },
+    { code: "ROME", time: "10:00", views: "68 930", variant: "lake" },
   ],
 };
 
@@ -166,16 +159,9 @@ function DemoWorkspace({ uiLang }) {
   return (
     <div className="land-demo-frame land-real-demo" aria-label={t(uiLang, "landDemoLabel")}>
       <DemoChrome uiLang={uiLang} active="videos" />
-      <div className="demo-app-grid">
-        <nav className="demo-side-nav" aria-hidden="true">
-          <b>M</b>
-          <span className="active">{t(uiLang, "videos")}</span>
-          <span>{t(uiLang, "playlists")}</span>
-          <span>{t(uiLang, "calendar")}</span>
-          <span>{t(uiLang, "statistics")}</span>
-        </nav>
+      <div className="demo-real-video-page">
         <aside className="demo-video-list">
-          <div className="demo-pane-title">{t(uiLang, "videos")} <span>24</span></div>
+          <div className="demo-pane-title">{t(uiLang, "videos")} <span>36</span></div>
           <div className="demo-search">{t(uiLang, "searchVideos")}</div>
           {DEMO.videos.map((video, i) => (
             <div className={`demo-list-video ${i === 0 ? "active" : ""}`} key={video.code}>
@@ -184,26 +170,25 @@ function DemoWorkspace({ uiLang }) {
             </div>
           ))}
         </aside>
-        <section className="demo-video-editor">
-          <div className="demo-video-head">
-            <DemoThumb code="ALPS" variant="alps" large />
-            <div className="demo-video-summary"><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
+        <section className="demo-real-video-editor">
+          <div className="demo-real-video-head">
+            <DemoThumb code="KYOTO" variant="sunset" large />
+            <div><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
+            <div className="demo-real-player"><DemoThumb code="KYOTO" variant="sunset" large /><span>▶</span></div>
           </div>
-          <div className="demo-editor-cols">
+          <div className="demo-real-divider" />
+          <div className="demo-real-editor-body">
             <div>
               <DemoField label={t(uiLang, "title")} value={t(uiLang, "landDemoVideo1")} />
               <DemoField label={t(uiLang, "description")} value={t(uiLang, "landDemoDescription")} tall />
-              <div className="demo-field"><span>{t(uiLang, "tags")}</span><div className="demo-tag-row"><i>travel ×</i><i>Alps ×</i><i>Switzerland ×</i><i>weekend ×</i></div></div>
+              <DemoField label={t(uiLang, "tags")} value="travel, city guide, weekend, food, architecture" />
             </div>
             <div className="demo-settings">
               <DemoField label={t(uiLang, "videoLanguage")} value={t(uiLang, "landDemoLanguage")} />
               <DemoField label={t(uiLang, "videoCategory")} value={t(uiLang, "landDemoTravelCategory")} />
               <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterScheduled")} />
-              <DemoField label={t(uiLang, "landDemoDateTime")} value="18.10.2026 · 17:00" />
-              <button type="button">✦ {t(uiLang, "landDemoImproveAi")}</button>
             </div>
           </div>
-          <div className="demo-editor-actions"><button type="button">{t(uiLang, "cancel")}</button><button type="button" className="primary">{t(uiLang, "save")}</button></div>
         </section>
       </div>
     </div>
@@ -211,28 +196,19 @@ function DemoWorkspace({ uiLang }) {
 }
 
 function DemoCalendar({ uiLang }) {
-  const entries = {
-    2:["17:00","ALPS"],4:["12:00","CITY"],7:["09:00","48H"],9:["17:00","ROAD"],
-    11:["12:00","FALLS"],14:["17:00","SUN"],16:["09:00","ALPS"],18:["17:00","CITY"],
-    21:["09:00","48H"],23:["17:00","ROAD"],25:["12:00","FALLS"]
-  };
+  const entries = {2:["17:00","KYOTO"],4:["12:00","TOKYO"],7:["09:00","FUJI"],9:["17:00","SEOUL"],11:["12:00","BALI"],14:["17:00","ROME"],16:["09:00","KYOTO"],18:["17:00","TOKYO"],21:["09:00","FUJI"],23:["17:00","SEOUL"],25:["12:00","BALI"]};
   return <div className="land-calendar-demo land-real-demo" aria-label={t(uiLang, "calendar")}>
     <DemoChrome uiLang={uiLang} active="calendar" compact />
+    <div className="demo-calendar-toolbar"><b>{t(uiLang,"calendar")}</b><span>‹</span><strong>{t(uiLang,"landDemoOctober")} 2026</strong><span>›</span><button type="button">{t(uiLang,"today")}</button></div>
     <div className="demo-calendar-workspace">
       <div className="demo-calendar-main">
-        <div className="demo-calendar-head"><b>{t(uiLang, "calendar")}</b><span>{t(uiLang,"landDemoOctober")} 2026</span><button type="button">{t(uiLang, "today")}</button></div>
         <div className="demo-calendar-week">{["1","2","3","4","5","6","7"].map((d,i)=><span key={i}>{t(uiLang,`weekdayShort${d}`)}</span>)}</div>
-        <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{
-          const item=entries[i];
-          return <div className={i===16?"selected":""} key={i}><small>{i+1}</small>{item?<span><b>{item[0]}</b> {item[1]}</span>:null}</div>
-        })}</div>
+        <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{const item=entries[i];return <div className={i===16?"selected":""} key={i}><small>{i+1}</small>{item?<span><b>{item[0]}</b> {item[1]}</span>:null}</div>})}</div>
       </div>
       <aside className="demo-calendar-inspector">
-        <DemoThumb code="ALPS" variant="alps" />
-        <b>{t(uiLang,"landDemoVideo1")}</b>
-        <small>{t(uiLang,"landDemoScheduled")}</small>
-        <DemoField label={t(uiLang,"landDemoDate")} value="17.10.2026" />
-        <DemoField label={t(uiLang,"landDemoTime")} value="09:00" />
+        <DemoThumb code="KYOTO" variant="sunset" />
+        <b>{t(uiLang,"landDemoVideo1")}</b><small>{t(uiLang,"landDemoScheduled")}</small>
+        <DemoField label={t(uiLang,"landDemoDate")} value="17.10.2026" /><DemoField label={t(uiLang,"landDemoTime")} value="09:00" />
         <button type="button">{t(uiLang,"landDemoScheduled")}</button>
       </aside>
     </div>
@@ -253,7 +229,7 @@ function DemoAiControl({ uiLang }) {
 }
 
 function DemoChrome({ uiLang, active, compact = false }) {
-  return <><div className="land-demo-bar"><span className="demo-back">‹</span><span>Atlas Studio</span><span className="demo-chevron">⌄</span><b>{t(uiLang, "landDemoBadge")}</b><i className="demo-avatar">A</i></div><div className={`land-demo-nav ${compact ? "compact" : ""}`}><b>M</b>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}</div></>;
+  return <><div className="demo-real-top"><b className="demo-real-logo">M</b><strong>Atlas Studio</strong>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}<i /> <small>{t(uiLang,"landDemoBadge")}</small></div><div className="demo-real-sync"><b>{t(uiLang,"landDemoData")}</b><span>36</span><i />18.10.2026 · 16:35</div></>;
 }
 
 function DemoThumb({ code, variant = "alps", large = false }) {
