@@ -132,10 +132,12 @@ export function Landing({ authError = "" }) {
 
 const DEMO = {
   videos: [
-    { code: "B1", time: "17:00", views: "4 821" },
-    { code: "A2", time: "09:00", views: "3 406" },
-    { code: "SHORTS", time: "18:30", views: "7 918" },
-    { code: "GRAMMATIK", time: "12:00", views: "2 597" },
+    { code: "B1", time: "17:00", views: "18 742", variant: "berlin" },
+    { code: "A2", time: "16:30", views: "12 486", variant: "sky" },
+    { code: "SHORTS", time: "12:00", views: "54 320", variant: "shorts" },
+    { code: "GRAM", time: "15:45", views: "8 912", variant: "grammar" },
+    { code: "A1–A2", time: "14:20", views: "22 481", variant: "flag" },
+    { code: "B1", time: "11:10", views: "6 903", variant: "study" },
   ],
   bars: [28,38,31,52,44,67,61,76,58,82,71,91],
   calendar: [
@@ -151,20 +153,27 @@ function DemoWorkspace({ uiLang }) {
     <div className="land-demo-frame land-real-demo" aria-label={t(uiLang, "landDemoLabel")}>
       <DemoChrome uiLang={uiLang} active="videos" />
       <div className="demo-app-grid">
+        <nav className="demo-side-nav" aria-hidden="true">
+          <b>M</b>
+          <span className="active">{t(uiLang, "videos")}</span>
+          <span>{t(uiLang, "playlists")}</span>
+          <span>{t(uiLang, "calendar")}</span>
+          <span>{t(uiLang, "statistics")}</span>
+        </nav>
         <aside className="demo-video-list">
           <div className="demo-pane-title">{t(uiLang, "videos")} <span>24</span></div>
           <div className="demo-search">{t(uiLang, "searchVideos")}</div>
           {DEMO.videos.map((video, i) => (
             <div className={`demo-list-video ${i === 0 ? "active" : ""}`} key={video.code}>
-              <DemoThumb code={video.code} />
+              <DemoThumb code={video.code} variant={video.variant} />
               <div><b>{t(uiLang, `landDemoVideo${i + 1}`)}</b><small>{i === 0 ? t(uiLang, "filterScheduled") : t(uiLang, "filterPublic")} · {video.views}</small></div>
             </div>
           ))}
         </aside>
         <section className="demo-video-editor">
           <div className="demo-video-head">
-            <DemoThumb code="B1" large />
-            <div><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p></div>
+            <DemoThumb code="B1" variant="berlin" large />
+            <div className="demo-video-summary"><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
           </div>
           <div className="demo-editor-cols">
             <div>
@@ -175,7 +184,8 @@ function DemoWorkspace({ uiLang }) {
             <div className="demo-settings">
               <DemoField label={t(uiLang, "videoLanguage")} value="Deutsch" />
               <DemoField label={t(uiLang, "videoCategory")} value={t(uiLang, "landDemoEducation")} />
-              <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterPrivate")} />
+              <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterScheduled")} />
+              <DemoField label={t(uiLang, "landDemoDateTime")} value="18.10.2026 · 17:00" />
               <button type="button">{t(uiLang, "landDemoImproveAi")}</button>
             </div>
           </div>
@@ -200,8 +210,11 @@ function DemoChrome({ uiLang, active, compact = false }) {
   return <><div className="land-demo-bar"><i /><i /><i /><span>Deutsch Studio</span><b>{t(uiLang, "landDemoBadge")}</b></div><div className={`land-demo-nav ${compact ? "compact" : ""}`}><b>M</b>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}</div></>;
 }
 
-function DemoThumb({ code, large = false }) {
-  return <div className={`demo-thumb ${large ? "large" : ""}`}><small>DEUTSCH</small><strong>{code}</strong><span>MOYASTUDIA DEMO</span></div>;
+function DemoThumb({ code, variant = "berlin", large = false }) {
+  return <div className={`demo-thumb demo-thumb-${variant} ${large ? "large" : ""}`}>
+    <span className="demo-thumb-scene" aria-hidden="true"><i /><i /><i /></span>
+    <span className="demo-thumb-copy"><small>DEUTSCH</small><strong>{code}</strong><b>{variant === "shorts" ? "5 WÖRTER" : variant === "grammar" ? "WORTSTELLUNG" : "WORTSCHATZ"}</b></span>
+  </div>;
 }
 
 function DemoField({ label, value, tall = false }) {
