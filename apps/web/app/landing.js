@@ -36,7 +36,7 @@ export function Landing({ authError = "" }) {
         <section className="land-hero-v2">
           <div className="land-hero-copy">
             <span className="land-eyebrow">{t(uiLang, "landEyebrow")}</span>
-            <h1>{t(uiLang, "landTitleV2")}</h1>
+            <h1>{t(uiLang, "landHeroTitleLine1")}<br />{t(uiLang, "landHeroTitleLine2")}<br /><em>{t(uiLang, "landHeroTitleAccent")}</em></h1>
             <p className="land-lead">{t(uiLang, "landLeadV2")}</p>
             <p className="land-ai-note">{t(uiLang, "landAiNote")}</p>
             {authError ? <p className="selection-error" role="alert">{t(uiLang, authError)}</p> : null}
@@ -55,10 +55,11 @@ export function Landing({ authError = "" }) {
             <h2>{t(uiLang, "landFeaturesTitle")}</h2>
             <p>{t(uiLang, "landFeaturesLead")}</p>
           </div>
-          <div className="land-feature-grid">
-            {FEATURES.map(([title, text, number]) => (
+          <div className="land-feature-grid land-feature-grid-render">
+            {FEATURES.slice(0,4).map(([title, text, number], index) => (
               <article className="land-feature-card" key={title}>
                 <span>{number}</span>
+                <i aria-hidden="true">{["▣","☷","□","▥"][index]}</i>
                 <h3>{t(uiLang, title)}</h3>
                 <p>{t(uiLang, text)}</p>
               </article>
@@ -207,7 +208,7 @@ function DemoStatistics({ uiLang }) {
 }
 
 function DemoChrome({ uiLang, active, compact = false }) {
-  return <><div className="land-demo-bar"><i /><i /><i /><span>Deutsch Studio</span><b>{t(uiLang, "landDemoBadge")}</b></div><div className={`land-demo-nav ${compact ? "compact" : ""}`}><b>M</b>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}</div></>;
+  return <><div className="land-demo-bar"><span className="demo-back">‹</span><span>Atlas Studio</span><span className="demo-chevron">⌄</span><b>{t(uiLang, "landDemoBadge")}</b><i className="demo-avatar">A</i></div><div className={`land-demo-nav ${compact ? "compact" : ""}`}><b>M</b>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}</div></>;
 }
 
 function DemoThumb({ code, variant = "berlin", large = false }) {
