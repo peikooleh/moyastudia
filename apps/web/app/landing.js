@@ -106,7 +106,11 @@ export function Landing({ authError = "" }) {
             <h2>{t(uiLang, "landHowTitle")}</h2>
           </div>
           <div className="land-steps">
-            {[1,2,3].map((step) => <article key={step}><span>0{step}</span><h3>{t(uiLang, `landStep${step}Title`)}</h3><p>{t(uiLang, `landStep${step}Text`)}</p></article>)}
+            {[1,2,3].map((step) => <article key={step}>
+              <div className="land-step-top"><span>0{step}</span><span className="land-step-icon" aria-hidden="true">{step === 1 ? "G" : step === 2 ? "▶" : "✓"}</span></div>
+              <h3>{t(uiLang, `landStep${step}Title`)}</h3>
+              <p>{t(uiLang, `landStep${step}Text`)}</p>
+            </article>)}
           </div>
         </section>
 
