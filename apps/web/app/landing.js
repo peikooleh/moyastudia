@@ -123,6 +123,8 @@ export function Landing({ authError = "" }) {
         </section>
       </main>
 
+      <a className="land-back-top" href="#top" aria-label={t(uiLang, "landBackTop")} title={t(uiLang, "landBackTop")}>↑</a>
+
       <footer className="app-footer land-footer">
         <span>© {new Date().getFullYear()} {t(uiLang, "brand")} · {t(uiLang, "landIndependent")}</span>
         <nav aria-label={t(uiLang, "legalLinks")}><a href="/privacy">{t(uiLang, "privacy")}</a><a href="/terms">{t(uiLang, "terms")}</a></nav>
