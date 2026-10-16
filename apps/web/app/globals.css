@@ -4757,3 +4757,11 @@ html { scroll-behavior:smooth; }
  .demo-calendar-main{border-right:0}
  .demo-calendar-inspector{display:none}
 }
+
+
+/* AI provider showcase */
+.land-ai-demo{padding:16px}
+.land-ai-providers{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 12px}
+.land-ai-providers span{padding:4px 7px;border:1px solid var(--line);border-radius:999px;background:var(--bg);font-size:7px;font-weight:700;color:var(--text)}
+.land-ai-demo label{margin-top:8px}
+.land-ai-demo>small{display:block;margin-top:10px;line-height:1.4}
