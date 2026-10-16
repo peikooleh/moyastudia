@@ -4287,3 +4287,36 @@ body {
   .land-ai-section h2,
   .land-security-v2 h2 { font-size: 29px; }
 }
+
+
+/* Product-faithful synthetic demo surfaces used only by the public landing. */
+.land-real-demo { color: var(--text); }
+.land-real-demo .land-demo-nav { padding-inline: 12px; }
+.demo-app-grid { display:grid;grid-template-columns:190px minmax(0,1fr);min-height:390px;background:var(--bg) }
+.demo-video-list { border-right:1px solid var(--line);padding:14px 10px;background:var(--panel) }
+.demo-pane-title { display:flex;justify-content:space-between;align-items:center;padding:0 5px 10px;font-size:14px;font-weight:700 }
+.demo-pane-title span { color:var(--muted);font-size:10px;font-weight:500 }
+.demo-search { margin-bottom:9px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:9px;background:var(--bg) }
+.demo-list-video { display:grid;grid-template-columns:56px 1fr;gap:8px;padding:7px 5px;border-left:2px solid transparent;border-radius:4px }
+.demo-list-video.active { border-left-color:var(--accent);background:var(--bg-hover) }
+.demo-list-video b { display:-webkit-box;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:9px;line-height:1.25 }
+.demo-list-video small { display:block;margin-top:5px;color:var(--muted);font-size:7px }
+.demo-thumb { aspect-ratio:16/9;padding:5px;display:flex;flex-direction:column;justify-content:center;border:1px solid var(--line);background:linear-gradient(125deg,var(--panel),color-mix(in srgb,var(--accent) 11%,var(--bg-hover)));overflow:hidden }
+.demo-thumb small { font-size:5px;font-weight:700 }.demo-thumb strong { color:var(--accent);font-size:17px;line-height:.95 }.demo-thumb span { margin-top:2px;font-size:4px;color:var(--muted) }
+.demo-thumb.large { width:150px;padding:10px }.demo-thumb.large small{font-size:7px}.demo-thumb.large strong{font-size:32px}.demo-thumb.large span{font-size:6px}
+.demo-video-editor { padding:18px;background:var(--bg) }
+.demo-video-head { display:flex;gap:14px;align-items:flex-start;padding-bottom:15px;border-bottom:1px solid var(--line) }
+.demo-video-head h3 { margin:2px 0 7px;font-size:15px;line-height:1.25 }.demo-video-head p{margin:0;color:var(--muted);font-size:9px}
+.demo-editor-cols { display:grid;grid-template-columns:minmax(0,1.5fr) minmax(130px,.7fr);gap:16px;padding-top:15px }
+.demo-field { display:grid;gap:5px;margin-bottom:10px;color:var(--muted);font-size:8px }
+.demo-field>div { min-height:27px;padding:7px 8px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--text);font-size:8px;line-height:1.35 }
+.demo-field>div.tall { min-height:64px }
+.demo-settings { padding-left:15px;border-left:1px solid var(--line) }
+.demo-settings button { width:100%;min-height:29px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--text);font-size:8px }
+.demo-stats-content { padding:18px 22px 22px;background:var(--bg) }
+.land-stats-demo.land-real-demo { padding:0;min-height:0 }
+.land-stats-demo.land-real-demo .land-stat-cards { margin-top:0 }
+.land-stats-demo.land-real-demo .land-realtime { padding-bottom:2px }
+@media(max-width:600px){
+ .demo-app-grid{grid-template-columns:1fr;min-height:0}.demo-video-list{display:none}.demo-video-editor{padding:12px}.demo-video-head{gap:10px}.demo-thumb.large{width:105px}.demo-editor-cols{grid-template-columns:1fr}.demo-settings{display:none}.demo-stats-content{padding:12px}.land-real-demo .land-demo-nav span:nth-of-type(2){display:none}
+}
