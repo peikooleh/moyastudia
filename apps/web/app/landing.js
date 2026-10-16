@@ -212,20 +212,33 @@ function DemoWorkspace({ uiLang }) {
 }
 
 function DemoCalendar({ uiLang }) {
-  const entries = {
-    2:["17:00","ALPS"],4:["12:00","CITY"],7:["09:00","48H"],9:["17:00","ROAD"],
-    11:["12:00","FALLS"],14:["17:00","SUN"],16:["09:00","ALPS"],18:["17:00","CITY"],
-    21:["09:00","48H"],23:["17:00","ROAD"],25:["12:00","FALLS"]
+  const videos = DEMO.videos;
+  const schedule = {
+    1:[0,"17:00"], 3:[1,"12:00"], 5:[2,"09:00"], 8:[3,"17:00"],
+    10:[4,"12:00"], 12:[5,"17:00"], 15:[0,"09:00"], 17:[1,"17:00"],
+    19:[2,"09:00"], 22:[3,"17:00"], 24:[4,"12:00"], 26:[5,"17:00"]
   };
+  const days = Array.from({length:42},(_,i)=> {
+    if (i < 3) return { day: 28 + i, muted: true, key: `prev-${i}` };
+    if (i < 34) return { day: i - 2, muted: false, key: `oct-${i}` };
+    return { day: i - 33, muted: true, key: `next-${i}` };
+  });
   return <div className="land-calendar-demo land-real-demo" aria-label={t(uiLang, "calendar")}>
     <DemoChrome uiLang={uiLang} active="calendar" compact />
     <div className="demo-calendar-workspace">
       <div className="demo-calendar-main">
-        <div className="demo-calendar-head"><b>{t(uiLang, "landDemoNavCalendar")}</b><span>{t(uiLang,"landDemoOctober")} 2026</span><button type="button">{t(uiLang, "landDemoToday")}</button></div>
+        <div className="demo-calendar-titlebar">
+          <b>{t(uiLang, "calendar")}</b>
+          <span className="demo-calendar-queue">{t(uiLang, "landDemoQueue")} <i>12</i></span>
+          <div className="demo-calendar-month"><button type="button">←</button><strong>{t(uiLang,"landDemoOctober")} 2026</strong><button type="button">→</button><button type="button">{t(uiLang, "landDemoToday")}</button></div>
+        </div>
+        <div className="demo-calendar-filter"><span>{t(uiLang,"searchVideos")}</span><b>{t(uiLang,"landDemoAll")}</b></div>
+        <div className="demo-calendar-sync"><b>{t(uiLang,"landDemoSynced")}</b><span>{t(uiLang,"landDemoCache")} 36</span></div>
         <div className="demo-calendar-week">{["landDemoMon","landDemoTue","landDemoWed","landDemoThu","landDemoFri","landDemoSat","landDemoSun"].map(key=><span key={key}>{t(uiLang,key)}</span>)}</div>
-        <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{
-          const item=entries[i];
-          return <div className={i===16?"selected":""} key={i}><small>{i+1}</small>{item?<span><b>{item[0]}</b> {item[1]}</span>:null}</div>
+        <div className="demo-calendar-grid">{days.map((cell,i)=>{
+          const item=!cell.muted ? schedule[cell.day] : null;
+          const video=item ? videos[item[0]] : null;
+          return <div className={`${cell.muted?"muted ":""}${cell.day===17&&!cell.muted?"selected":""}`} key={cell.key}><small>{cell.day}</small>{video?<span title={t(uiLang,`landDemoVideo${item[0]+1}`)}><b>{item[1]}</b> {video.code}</span>:null}</div>
         })}</div>
       </div>
       <aside className="demo-calendar-inspector">
