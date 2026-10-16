@@ -4688,7 +4688,7 @@ html { scroll-behavior:smooth; }
 #features .land-section-heading .land-kicker{grid-column:1}
 #features .land-section-heading h2{grid-column:1;margin-top:10px;max-width:520px;font-size:36px;line-height:1.06;letter-spacing:-.025em}
 #features .land-section-heading p{grid-column:2;grid-row:1 / span 2;align-self:end;max-width:520px;margin:0 0 4px;font-size:14px;line-height:1.55}
-#features .land-feature-grid-render{gap:12px}
+#features .land-feature-grid-render{gap:12px;border-top:0;border-left:0}
 #features .land-feature-card{position:relative;min-height:154px;padding:24px 22px 20px;border-radius:12px;background:color-mix(in srgb,var(--panel) 72%,var(--bg))}
 #features .land-feature-card>span{font-size:10px}
 #features .land-feature-card>i{position:absolute;top:24px;right:22px;display:grid;place-items:center;width:24px;height:24px;border:1px solid var(--line);border-radius:6px;font-size:12px;font-style:normal;color:var(--accent)}
