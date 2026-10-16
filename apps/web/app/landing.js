@@ -169,10 +169,10 @@ function DemoWorkspace({ uiLang }) {
       <div className="demo-app-grid">
         <nav className="demo-side-nav" aria-hidden="true">
           <b>M</b>
-          <span className="active">{t(uiLang, "videos")}</span>
-          <span>{t(uiLang, "playlists")}</span>
-          <span>{t(uiLang, "calendar")}</span>
-          <span>{t(uiLang, "statistics")}</span>
+          <span className="active">{t(uiLang, "landDemoNavVideos")}</span>
+          <span>{t(uiLang, "landDemoNavPlaylists")}</span>
+          <span>{t(uiLang, "landDemoNavCalendar")}</span>
+          <span>{t(uiLang, "landDemoNavStatistics")}</span>
         </nav>
         <aside className="demo-video-list">
           <div className="demo-sync-mini"><b>{t(uiLang, "landDemoSynced")}</b><span>36</span></div>
@@ -221,8 +221,8 @@ function DemoCalendar({ uiLang }) {
     <DemoChrome uiLang={uiLang} active="calendar" compact />
     <div className="demo-calendar-workspace">
       <div className="demo-calendar-main">
-        <div className="demo-calendar-head"><b>{t(uiLang, "calendar")}</b><span>{t(uiLang,"landDemoOctober")} 2026</span><button type="button">{t(uiLang, "today")}</button></div>
-        <div className="demo-calendar-week">{["1","2","3","4","5","6","7"].map((d,i)=><span key={i}>{t(uiLang,`weekdayShort${d}`)}</span>)}</div>
+        <div className="demo-calendar-head"><b>{t(uiLang, "landDemoNavCalendar")}</b><span>{t(uiLang,"landDemoOctober")} 2026</span><button type="button">{t(uiLang, "landDemoToday")}</button></div>
+        <div className="demo-calendar-week">{["landDemoMon","landDemoTue","landDemoWed","landDemoThu","landDemoFri","landDemoSat","landDemoSun"].map(key=><span key={key}>{t(uiLang,key)}</span>)}</div>
         <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{
           const item=entries[i];
           return <div className={i===16?"selected":""} key={i}><small>{i+1}</small>{item?<span><b>{item[0]}</b> {item[1]}</span>:null}</div>
