@@ -42,7 +42,7 @@ export function Landing({ authError = "" }) {
             {authError ? <p className="selection-error" role="alert">{t(uiLang, authError)}</p> : null}
             <div className="land-actions">
               <a className="btn primary" href={loginUrl}>{t(uiLang, "landCtaGoogle")}</a>
-              <a className="btn ghost" href="#product">{t(uiLang, "landSeeProduct")}</a>
+              <a className="btn ghost" href="#features">{t(uiLang, "landSeeProduct")}</a>
             </div>
             <p className="land-microcopy">{t(uiLang, "landHeroNote")}</p>
           </div>
@@ -174,9 +174,9 @@ function DemoWorkspace({ uiLang }) {
             </div>
             <div className="demo-settings">
               <DemoField label={t(uiLang, "videoLanguage")} value="Deutsch" />
-              <DemoField label={t(uiLang, "videoCategory")} value="Education" />
+              <DemoField label={t(uiLang, "videoCategory")} value={t(uiLang, "landDemoEducation")} />
               <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterPrivate")} />
-              <button type="button">{t(uiLang, "improveWithAi")}</button>
+              <button type="button">{t(uiLang, "landDemoImproveAi")}</button>
             </div>
           </div>
         </section>
