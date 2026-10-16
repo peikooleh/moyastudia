@@ -4927,3 +4927,51 @@ html{scroll-behavior:smooth;scroll-padding-top:84px}
  .onb-card{padding:24px 20px}
  .onb-head{align-items:center}
 }
+
+
+/* One outer grid for every public landing section. */
+.land-v2{
+  --landing-max:1480px;
+  --landing-gutter:34px;
+}
+.land-v2 .land-hero-v2,
+.land-v2 main>.land-section{
+  box-sizing:border-box;
+  width:100%;
+  max-width:var(--landing-max);
+  margin-left:auto;
+  margin-right:auto;
+  padding-left:var(--landing-gutter);
+  padding-right:var(--landing-gutter);
+}
+.land-v2 #features.land-section{
+  max-width:var(--landing-max);
+  padding-left:var(--landing-gutter);
+  padding-right:var(--landing-gutter);
+}
+.land-v2 .land-product,
+.land-v2 .land-security-v2{
+  max-width:var(--landing-max);
+  padding-left:var(--landing-gutter);
+  padding-right:var(--landing-gutter);
+}
+.land-v2 .land-ai-section,
+.land-v2 #workflow.land-section{
+  max-width:var(--landing-max);
+}
+.land-v2 .land-final{
+  box-sizing:border-box;
+  width:calc(100% - (var(--landing-gutter) * 2));
+  max-width:calc(var(--landing-max) - (var(--landing-gutter) * 2));
+}
+.land-v2 .land-footer{
+  box-sizing:border-box;
+  width:100%;
+  max-width:var(--landing-max);
+  padding-left:var(--landing-gutter);
+  padding-right:var(--landing-gutter);
+}
+@media(max-width:700px){
+ .land-v2{--landing-gutter:16px}
+ .land-v2 .land-final{width:calc(100% - 32px)}
+}
