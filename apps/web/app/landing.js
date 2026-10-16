@@ -121,14 +121,16 @@ export function Landing({ authError = "" }) {
             <p>{t(uiLang, "landSecurityLead")}</p>
           </div>
           <div className="land-security-list">
-            {[1,2,3,4].map((item) => <p key={item}><span aria-hidden="true">✓</span>{t(uiLang, `landSecurity${item}`)}</p>)}
+            {[1,2,3,4].map((item) => <article key={item}><span aria-hidden="true">✓</span><div><b>{t(uiLang, `landSecurity${item}Title`)}</b><p>{t(uiLang, `landSecurity${item}`)}</p></div></article>)}
           </div>
         </section>
 
         <section className="land-final">
+          <span className="land-kicker">{t(uiLang, "landFinalKicker")}</span>
           <h2>{t(uiLang, "landFinalTitle")}</h2>
           <p>{t(uiLang, "landFinalLead")}</p>
           <a className="btn primary" href={loginUrl}>{t(uiLang, "landCtaGoogle")}</a>
+          <small>{t(uiLang, "landFinalNote")}</small>
         </section>
       </main>
 
