@@ -5005,3 +5005,37 @@ html{scroll-behavior:smooth;scroll-padding-top:84px}
 .land-calendar-demo .demo-calendar-inspector .demo-thumb{width:100%;min-height:78px}
 .land-calendar-demo .demo-calendar-inspector>b{font-size:10px;line-height:1.25}
 .land-calendar-demo .demo-calendar-inspector small{line-height:1.35}
+
+/* Landing final coherence pass. Keep approved composition; normalize rhythm and type. */
+.land-v2{--landing-max:1320px;--landing-gutter:32px}
+.land-v2 main{font-size:14px}
+.land-v2 .land-section{padding-top:44px;padding-bottom:44px}
+.land-v2 .land-section-heading{margin-bottom:24px}
+.land-v2 .land-kicker{letter-spacing:.075em;font-weight:700}
+.land-v2 .land-section-heading h2,.land-v2 .land-product h2,.land-v2 .land-ai-section h2,.land-v2 .land-security-v2 h2{font-size:clamp(30px,2.45vw,39px);line-height:1.08;letter-spacing:-.028em}
+.land-v2 .land-section-heading p,.land-v2 .land-product-copy>p,.land-v2 .land-ai-section>div>p,.land-v2 .land-security-v2>div>p{max-width:590px;line-height:1.58}
+.land-v2 .land-feature-card,.land-v2 .land-steps article,.land-v2 .land-ai-demo,.land-v2 .land-final,.land-v2 .land-real-demo{border-radius:12px}
+.land-v2 .land-feature-card h3,.land-v2 .land-steps h3,.land-v2 .land-security-list b{line-height:1.25}
+.land-v2 .land-feature-card p,.land-v2 .land-steps p,.land-v2 .land-security-list p{line-height:1.5}
+.land-v2 .land-feature-card a{color:inherit;text-decoration:none}
+.land-v2 .land-feature-card a:hover{text-decoration:underline;text-underline-offset:3px}
+.land-v2 .land-product{align-items:center}
+.land-v2 .land-calendar-demo{width:100%;max-width:none}
+.land-v2 .land-ai-section{align-items:center}
+.land-v2 .land-ai-side{align-items:center}
+.land-v2 .land-steps{gap:16px}
+.land-v2 .land-steps article{border:1px solid var(--line);padding:20px;min-height:150px}
+.land-v2 .land-step-top{margin-bottom:28px}
+.land-v2 .land-security-list article{padding:14px 0}
+.land-v2 .land-final{border-radius:16px}
+.land-v2 .land-final h2{letter-spacing:-.025em}
+.land-v2 .land-back-top{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;box-shadow:0 8px 28px rgba(0,0,0,.1)}
+.land-v2 .land-nav a{position:relative}
+.land-v2 .land-nav a:hover{color:var(--text)}
+.land-v2 .land-nav a:after{content:"";position:absolute;left:0;right:0;bottom:-7px;height:1px;background:var(--accent);transform:scaleX(0);transition:transform .16s ease}
+.land-v2 .land-nav a:hover:after{transform:scaleX(1)}
+.land-v2 :is(#features,#product,#ai,#workflow,#security){scroll-margin-top:84px}
+.land-v2 button,.land-v2 a{transition:border-color .15s ease,background-color .15s ease,color .15s ease,box-shadow .15s ease}
+.land-v2 .land-real-demo button:hover,.land-v2 .land-actions .btn:hover,.land-v2 .land-login:hover,.land-v2 .land-final .btn:hover{box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 18%,transparent)}
+@media(max-width:900px){.land-v2{--landing-gutter:20px}.land-v2 .land-section{padding-top:36px;padding-bottom:36px}.land-v2 .land-steps article{min-height:0}.land-v2 .land-step-top{margin-bottom:12px}}
+@media(max-width:620px){.land-v2{--landing-gutter:14px}.land-v2 .land-section{padding-top:30px;padding-bottom:30px}.land-v2 .land-section-heading h2,.land-v2 .land-product h2,.land-v2 .land-ai-section h2,.land-v2 .land-security-v2 h2{font-size:28px}}
