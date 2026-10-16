@@ -4628,3 +4628,28 @@ html { scroll-behavior:smooth; }
  .demo-calendar-grid>div{min-height:54px;padding:4px}.demo-calendar-grid span{font-size:7px;padding:4px}
  .land-final{margin:24px 16px;padding:30px 18px}.land-final h2{font-size:28px}
 }
+
+
+/* Vivid travel thumbnails for the hero demo — CSS artwork keeps every locale consistent. */
+.demo-thumb{position:relative;overflow:hidden;background:#b9d4dd}
+.demo-thumb-scene{position:absolute;inset:0;display:block;overflow:hidden}
+.demo-thumb-scene i{position:absolute;display:block}
+.demo-thumb .demo-sun{width:18%;aspect-ratio:1;border-radius:50%;right:7%;top:8%;background:#fff7c9;opacity:.95}
+.demo-thumb .demo-mountain-back{left:-8%;right:-8%;bottom:27%;height:60%;background:#7598a5;clip-path:polygon(0 100%,20% 44%,34% 70%,52% 18%,68% 66%,82% 38%,100% 100%)}
+.demo-thumb .demo-mountain-front{left:-10%;right:-10%;bottom:20%;height:52%;background:#315d50;clip-path:polygon(0 100%,17% 55%,31% 76%,47% 33%,61% 75%,78% 48%,100% 100%)}
+.demo-thumb .demo-water{left:0;right:0;bottom:0;height:31%;background:#4fa8b5;clip-path:polygon(0 28%,100% 0,100% 100%,0 100%)}
+.demo-thumb .demo-road{left:47%;bottom:-12%;width:20%;height:65%;background:#e9dcc0;clip-path:polygon(45% 0,58% 0,100% 100%,0 100%)}
+.demo-thumb-city .demo-mountain-back{background:#d88961;clip-path:polygon(0 100%,0 55%,12% 55%,12% 27%,25% 27%,25% 66%,38% 66%,38% 18%,54% 18%,54% 58%,69% 58%,69% 34%,83% 34%,83% 65%,100% 65%,100% 100%)}
+.demo-thumb-city .demo-mountain-front{background:#f1c98d;clip-path:polygon(0 100%,0 70%,16% 70%,16% 44%,34% 44%,34% 73%,52% 73%,52% 36%,72% 36%,72% 68%,100% 68%,100% 100%)}
+.demo-thumb-city .demo-water{background:#57a5bd;height:27%}.demo-thumb-city .demo-road{display:none}
+.demo-thumb-lake .demo-mountain-back{background:#547e9a}.demo-thumb-lake .demo-mountain-front{background:#49704f}.demo-thumb-lake .demo-water{height:42%;background:#27a5ba}
+.demo-thumb-road .demo-water{display:none}.demo-thumb-road .demo-road{width:28%;left:40%;height:80%;background:#d8c2a0}.demo-thumb-road .demo-mountain-back{background:#7599aa}.demo-thumb-road .demo-mountain-front{background:#5d814d}
+.demo-thumb-falls .demo-water{height:38%;background:#41b8c3}.demo-thumb-falls .demo-road{left:61%;bottom:5%;width:8%;height:56%;background:#eaf7f4}.demo-thumb-falls .demo-mountain-front{background:#3d7653}
+.demo-thumb-sunset{background:#e98b5b}.demo-thumb-sunset .demo-sun{background:#ffd46b;width:23%;right:12%;top:20%}.demo-thumb-sunset .demo-mountain-back{background:#805b70}.demo-thumb-sunset .demo-mountain-front{background:#354f51}.demo-thumb-sunset .demo-water{background:#d96f62}
+.demo-thumb-copy{position:absolute;left:7%;top:8%;z-index:3;color:white;text-shadow:0 1px 4px rgba(0,0,0,.45)}
+.demo-thumb-copy small{display:block;font-size:5px;letter-spacing:.12em}.demo-thumb-copy strong{display:block;font-size:17px;line-height:1;font-weight:800}
+.demo-thumb.large .demo-thumb-copy strong{font-size:34px}
+.demo-duration{position:absolute;right:5%;bottom:6%;z-index:4;padding:2px 4px;border-radius:3px;background:rgba(0,0,0,.78);color:white;font-size:6px;font-weight:700}
+.demo-thumb.large .demo-duration{font-size:9px;padding:3px 5px}
+.demo-list-video{min-height:62px}.demo-list-video .demo-thumb{height:46px}
+.demo-thumb.large{height:128px}
