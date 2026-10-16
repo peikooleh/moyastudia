@@ -13,6 +13,15 @@ const FEATURES = [
   ["landChannelsTitle", "landChannelsText", "06"],
 ];
 
+function FeatureMini({ index, uiLang }) {
+  if (index === 0) return <div className="feature-mini feature-mini-video"><span className="fm-thumb">ALPS</span><span><b>{t(uiLang,"landDemoVideo1")}</b><small>{t(uiLang,"landDemoScheduled")} · 17:00</small></span></div>;
+  if (index === 1) return <div className="feature-mini feature-mini-playlists"><span>ALPS <b>12</b></span><span>CITY <b>8</b></span><span>ROAD <b>15</b></span></div>;
+  if (index === 2) return <div className="feature-mini feature-mini-calendar">{["17","18","19","20","21"].map((d,i)=><span key={d}><b>{d}</b>{i===1||i===3?<i>{i===1?"09:00":"17:00"}</i>:null}</span>)}</div>;
+  if (index === 3) return <div className="feature-mini feature-mini-stats"><span><b>18 742</b><small>{t(uiLang,"landDemoViews")}</small></span><div>{[3,5,4,7,6,9,8,11].map((h,i)=><i key={i} style={{height:`${h*3}px`}} />)}</div></div>;
+  if (index === 4) return <div className="feature-mini feature-mini-ai"><span><small>{t(uiLang,"title")}</small><b>{t(uiLang,"landDemoVideo1")}</b></span><button type="button">✦ {t(uiLang,"landDemoImproveAi")}</button></div>;
+  return <div className="feature-mini feature-mini-channels"><span className="active">A</span><span>T</span><span>C</span><b>Atlas Studio</b></div>;
+}
+
 export function Landing({ authError = "" }) {
   const { uiLang } = usePrefs();
   const loginUrl = apiUrl("/auth/google/login");
@@ -58,7 +67,7 @@ export function Landing({ authError = "" }) {
             {FEATURES.map(([title, text, number], index) => (
               <article className="land-feature-card" key={title}>
                 <span>{number}</span>
-                <i aria-hidden="true">{["▤","☷","▦","▥","✦","▣"][index]}</i>
+                <FeatureMini index={index} uiLang={uiLang} />
                 <h3>{t(uiLang, title)}</h3>
                 <p>{t(uiLang, text)}</p>
               </article>
