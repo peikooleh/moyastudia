@@ -235,11 +235,14 @@ function DemoCalendar({ uiLang }) {
 
 function DemoAiControl({ uiLang }) {
   return <div className="land-ai-demo land-real-demo" aria-label="AI">
-    <div className="land-ai-demo-head"><span>AI</span><b>{t(uiLang, "landAiPoint1Title")}</b></div>
-    <label><span>{t(uiLang, "landAiPoint1Title")}</span><div>Gemini 3.6 Flash <b>⌄</b></div></label>
-    <label><span>{t(uiLang, "title")}</span><div>{t(uiLang, "landDemoVideo1")}</div></label>
+    <div className="land-ai-demo-head"><span>AI</span><b>{t(uiLang, "landAiConnectTitle")}</b></div>
+    <div className="land-ai-providers" aria-label={t(uiLang, "landAiProvidersLabel")}>
+      <span>OpenAI</span><span>Gemini</span><span>Anthropic</span><span>xAI</span><span>Groq</span>
+    </div>
+    <label><span>{t(uiLang, "landAiApiKey")}</span><div>••••••••••••••••</div></label>
+    <label><span>{t(uiLang, "landAiModel")}</span><div>Gemini 3.6 Flash <b>⌄</b></div></label>
     <button type="button">✦ {t(uiLang, "landDemoImproveAi")}</button>
-    <small>{t(uiLang, "landAiPoint3Text")}</small>
+    <small>{t(uiLang, "landAiDraftNote")}</small>
   </div>;
 }
 
