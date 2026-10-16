@@ -4547,3 +4547,39 @@ body {
  .land-hero-v2 .demo-app-grid{grid-template-columns:1fr;min-height:0}.demo-side-nav,.demo-video-list{display:none}
  #features.land-section{padding:34px 16px}.land-feature-grid-render{grid-template-columns:1fr}
 }
+
+
+/* MoyaStudia typography + navigation polish */
+html { scroll-behavior:smooth; }
+.land-v2 { font-family:inherit; }
+.land-v2 h1,.land-v2 h2,.land-v2 h3 { font-family:inherit;letter-spacing:-.025em;color:var(--text) }
+.land-hero-copy h1 { font-family:inherit;font-weight:750;line-height:1.02;letter-spacing:-.045em }
+.demo-video-head h3 { font-family:inherit;font-weight:700;letter-spacing:-.02em }
+.land-section-heading h2,.land-product h2,.land-ai-section h2,.land-security-v2 h2,.land-final h2 { font-family:inherit;font-weight:720;line-height:1.08 }
+.land-v2 p { color:var(--muted) }
+.land-feature-card h3,.land-steps h3 { font-family:inherit;font-weight:700 }
+.land-back-top {
+  position:fixed;
+  right:22px;
+  bottom:22px;
+  z-index:40;
+  display:grid;
+  place-items:center;
+  width:42px;
+  height:42px;
+  border:1px solid var(--line);
+  border-radius:50%;
+  background:color-mix(in srgb,var(--panel) 94%,transparent);
+  color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,.10);
+  text-decoration:none;
+  font-size:20px;
+  line-height:1;
+  backdrop-filter:blur(8px);
+  transition:transform .15s ease,border-color .15s ease,background .15s ease;
+}
+.land-back-top:hover { transform:translateY(-2px);border-color:var(--accent);background:var(--bg-hover) }
+.land-back-top:focus-visible { outline:2px solid var(--accent);outline-offset:3px }
+@media(max-width:600px){
+ .land-back-top{right:14px;bottom:14px;width:40px;height:40px}
+}
