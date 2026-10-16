@@ -132,12 +132,12 @@ export function Landing({ authError = "" }) {
 
 const DEMO = {
   videos: [
-    { code: "B1", time: "17:00", views: "18 742", variant: "berlin" },
-    { code: "A2", time: "16:30", views: "12 486", variant: "sky" },
-    { code: "SHORTS", time: "12:00", views: "54 320", variant: "shorts" },
-    { code: "GRAM", time: "15:45", views: "8 912", variant: "grammar" },
-    { code: "A1–A2", time: "14:20", views: "22 481", variant: "flag" },
-    { code: "B1", time: "11:10", views: "6 903", variant: "study" },
+    { code: "ALPS", time: "17:00", views: "18 742", variant: "berlin" },
+    { code: "CITY", time: "16:30", views: "12 486", variant: "sky" },
+    { code: "48H", time: "12:00", views: "54 320", variant: "shorts" },
+    { code: "ROAD", time: "15:45", views: "8 912", variant: "grammar" },
+    { code: "LAKE", time: "14:20", views: "22 481", variant: "flag" },
+    { code: "TRIP", time: "11:10", views: "6 903", variant: "study" },
   ],
   bars: [28,38,31,52,44,67,61,76,58,82,71,91],
   calendar: [
@@ -172,18 +172,18 @@ function DemoWorkspace({ uiLang }) {
         </aside>
         <section className="demo-video-editor">
           <div className="demo-video-head">
-            <DemoThumb code="B1" variant="berlin" large />
+            <DemoThumb code="ALPS" variant="berlin" large />
             <div className="demo-video-summary"><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
           </div>
           <div className="demo-editor-cols">
             <div>
               <DemoField label={t(uiLang, "title")} value={t(uiLang, "landDemoVideo1")} />
               <DemoField label={t(uiLang, "description")} value={t(uiLang, "landDemoDescription")} tall />
-              <DemoField label={t(uiLang, "tags")} value="Deutsch, B1, Wortschatz, Lernen" />
+              <DemoField label={t(uiLang, "tags")} value="travel, Alps, weekend, guide" />
             </div>
             <div className="demo-settings">
-              <DemoField label={t(uiLang, "videoLanguage")} value="Deutsch" />
-              <DemoField label={t(uiLang, "videoCategory")} value={t(uiLang, "landDemoEducation")} />
+              <DemoField label={t(uiLang, "videoLanguage")} value={t(uiLang, "landDemoLanguage")} />
+              <DemoField label={t(uiLang, "videoCategory")} value={t(uiLang, "landDemoTravelCategory")} />
               <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterScheduled")} />
               <DemoField label={t(uiLang, "landDemoDateTime")} value="18.10.2026 · 17:00" />
               <button type="button">{t(uiLang, "landDemoImproveAi")}</button>
@@ -213,7 +213,7 @@ function DemoChrome({ uiLang, active, compact = false }) {
 function DemoThumb({ code, variant = "berlin", large = false }) {
   return <div className={`demo-thumb demo-thumb-${variant} ${large ? "large" : ""}`}>
     <span className="demo-thumb-scene" aria-hidden="true"><i /><i /><i /></span>
-    <span className="demo-thumb-copy"><small>DEUTSCH</small><strong>{code}</strong><b>{variant === "shorts" ? "5 WÖRTER" : variant === "grammar" ? "WORTSTELLUNG" : "WORTSCHATZ"}</b></span>
+    <span className="demo-thumb-copy"><small>ATLAS</small><strong>{code}</strong><b>{variant === "shorts" ? "48 HOURS" : variant === "grammar" ? "ROAD TRIP" : variant === "flag" ? "WEEKEND" : "TRAVEL"}</b></span>
   </div>;
 }
 
