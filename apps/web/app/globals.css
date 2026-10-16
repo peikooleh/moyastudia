@@ -4791,3 +4791,16 @@ html { scroll-behavior:smooth; }
 .land-final h2{max-width:720px;margin-left:auto;margin-right:auto}
 .land-final>small{display:block;margin:12px auto 0;max-width:520px;color:var(--muted);font-size:11px;line-height:1.45}
 @media(max-width:760px){.land-security-list{grid-template-columns:1fr}}
+
+
+/* Control section: restore the lighter list layout */
+.land-security-v2{grid-template-columns:minmax(0,.9fr) minmax(520px,1.1fr);gap:72px;align-items:start}
+.land-security-list{display:block}
+.land-security-list article{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;padding:17px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.land-security-list article:first-child{padding-top:2px}
+.land-security-list article>span{display:block;width:auto;height:auto;background:transparent;border-radius:0;color:var(--accent);font-size:17px;line-height:1.25;font-weight:800}
+.land-security-list article b{display:block;margin:0 0 4px;font-size:13px;line-height:1.35}
+.land-security-list article p{margin:0;max-width:none;color:var(--muted);font-size:12px;line-height:1.5}
+.land-final{margin-top:18px;padding-top:34px;padding-bottom:34px}
+.land-final::before{width:260px;height:260px;opacity:.4}
+@media(max-width:900px){.land-security-v2{grid-template-columns:1fr;gap:30px}.land-security-list article:first-child{padding-top:10px}}
