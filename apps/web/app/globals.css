@@ -4867,3 +4867,63 @@ html { scroll-behavior:smooth; }
 @media(max-width:600px){
   .land-final{margin:20px 16px 34px;padding:30px 18px}
 }
+
+
+/* Landing + onboarding visual pass */
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+.land-v2{font-size:15px}
+.land-v2 .land-top{max-width:none;padding-left:max(28px,calc((100vw - 1320px)/2));padding-right:max(28px,calc((100vw - 1320px)/2))}
+.land-v2 .land-top>.brand{margin-right:auto}
+.land-v2 .land-nav a,.land-v2 .land-login,.land-v2 .brand{transition:color .18s ease,background-color .18s ease,border-color .18s ease,transform .18s ease}
+.land-v2 .land-nav a:focus-visible,.land-v2 a:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:5px}
+.land-v2 .land-nav a:hover{color:var(--accent)}
+.land-v2 main{display:block}
+.land-hero-v2{padding-top:52px;padding-bottom:54px}
+.land-hero-copy h1{margin-top:0}
+.land-v2 main>.land-section{padding-top:50px;padding-bottom:50px}
+.land-v2 main>.land-section+ .land-section{margin-top:0}
+.land-kicker{line-height:1.25}
+.land-section-heading h2,.land-product h2,.land-ai-section h2,.land-security-v2 h2{letter-spacing:-.035em}
+.land-v2 p{letter-spacing:-.006em}
+.land-feature-card{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.land-feature-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 10px 28px rgba(20,45,28,.06)}
+.land-feature-card h3 a{color:inherit;text-decoration:none}
+.land-feature-card h3 a:hover{color:var(--accent)}
+.land-feature-card h3 a::after{content:" ↓";color:var(--accent);font-size:.72em;font-weight:600}
+.land-real-demo{border-radius:14px}
+.demo-thumb{filter:saturate(1.18) contrast(1.03)}
+.demo-thumb-alps{background:linear-gradient(145deg,#167d8a 0 36%,#e2b85d 36% 53%,#628c58 53% 74%,#dbe9dc 74%)}
+.demo-thumb-city{background:linear-gradient(135deg,#d85d48 0 26%,#e6b64f 26% 48%,#2f7c87 48% 72%,#274b63 72%)}
+.demo-thumb-lake{background:linear-gradient(145deg,#178a9c 0 45%,#82c8d0 45% 58%,#f0c45e 58% 73%,#466f54 73%)}
+.demo-thumb-road{background:linear-gradient(145deg,#315b3e 0 35%,#ef9b45 35% 50%,#3f7387 50% 72%,#d7d1aa 72%)}
+.demo-thumb-falls{background:linear-gradient(145deg,#126b70 0 38%,#55b5bd 38% 55%,#d8cf7b 55% 68%,#37664a 68%)}
+.demo-thumb-sunset{background:linear-gradient(145deg,#7a3155 0 30%,#ef6c4b 30% 48%,#f2bf58 48% 67%,#345c72 67%)}
+.demo-thumb-copy strong{text-shadow:0 1px 8px rgba(0,0,0,.22)}
+.land-ai-section,.land-product,.land-security-v2{scroll-margin-top:76px}
+.land-back-top{box-shadow:0 8px 24px rgba(20,45,28,.12)}
+.land-back-top:hover{transform:translateY(-3px)}
+.land-final{border-radius:16px}
+.land-v2 .btn{border-radius:8px}
+.land-v2 .land-demo-frame,.land-calendar-demo,.land-ai-demo,#features .land-feature-card,.land-steps article{border-radius:12px}
+
+/* First-run card: account action belongs in the header, not in the content flow. */
+.onb-card{width:min(560px,100%);border-radius:14px;padding:32px}
+.onb-head{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
+.onb-head .onb-logo{margin:0;color:var(--text);font-weight:700}
+.onb-account-nav{margin:0}
+.onb-account-nav .logout-control{display:flex;align-items:center}
+.onb-account-nav .btn{padding:7px 11px;border-radius:7px;font-size:12px;color:var(--muted)}
+.onb-account-nav .btn:hover{color:var(--text);background:var(--bg-hover)}
+.onb-dots{margin:0 0 24px}
+.onb-card h1{font-size:28px;margin-bottom:10px}
+.onb-hint{margin:0 0 20px;font-size:13px}
+.onb .choice{border-radius:8px;padding:10px 14px}
+.onb .actions{margin-top:4px}
+.onb .actions .btn{min-width:88px}
+@media(max-width:700px){
+ .land-v2 .land-top{padding-left:16px;padding-right:16px}
+ .land-hero-v2{padding-top:34px;padding-bottom:40px}
+ .land-v2 main>.land-section{padding-top:38px;padding-bottom:38px}
+ .onb-card{padding:24px 20px}
+ .onb-head{align-items:center}
+}
