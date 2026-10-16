@@ -4993,3 +4993,15 @@ html{scroll-behavior:smooth;scroll-padding-top:84px}
 .land-calendar-demo .demo-calendar-grid>div{min-height:50px}.land-calendar-demo .demo-calendar-grid>div.muted{background:var(--soft);opacity:.55;border-style:dashed}.land-calendar-demo .demo-calendar-grid>div.selected{box-shadow:inset 0 0 0 1px var(--accent)}
 .land-calendar-demo .demo-calendar-grid>div>span{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 @media(max-width:900px){.land-calendar-demo .demo-calendar-queue,.land-calendar-demo .demo-calendar-filter,.land-calendar-demo .demo-calendar-sync{display:none}.land-calendar-demo .demo-calendar-titlebar{padding:9px}.land-calendar-demo .demo-calendar-month strong{font-size:8px}}
+
+/* Final calendar demo pass: calmer overflow days and clearer inspector. */
+.land-calendar-demo .demo-calendar-titlebar{min-height:42px;padding:12px 14px 9px}
+.land-calendar-demo .demo-calendar-month{gap:7px}
+.land-calendar-demo .demo-calendar-month button{min-height:26px;padding:5px 8px}
+.land-calendar-demo .demo-calendar-grid>div.muted{background:color-mix(in srgb,var(--soft) 62%,transparent);opacity:.68;border-style:solid;border-color:color-mix(in srgb,var(--line) 72%,transparent)}
+.land-calendar-demo .demo-calendar-grid>div>span{display:block}
+.land-calendar-demo .demo-calendar-grid>div>span b{margin-right:3px}
+.land-calendar-demo .demo-calendar-inspector{padding:12px;gap:8px}
+.land-calendar-demo .demo-calendar-inspector .demo-thumb{width:100%;min-height:78px}
+.land-calendar-demo .demo-calendar-inspector>b{font-size:10px;line-height:1.25}
+.land-calendar-demo .demo-calendar-inspector small{line-height:1.35}
