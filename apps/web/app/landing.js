@@ -35,7 +35,6 @@ export function Landing({ authError = "" }) {
       <main id="top">
         <section className="land-hero-v2">
           <div className="land-hero-copy">
-            <span className="land-eyebrow">{t(uiLang, "landEyebrow")}</span>
             <h1>{t(uiLang, "landHeroTitleLine1")}<br />{t(uiLang, "landHeroTitleLine2")}<br /><em>{t(uiLang, "landHeroTitleAccent")}</em></h1>
             <p className="land-lead">{t(uiLang, "landLeadV2")}</p>
             <p className="land-ai-note">{t(uiLang, "landAiNote")}</p>
