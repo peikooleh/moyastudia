@@ -4975,3 +4975,10 @@ html{scroll-behavior:smooth;scroll-padding-top:84px}
  .land-v2{--landing-gutter:16px}
  .land-v2 .land-final{width:calc(100% - 32px)}
 }
+
+/* Hero demo: richer real-screen metadata without changing the approved landing geometry. */
+.land-hero .demo-sync-mini{display:flex;align-items:center;gap:6px;margin:0 0 7px;padding:0 2px 7px;border-bottom:1px solid var(--line);font-size:7px;color:var(--muted)}
+.land-hero .demo-sync-mini b{font-weight:600;color:var(--text)}.land-hero .demo-sync-mini span{margin-left:auto;border:1px solid var(--line);border-radius:999px;padding:1px 5px}
+.land-hero .demo-video-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 8px;font-size:7px;color:var(--muted)}
+.land-hero .demo-video-facts span{display:flex;flex-direction:column;gap:2px}.land-hero .demo-video-facts b{font-weight:500;color:var(--muted)}
+@media(max-width:900px){.land-hero .demo-video-facts{grid-template-columns:1fr 1fr}.land-hero .demo-video-facts span:last-child{display:none}}
