@@ -215,7 +215,7 @@ function DemoCalendar({ uiLang }) {
   const videos = DEMO.videos;
   const schedule = {
     1:[0,"17:00"], 3:[1,"12:00"], 5:[2,"09:00"], 8:[3,"17:00"],
-    10:[4,"12:00"], 12:[5,"17:00"], 15:[0,"09:00"], 17:[1,"17:00"],
+    10:[4,"12:00"], 12:[5,"17:00"], 15:[0,"09:00"], 17:[0,"17:00"],
     19:[2,"09:00"], 22:[3,"17:00"], 24:[4,"12:00"], 26:[5,"17:00"]
   };
   const days = Array.from({length:42},(_,i)=> {
@@ -223,12 +223,12 @@ function DemoCalendar({ uiLang }) {
     if (i < 34) return { day: i - 2, muted: false, key: `oct-${i}` };
     return { day: i - 33, muted: true, key: `next-${i}` };
   });
-  return <div className="land-calendar-demo land-real-demo" aria-label={t(uiLang, "calendar")}>
+  return <div className="land-calendar-demo land-real-demo" aria-label={t(uiLang, "landDemoCalendar")}>
     <DemoChrome uiLang={uiLang} active="calendar" compact />
     <div className="demo-calendar-workspace">
       <div className="demo-calendar-main">
         <div className="demo-calendar-titlebar">
-          <b>{t(uiLang, "calendar")}</b>
+          <b>{t(uiLang, "landDemoCalendar")}</b>
           <span className="demo-calendar-queue">{t(uiLang, "landDemoQueue")} <i>12</i></span>
           <div className="demo-calendar-month"><button type="button">←</button><strong>{t(uiLang,"landDemoOctober")} 2026</strong><button type="button">→</button><button type="button">{t(uiLang, "landDemoToday")}</button></div>
         </div>
@@ -238,7 +238,7 @@ function DemoCalendar({ uiLang }) {
         <div className="demo-calendar-grid">{days.map((cell,i)=>{
           const item=!cell.muted ? schedule[cell.day] : null;
           const video=item ? videos[item[0]] : null;
-          return <div className={`${cell.muted?"muted ":""}${cell.day===17&&!cell.muted?"selected":""}`} key={cell.key}><small>{cell.day}</small>{video?<span title={t(uiLang,`landDemoVideo${item[0]+1}`)}><b>{item[1]}</b> {video.code}</span>:null}</div>
+          return <div className={`${cell.muted?"muted ":""}${cell.day===17&&!cell.muted?"selected":""}`} key={cell.key}><small>{cell.day}</small>{video?<span title={t(uiLang,`landDemoVideo${item[0]+1}`)}><b>{item[1]}</b> {t(uiLang,`landDemoVideo${item[0]+1}`)}</span>:null}</div>
         })}</div>
       </div>
       <aside className="demo-calendar-inspector">
