@@ -36,12 +36,12 @@ export function Landing({ authError = "" }) {
         <section className="land-hero-v2">
           <div className="land-hero-copy">
             <h1>{t(uiLang, "landHeroTitleLine1")}<br />{t(uiLang, "landHeroTitleLine2")}<br /><em>{t(uiLang, "landHeroTitleAccent")}</em></h1>
-            <p className="land-lead">{t(uiLang, "landLeadV2")}</p>
-            <p className="land-ai-note">{t(uiLang, "landAiNote")}</p>
+            <p className="land-lead">{t(uiLang, "landHeroLeadRefined")}</p>
+            <p className="land-ai-note">{t(uiLang, "landHeroAiRefined")}</p>
             {authError ? <p className="selection-error" role="alert">{t(uiLang, authError)}</p> : null}
             <div className="land-actions">
               <a className="btn primary" href={loginUrl}>{t(uiLang, "landCtaGoogle")}</a>
-              <a className="btn ghost" href="#features">{t(uiLang, "landSeeProduct")}</a>
+              <a className="btn ghost" href="#product">{t(uiLang, "landSeeInterface")}</a>
             </div>
             <p className="land-microcopy">{t(uiLang, "landHeroNote")}</p>
           </div>
@@ -184,16 +184,17 @@ function DemoWorkspace({ uiLang }) {
             <div>
               <DemoField label={t(uiLang, "title")} value={t(uiLang, "landDemoVideo1")} />
               <DemoField label={t(uiLang, "description")} value={t(uiLang, "landDemoDescription")} tall />
-              <DemoField label={t(uiLang, "tags")} value="travel, Alps, weekend, guide" />
+              <div className="demo-field"><span>{t(uiLang, "tags")}</span><div className="demo-tag-row"><i>travel ×</i><i>Alps ×</i><i>Switzerland ×</i><i>weekend ×</i></div></div>
             </div>
             <div className="demo-settings">
               <DemoField label={t(uiLang, "videoLanguage")} value={t(uiLang, "landDemoLanguage")} />
               <DemoField label={t(uiLang, "videoCategory")} value={t(uiLang, "landDemoTravelCategory")} />
               <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterScheduled")} />
               <DemoField label={t(uiLang, "landDemoDateTime")} value="18.10.2026 · 17:00" />
-              <button type="button">{t(uiLang, "landDemoImproveAi")}</button>
+              <button type="button">✦ {t(uiLang, "landDemoImproveAi")}</button>
             </div>
           </div>
+          <div className="demo-editor-actions"><button type="button">{t(uiLang, "cancel")}</button><button type="button" className="primary">{t(uiLang, "save")}</button></div>
         </section>
       </div>
     </div>
