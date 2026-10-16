@@ -18,10 +18,12 @@ export function Onboarding({ channels = [], youtubeConnected = false }) {
   return (
     <div className="onb">
       <div className="onb-card">
-        <div className="onb-logo">{t(uiLang, "brand")}</div>
-        <nav className="onb-account-nav" aria-label={t(uiLang, "account") }>
-          <LogoutControl />
-        </nav>
+        <div className="onb-head">
+          <div className="onb-logo">{t(uiLang, "brand")}</div>
+          <nav className="onb-account-nav" aria-label={t(uiLang, "account")}>
+            <LogoutControl />
+          </nav>
+        </div>
         <div
           className="onb-dots"
           role="progressbar"
