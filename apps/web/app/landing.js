@@ -56,10 +56,10 @@ export function Landing({ authError = "" }) {
             <p>{t(uiLang, "landFeaturesLead")}</p>
           </div>
           <div className="land-feature-grid land-feature-grid-render">
-            {FEATURES.slice(0,4).map(([title, text, number], index) => (
+            {FEATURES.map(([title, text, number], index) => (
               <article className="land-feature-card" key={title}>
                 <span>{number}</span>
-                <i aria-hidden="true">{["▣","☷","□","▥"][index]}</i>
+                <i aria-hidden="true">{["▣","☷","□","▥","✦","◫"][index]}</i>
                 <h3>{t(uiLang, title)}</h3>
                 <p>{t(uiLang, text)}</p>
               </article>
@@ -79,7 +79,7 @@ export function Landing({ authError = "" }) {
               <span>{t(uiLang, "statistics")}</span>
             </div>
           </div>
-          <DemoStatistics uiLang={uiLang} />
+          <DemoCalendar uiLang={uiLang} />
         </section>
 
         <section className="land-ai-section land-section">
@@ -88,10 +88,13 @@ export function Landing({ authError = "" }) {
             <h2>{t(uiLang, "landAiSectionTitle")}</h2>
             <p>{t(uiLang, "landAiSectionLead")}</p>
           </div>
-          <div className="land-ai-points">
+          <div className="land-ai-side">
+            <DemoAiControl uiLang={uiLang} />
+            <div className="land-ai-points">
             <p><b>{t(uiLang, "landAiPoint1Title")}</b><span>{t(uiLang, "landAiPoint1Text")}</span></p>
             <p><b>{t(uiLang, "landAiPoint2Title")}</b><span>{t(uiLang, "landAiPoint2Text")}</span></p>
             <p><b>{t(uiLang, "landAiPoint3Title")}</b><span>{t(uiLang, "landAiPoint3Text")}</span></p>
+            </div>
           </div>
         </section>
 
@@ -198,14 +201,28 @@ function DemoWorkspace({ uiLang }) {
   );
 }
 
-function DemoStatistics({ uiLang }) {
-  return <div className="land-stats-demo land-real-demo" aria-label={t(uiLang, "landDemoStatsLabel")}>
-    <DemoChrome uiLang={uiLang} active="statistics" compact />
-    <div className="demo-stats-content">
-      <div className="land-stat-cards"><article><span>{t(uiLang, "views")}</span><strong>18 742</strong><small>{t(uiLang, "landDemoData")}</small></article><article><span>{t(uiLang, "watchTime")}</span><strong>1 286 h</strong><small>{t(uiLang, "landDemoData")}</small></article><article><span>{t(uiLang, "subscribers")}</span><strong>+312</strong><small>{t(uiLang, "landDemoData")}</small></article></div>
-      <div className="land-bars">{DEMO.bars.map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div>
-      <div className="land-realtime"><span>{t(uiLang, "landDemoPeriod")}</span><b>28</b><small>{t(uiLang, "days")}</small></div>
-    </div>
+function DemoCalendar({ uiLang }) {
+  const items = ["ALPS","CITY","48H","ROAD","LAKE","TRIP"];
+  let n = 0;
+  return <div className="land-calendar-demo land-real-demo" aria-label={t(uiLang, "calendar")}>
+    <DemoChrome uiLang={uiLang} active="calendar" compact />
+    <div className="demo-calendar-head"><b>{t(uiLang, "calendar")}</b><span>October 2026</span><button type="button">{t(uiLang, "today")}</button></div>
+    <div className="demo-calendar-week">{["M","T","W","T","F","S","S"].map((d,i)=><span key={i}>{d}</span>)}</div>
+    <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{
+      const show=[2,4,7,9,11,14,16,18,21,23,25].includes(i);
+      const code=show?items[n++%items.length]:"";
+      return <div key={i}><small>{i+1}</small>{show?<span><b>{["09:00","12:00","17:00"][i%3]}</b> {code}</span>:null}</div>
+    })}</div>
+  </div>;
+}
+
+function DemoAiControl({ uiLang }) {
+  return <div className="land-ai-demo land-real-demo" aria-label="AI">
+    <div className="land-ai-demo-head"><span>AI</span><b>{t(uiLang, "landAiPoint1Title")}</b></div>
+    <label><span>{t(uiLang, "landAiPoint1Title")}</span><div>Gemini 3.6 Flash <b>⌄</b></div></label>
+    <label><span>{t(uiLang, "title")}</span><div>{t(uiLang, "landDemoVideo1")}</div></label>
+    <button type="button">✦ {t(uiLang, "landDemoImproveAi")}</button>
+    <small>{t(uiLang, "landAiPoint3Text")}</small>
   </div>;
 }
 
