@@ -138,12 +138,12 @@ export function Landing({ authError = "" }) {
 
 const DEMO = {
   videos: [
-    { code: "ALPS", time: "17:00", views: "18 742", variant: "berlin" },
-    { code: "CITY", time: "16:30", views: "12 486", variant: "sky" },
-    { code: "48H", time: "12:00", views: "54 320", variant: "shorts" },
-    { code: "ROAD", time: "15:45", views: "8 912", variant: "grammar" },
-    { code: "LAKE", time: "14:20", views: "22 481", variant: "flag" },
-    { code: "TRIP", time: "11:10", views: "6 903", variant: "study" },
+    { code: "ALPS", time: "17:00", views: "128 740", variant: "alps" },
+    { code: "CITY", time: "16:30", views: "64 320", variant: "city" },
+    { code: "48H", time: "14:20", views: "95 680", variant: "lake" },
+    { code: "ROAD", time: "12:00", views: "42 190", variant: "road" },
+    { code: "FALLS", time: "11:15", views: "38 450", variant: "falls" },
+    { code: "SUN", time: "10:00", views: "71 230", variant: "sunset" },
   ],
   bars: [28,38,31,52,44,67,61,76,58,82,71,91],
   calendar: [
@@ -172,13 +172,13 @@ function DemoWorkspace({ uiLang }) {
           {DEMO.videos.map((video, i) => (
             <div className={`demo-list-video ${i === 0 ? "active" : ""}`} key={video.code}>
               <DemoThumb code={video.code} variant={video.variant} />
-              <div><b>{t(uiLang, `landDemoVideo${i + 1}`)}</b><small>{i === 0 ? t(uiLang, "filterScheduled") : t(uiLang, "filterPublic")} · {video.views}</small></div>
+              <div><b>{t(uiLang, `landDemoVideo${i + 1}`)}</b><small>{video.views} {t(uiLang, "views").toLowerCase()} · {video.time}</small></div>
             </div>
           ))}
         </aside>
         <section className="demo-video-editor">
           <div className="demo-video-head">
-            <DemoThumb code="ALPS" variant="berlin" large />
+            <DemoThumb code="ALPS" variant="alps" large />
             <div className="demo-video-summary"><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p><button type="button">{t(uiLang, "landDemoChangeCover")}</button></div>
           </div>
           <div className="demo-editor-cols">
@@ -230,10 +230,11 @@ function DemoChrome({ uiLang, active, compact = false }) {
   return <><div className="land-demo-bar"><span className="demo-back">‹</span><span>Atlas Studio</span><span className="demo-chevron">⌄</span><b>{t(uiLang, "landDemoBadge")}</b><i className="demo-avatar">A</i></div><div className={`land-demo-nav ${compact ? "compact" : ""}`}><b>M</b>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}</div></>;
 }
 
-function DemoThumb({ code, variant = "berlin", large = false }) {
+function DemoThumb({ code, variant = "alps", large = false }) {
   return <div className={`demo-thumb demo-thumb-${variant} ${large ? "large" : ""}`}>
-    <span className="demo-thumb-scene" aria-hidden="true"><i /><i /><i /></span>
-    <span className="demo-thumb-copy"><small>ATLAS</small><strong>{code}</strong><b>{variant === "shorts" ? "48 HOURS" : variant === "grammar" ? "ROAD TRIP" : variant === "flag" ? "WEEKEND" : "TRAVEL"}</b></span>
+    <span className="demo-thumb-scene" aria-hidden="true"><i className="demo-sun" /><i className="demo-mountain-back" /><i className="demo-mountain-front" /><i className="demo-water" /><i className="demo-road" /></span>
+    <span className="demo-thumb-copy"><small>ATLAS</small><strong>{code}</strong></span>
+    <span className="demo-duration">{large ? "12:34" : code === "CITY" ? "10:21" : code === "48H" ? "8:15" : code === "ROAD" ? "11:02" : code === "FALLS" ? "9:48" : "13:26"}</span>
   </div>;
 }
 
