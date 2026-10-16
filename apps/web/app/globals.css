@@ -4982,3 +4982,14 @@ html{scroll-behavior:smooth;scroll-padding-top:84px}
 .land-hero .demo-video-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 8px;font-size:7px;color:var(--muted)}
 .land-hero .demo-video-facts span{display:flex;flex-direction:column;gap:2px}.land-hero .demo-video-facts b{font-weight:500;color:var(--muted)}
 @media(max-width:900px){.land-hero .demo-video-facts{grid-template-columns:1fr 1fr}.land-hero .demo-video-facts span:last-child{display:none}}
+
+/* Calendar landing demo: mirror the real Calendar controls while preserving section width. */
+.land-calendar-demo .demo-calendar-titlebar{display:flex;align-items:center;gap:9px;padding:11px 14px 8px;font-size:9px}
+.land-calendar-demo .demo-calendar-titlebar>b{font-size:14px}.land-calendar-demo .demo-calendar-queue{border:1px solid var(--line);border-radius:6px;padding:5px 8px}.land-calendar-demo .demo-calendar-queue i{margin-left:5px;font-style:normal;border-radius:999px;background:var(--soft);padding:1px 5px}
+.land-calendar-demo .demo-calendar-month{margin-left:auto;display:flex;align-items:center;gap:6px}.land-calendar-demo .demo-calendar-month button{border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:5px 7px;font:inherit}.land-calendar-demo .demo-calendar-month strong{padding:0 3px;font-size:10px}
+.land-calendar-demo .demo-calendar-filter{display:grid;grid-template-columns:minmax(0,1fr) 105px;gap:7px;padding:0 14px 7px}.land-calendar-demo .demo-calendar-filter span,.land-calendar-demo .demo-calendar-filter b{border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:8px;font-weight:400;color:var(--muted)}.land-calendar-demo .demo-calendar-filter b{color:var(--text)}
+.land-calendar-demo .demo-calendar-sync{display:flex;gap:10px;padding:0 14px 8px;font-size:7px;color:var(--muted)}.land-calendar-demo .demo-calendar-sync b{color:var(--text)}
+.land-calendar-demo .demo-calendar-grid{grid-template-columns:repeat(7,minmax(0,1fr))}
+.land-calendar-demo .demo-calendar-grid>div{min-height:50px}.land-calendar-demo .demo-calendar-grid>div.muted{background:var(--soft);opacity:.55;border-style:dashed}.land-calendar-demo .demo-calendar-grid>div.selected{box-shadow:inset 0 0 0 1px var(--accent)}
+.land-calendar-demo .demo-calendar-grid>div>span{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media(max-width:900px){.land-calendar-demo .demo-calendar-queue,.land-calendar-demo .demo-calendar-filter,.land-calendar-demo .demo-calendar-sync{display:none}.land-calendar-demo .demo-calendar-titlebar{padding:9px}.land-calendar-demo .demo-calendar-month strong{font-size:8px}}
