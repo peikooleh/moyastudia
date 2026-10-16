@@ -4653,3 +4653,30 @@ html { scroll-behavior:smooth; }
 .demo-thumb.large .demo-duration{font-size:9px;padding:3px 5px}
 .demo-list-video{min-height:62px}.demo-list-video .demo-thumb{height:46px}
 .demo-thumb.large{height:128px}
+
+
+/* Hero-only polish matched to approved render */
+.land-hero-v2{padding-top:58px;padding-bottom:64px;grid-template-columns:minmax(390px,.72fr) minmax(720px,1.55fr);gap:42px;align-items:start}
+.land-hero-copy{padding-top:6px}
+.land-hero-copy h1{font-size:clamp(48px,3.15vw,60px);line-height:.98;letter-spacing:-.035em;max-width:610px}
+.land-hero-copy .land-lead{max-width:560px;margin-top:22px;font-size:17px;line-height:1.5}
+.land-hero-copy .land-ai-note{max-width:520px;margin-top:16px;padding:13px 16px;font-size:13px;line-height:1.4}
+.land-hero-copy .land-actions{margin-top:16px}
+.land-hero-copy .land-microcopy{margin-top:10px;max-width:530px;font-size:11px;line-height:1.45}
+.land-hero-v2 .land-real-demo{transform:none}
+.land-hero-v2 .land-demo-frame{min-height:535px}
+.demo-video-list{min-width:245px}
+.demo-video-editor{position:relative;padding-bottom:56px}
+.demo-video-head{grid-template-columns:210px 1fr;gap:18px}
+.demo-thumb.large{height:124px}
+.demo-editor-cols{grid-template-columns:minmax(0,1fr) 185px}
+.demo-tag-row{display:flex!important;gap:5px;flex-wrap:wrap;padding:6px!important;min-height:35px!important}
+.demo-tag-row i{font-style:normal;font-size:8px;padding:4px 6px;border-radius:5px;background:var(--bg-hover);white-space:nowrap}
+.demo-editor-actions{position:absolute;left:16px;right:16px;bottom:12px;display:flex;justify-content:flex-end;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.demo-editor-actions button{padding:7px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-size:9px}
+.demo-editor-actions button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+@media(max-width:1100px){
+ .land-hero-v2{grid-template-columns:1fr;gap:34px}
+ .land-hero-copy h1{max-width:700px}
+ .land-hero-v2 .land-demo-frame{min-height:500px}
+}
