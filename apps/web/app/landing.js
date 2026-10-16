@@ -79,13 +79,7 @@ export function Landing({ authError = "" }) {
           <div className="land-product-copy">
             <span className="land-kicker">{t(uiLang, "landProductKicker")}</span>
             <h2>{t(uiLang, "landProductTitle")}</h2>
-            <p>{t(uiLang, "landProductLead")}</p>
-            <div className="land-product-tabs" aria-hidden="true">
-              <span className="active">{t(uiLang, "videos")}</span>
-              <span>{t(uiLang, "playlists")}</span>
-              <span>{t(uiLang, "calendar")}</span>
-              <span>{t(uiLang, "statistics")}</span>
-            </div>
+            <p>{t(uiLang, "landCalendarLead")}</p>
           </div>
           <DemoCalendar uiLang={uiLang} />
         </section>
@@ -211,17 +205,31 @@ function DemoWorkspace({ uiLang }) {
 }
 
 function DemoCalendar({ uiLang }) {
-  const items = ["ALPS","CITY","48H","ROAD","LAKE","TRIP"];
-  let n = 0;
+  const entries = {
+    2:["17:00","ALPS"],4:["12:00","CITY"],7:["09:00","48H"],9:["17:00","ROAD"],
+    11:["12:00","FALLS"],14:["17:00","SUN"],16:["09:00","ALPS"],18:["17:00","CITY"],
+    21:["09:00","48H"],23:["17:00","ROAD"],25:["12:00","FALLS"]
+  };
   return <div className="land-calendar-demo land-real-demo" aria-label={t(uiLang, "calendar")}>
     <DemoChrome uiLang={uiLang} active="calendar" compact />
-    <div className="demo-calendar-head"><b>{t(uiLang, "calendar")}</b><span>October 2026</span><button type="button">{t(uiLang, "today")}</button></div>
-    <div className="demo-calendar-week">{["M","T","W","T","F","S","S"].map((d,i)=><span key={i}>{d}</span>)}</div>
-    <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{
-      const show=[2,4,7,9,11,14,16,18,21,23,25].includes(i);
-      const code=show?items[n++%items.length]:"";
-      return <div key={i}><small>{i+1}</small>{show?<span><b>{["09:00","12:00","17:00"][i%3]}</b> {code}</span>:null}</div>
-    })}</div>
+    <div className="demo-calendar-workspace">
+      <div className="demo-calendar-main">
+        <div className="demo-calendar-head"><b>{t(uiLang, "calendar")}</b><span>{t(uiLang,"landDemoOctober")} 2026</span><button type="button">{t(uiLang, "today")}</button></div>
+        <div className="demo-calendar-week">{["1","2","3","4","5","6","7"].map((d,i)=><span key={i}>{t(uiLang,`weekdayShort${d}`)}</span>)}</div>
+        <div className="demo-calendar-grid">{Array.from({length:28},(_,i)=>{
+          const item=entries[i];
+          return <div className={i===16?"selected":""} key={i}><small>{i+1}</small>{item?<span><b>{item[0]}</b> {item[1]}</span>:null}</div>
+        })}</div>
+      </div>
+      <aside className="demo-calendar-inspector">
+        <DemoThumb code="ALPS" variant="alps" />
+        <b>{t(uiLang,"landDemoVideo1")}</b>
+        <small>{t(uiLang,"landDemoScheduled")}</small>
+        <DemoField label={t(uiLang,"landDemoDate")} value="17.10.2026" />
+        <DemoField label={t(uiLang,"landDemoTime")} value="09:00" />
+        <button type="button">{t(uiLang,"landDemoScheduled")}</button>
+      </aside>
+    </div>
   </div>;
 }
 
