@@ -130,19 +130,55 @@ export function Landing({ authError = "" }) {
   );
 }
 
+const DEMO = {
+  videos: [
+    { code: "B1", time: "17:00", views: "4 821" },
+    { code: "A2", time: "09:00", views: "3 406" },
+    { code: "SHORTS", time: "18:30", views: "7 918" },
+    { code: "GRAMMATIK", time: "12:00", views: "2 597" },
+  ],
+  bars: [28,38,31,52,44,67,61,76,58,82,71,91],
+  calendar: [
+    ["", "17:00", "", "09:00", "", "18:30", ""],
+    ["12:00", "", "17:00", "", "09:00", "", "18:30"],
+    ["", "09:00", "", "17:00", "", "12:00", ""],
+    ["18:30", "", "09:00", "", "17:00", "", ""],
+  ],
+};
+
 function DemoWorkspace({ uiLang }) {
   return (
-    <div className="land-demo-frame" aria-label={t(uiLang, "landDemoLabel")}>
-      <div className="land-demo-bar"><i /><i /><i /><span>Demo Channel</span><b>{t(uiLang, "landDemoBadge")}</b></div>
-      <div className="land-demo-nav"><b>M</b><span className="active">{t(uiLang, "videos")}</span><span>{t(uiLang, "playlists")}</span><span>{t(uiLang, "calendar")}</span><span>{t(uiLang, "statistics")}</span></div>
-      <div className="land-demo-body">
-        <aside><strong>{t(uiLang, "videos")}</strong>{["A1", "B1", "Shorts", "Grammar"].map((x,i)=><div className={i===0?"active":""} key={x}><i /> <span>{x} · German</span></div>)}</aside>
-        <section>
-          <div className="land-demo-video">
-            <div className="land-demo-thumb"><span>DEUTSCH B1</span><strong>100</strong><b>WÖRTER</b></div>
-            <div><h3>{t(uiLang, "landDemoVideoTitle")}</h3><p>{t(uiLang, "landDemoScheduled")}</p><small>18.10.2026 · 17:00</small></div>
+    <div className="land-demo-frame land-real-demo" aria-label={t(uiLang, "landDemoLabel")}>
+      <DemoChrome uiLang={uiLang} active="videos" />
+      <div className="demo-app-grid">
+        <aside className="demo-video-list">
+          <div className="demo-pane-title">{t(uiLang, "videos")} <span>24</span></div>
+          <div className="demo-search">{t(uiLang, "searchVideos")}</div>
+          {DEMO.videos.map((video, i) => (
+            <div className={`demo-list-video ${i === 0 ? "active" : ""}`} key={video.code}>
+              <DemoThumb code={video.code} />
+              <div><b>{t(uiLang, `landDemoVideo${i + 1}`)}</b><small>{i === 0 ? t(uiLang, "filterScheduled") : t(uiLang, "filterPublic")} · {video.views}</small></div>
+            </div>
+          ))}
+        </aside>
+        <section className="demo-video-editor">
+          <div className="demo-video-head">
+            <DemoThumb code="B1" large />
+            <div><h3>{t(uiLang, "landDemoVideo1")}</h3><p>{t(uiLang, "filterScheduled")} · 18.10.2026, 17:00</p></div>
           </div>
-          <div className="land-demo-fields"><label>{t(uiLang, "title")}<i /></label><label>{t(uiLang, "description")}<i className="large" /></label><label>{t(uiLang, "tags")}<i /></label></div>
+          <div className="demo-editor-cols">
+            <div>
+              <DemoField label={t(uiLang, "title")} value={t(uiLang, "landDemoVideo1")} />
+              <DemoField label={t(uiLang, "description")} value={t(uiLang, "landDemoDescription")} tall />
+              <DemoField label={t(uiLang, "tags")} value="Deutsch, B1, Wortschatz, Lernen" />
+            </div>
+            <div className="demo-settings">
+              <DemoField label={t(uiLang, "videoLanguage")} value="Deutsch" />
+              <DemoField label={t(uiLang, "videoCategory")} value="Education" />
+              <DemoField label={t(uiLang, "videoVisibility")} value={t(uiLang, "filterPrivate")} />
+              <button type="button">{t(uiLang, "improveWithAi")}</button>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -150,11 +186,25 @@ function DemoWorkspace({ uiLang }) {
 }
 
 function DemoStatistics({ uiLang }) {
-  const bars=[28,38,31,52,44,67,61,76,58,82,71,91];
-  return <div className="land-stats-demo" aria-label={t(uiLang, "landDemoStatsLabel")}>
-    <div className="land-stats-top"><b>{t(uiLang, "statistics")}</b><span>28 {t(uiLang, "days")}</span></div>
-    <div className="land-stat-cards"><article><span>{t(uiLang, "views")}</span><strong>18 742</strong><small>+12.4%</small></article><article><span>{t(uiLang, "watchTime")}</span><strong>1 286 h</strong><small>+8.7%</small></article><article><span>{t(uiLang, "subscribers")}</span><strong>+312</strong><small>+16.1%</small></article></div>
-    <div className="land-bars">{bars.map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div>
-    <div className="land-realtime"><span>{t(uiLang, "landDemoRealtime")}</span><b>326</b><small>60 min</small></div>
+  return <div className="land-stats-demo land-real-demo" aria-label={t(uiLang, "landDemoStatsLabel")}>
+    <DemoChrome uiLang={uiLang} active="statistics" compact />
+    <div className="demo-stats-content">
+      <div className="land-stat-cards"><article><span>{t(uiLang, "views")}</span><strong>18 742</strong><small>{t(uiLang, "landDemoData")}</small></article><article><span>{t(uiLang, "watchTime")}</span><strong>1 286 h</strong><small>{t(uiLang, "landDemoData")}</small></article><article><span>{t(uiLang, "subscribers")}</span><strong>+312</strong><small>{t(uiLang, "landDemoData")}</small></article></div>
+      <div className="land-bars">{DEMO.bars.map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div>
+      <div className="land-realtime"><span>{t(uiLang, "landDemoPeriod")}</span><b>28</b><small>{t(uiLang, "days")}</small></div>
+    </div>
   </div>;
 }
+
+function DemoChrome({ uiLang, active, compact = false }) {
+  return <><div className="land-demo-bar"><i /><i /><i /><span>Deutsch Studio</span><b>{t(uiLang, "landDemoBadge")}</b></div><div className={`land-demo-nav ${compact ? "compact" : ""}`}><b>M</b>{["videos","playlists","calendar","statistics"].map(key=><span className={active===key?"active":""} key={key}>{t(uiLang,key)}</span>)}</div></>;
+}
+
+function DemoThumb({ code, large = false }) {
+  return <div className={`demo-thumb ${large ? "large" : ""}`}><small>DEUTSCH</small><strong>{code}</strong><span>MOYASTUDIA DEMO</span></div>;
+}
+
+function DemoField({ label, value, tall = false }) {
+  return <label className="demo-field"><span>{label}</span><div className={tall ? "tall" : ""}>{value}</div></label>;
+}
+
