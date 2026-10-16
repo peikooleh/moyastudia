@@ -68,7 +68,7 @@ export function Landing({ authError = "" }) {
               <article className="land-feature-card" key={title}>
                 <span>{number}</span>
                 <FeatureMini index={index} uiLang={uiLang} />
-                <h3>{t(uiLang, title)}</h3>
+                <h3>{index === 2 ? <a href="#product">{t(uiLang, title)}</a> : index === 4 ? <a href="#ai">{t(uiLang, title)}</a> : index === 5 ? <a href="#workflow">{t(uiLang, title)}</a> : t(uiLang, title)}</h3>
                 <p>{t(uiLang, text)}</p>
               </article>
             ))}
@@ -84,7 +84,7 @@ export function Landing({ authError = "" }) {
           <DemoCalendar uiLang={uiLang} />
         </section>
 
-        <section className="land-ai-section land-section">
+        <section className="land-ai-section land-section" id="ai">
           <div>
             <span className="land-kicker">AI</span>
             <h2>{t(uiLang, "landAiSectionTitle")}</h2>
