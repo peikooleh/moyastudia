@@ -58,7 +58,7 @@ export function Landing({ authError = "" }) {
             {FEATURES.map(([title, text, number], index) => (
               <article className="land-feature-card" key={title}>
                 <span>{number}</span>
-                <i aria-hidden="true">{["▣","☷","□","▥","✦","◫"][index]}</i>
+                <i aria-hidden="true">{["▤","☷","▦","▥","✦","▣"][index]}</i>
                 <h3>{t(uiLang, title)}</h3>
                 <p>{t(uiLang, text)}</p>
               </article>
