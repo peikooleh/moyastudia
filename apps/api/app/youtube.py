@@ -1149,7 +1149,19 @@ def set_playlist_thumbnail(
             "playlistImages.insert",
             recorder,
         )
-    return {"ok": True, "id": response.get("id") or "", "playlistId": playlist_id}
+
+    expected_id = response.get("id") or (existing[0].get("id") if existing else "")
+    verified = _playlist_images_list(service, playlist_id, recorder)
+    verified_custom = [
+        item for item in verified
+        if (item.get("snippet") or {}).get("playlistId") == playlist_id
+        and (item.get("snippet") or {}).get("type") == "custom"
+    ]
+    if expected_id:
+        verified_custom = [item for item in verified_custom if item.get("id") == expected_id]
+    if not verified_custom:
+        raise RuntimeError("YouTube did not confirm the custom playlist image")
+    return {"ok": True, "id": expected_id or verified_custom[0].get("id") or "", "playlistId": playlist_id, "verified": True}
 
 
 def update_playlist_item_position(
