@@ -247,6 +247,8 @@ test("playlist mapping preserves all available fields for the Studio view", () =
       title: "Playlist title",
       description: "Playlist description",
       thumb: "https://img.example.test/playlist.jpg",
+      customThumbnail: false,
+      thumbnailPreviewAvailable: true,
       publishedAt: "2026-01-02T03:04:05Z",
       privacy: "private",
       itemCount: 7,
