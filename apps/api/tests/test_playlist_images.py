@@ -17,13 +17,13 @@ class FakeHttp:
         return SimpleNamespace(status=self.status, reason="Forbidden" if self.status >= 400 else "OK"), json.dumps(self.body).encode("utf-8")
 
 
-def test_playlist_images_list_uses_documented_playlist_id_filter():
+def test_playlist_images_list_uses_documented_parent_filter():
     http = FakeHttp()
     service = SimpleNamespace(_http=http)
     images = youtube._playlist_images_list(service, "PL/with space")
     assert images == [{"id": "image-1"}]
     assert http.calls == [(
-        "https://www.googleapis.com/youtube/v3/playlistImages?part=snippet&playlistId=PL%2Fwith+space&maxResults=50",
+        "https://www.googleapis.com/youtube/v3/playlistImages?part=snippet&parent=PL%2Fwith+space&maxResults=50",
         "GET",
     )]
 
