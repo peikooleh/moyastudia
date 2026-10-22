@@ -548,7 +548,7 @@ def _playlist_images_list(service, playlist_id: str, recorder: QuotaRecorder | N
     request is made. Use the same authorized HTTP transport as the service.
     """
     url = "https://www.googleapis.com/youtube/v3/playlistImages?" + urlencode({
-        "part": "snippet", "playlistId": playlist_id, "maxResults": 50,
+        "part": "snippet", "parent": playlist_id, "maxResults": 50,
     })
 
     class _Request:
@@ -585,15 +585,29 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
                 continue
+            content_details = item.get("contentDetails") or {}
+            thumbnail_video_id = content_details.get("thumbnailVideoId") or ""
+            custom_thumbnail = False
+            if not thumbnail_video_id:
+                playlist_images = _playlist_images_list(service, item["id"], recorder)
+                custom_thumbnail = any(
+                    (image.get("snippet") or {}).get("playlistId") == item["id"]
+                    and (image.get("snippet") or {}).get("type") == "hero"
+                    for image in playlist_images
+                )
             out.append(
                 {
                     "id": item["id"],
                     "title": snippet.get("title") or "",
                     "description": snippet.get("description") or "",
-                    "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
+                    # playlistImages confirms a custom image but does not expose its URL.
+                    # Do not present the stale video-based snippet thumbnail as current.
+                    "thumb": "" if custom_thumbnail else _pick_thumb(snippet.get("thumbnails") or {}),
+                    "customThumbnail": custom_thumbnail,
+                    "thumbnailPreviewAvailable": not custom_thumbnail,
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
-                    "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
+                    "itemCount": content_details.get("itemCount"),
                 }
             )
         next_token = resp.get("nextPageToken")
@@ -1134,7 +1148,7 @@ def set_playlist_thumbnail(
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
     existing = _playlist_images_list(service, playlist_id, recorder)
-    body = {"snippet": {"playlistId": playlist_id, "type": "custom"}}
+    body = {"snippet": {"playlistId": playlist_id, "type": "hero"}}
     if existing:
         # YouTube requires the playlistImage resource ID for updates.
         body["id"] = existing[0]["id"]
@@ -1155,7 +1169,7 @@ def set_playlist_thumbnail(
     verified_custom = [
         item for item in verified
         if (item.get("snippet") or {}).get("playlistId") == playlist_id
-        and (item.get("snippet") or {}).get("type") == "custom"
+        and (item.get("snippet") or {}).get("type") == "hero"
     ]
     if expected_id:
         verified_custom = [item for item in verified_custom if item.get("id") == expected_id]
