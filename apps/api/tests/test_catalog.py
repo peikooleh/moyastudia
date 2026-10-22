@@ -1367,7 +1367,7 @@ def test_incremental_sync_refreshes_known_videos_across_all_pages(
             .one()
         )
         assert changed.youtube_visibility == "unlisted"
-        assert changed.youtube_thumbnail_url == "https://img.example/known-later.jpg"
+        assert changed.youtube_thumbnail_url == "https://img.example.test/known-later.jpg"
         assert changed.youtube_scheduled_at.isoformat() == "2026-10-16T05:00:00"
 
 
