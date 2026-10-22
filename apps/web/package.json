@@ -11,14 +11,14 @@
     "build:deployment": "npm run check:deployment && next build"
   },
   "dependencies": {
-    "next": "15.5.28",
+    "next": "15.5.27",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^2.15.1"
   },
   "devDependencies": {
     "eslint": "8.57.1",
-    "eslint-config-next": "15.5.28"
+    "eslint-config-next": "15.5.27"
   },
   "overrides": {
     "next": {
