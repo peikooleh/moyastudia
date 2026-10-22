@@ -687,7 +687,10 @@ def test_channel_playlists_are_scoped_to_selected_channel(
     response = client.get(f"/channels/{channel_id}/playlists")
 
     assert response.status_code == 200
-    assert response.json() == [
+    payload = response.json()
+    assert payload[0]["thumb"].startswith("https://img.example.test/selected.jpg?moyastudia_v=")
+    payload[0]["thumb"] = "https://img.example.test/selected.jpg"
+    assert payload == [
         {
             "id": "selected-playlist",
             "title": "Selected",
