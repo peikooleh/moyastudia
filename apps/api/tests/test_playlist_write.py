@@ -192,7 +192,7 @@ def test_playlist_thumbnail_validates_type_and_forwards_bytes(client, test_datab
             data=data,
             content_type=content_type,
         )
-        return {"ok": True, "id": "image-one", "playlistId": playlist_id}
+        return {"ok": True, "id": "image-one", "playlistId": playlist_id, "verified": True, "playlist": {"id": playlist_id, "thumb": "https://new.example/playlist.jpg"}}
 
     monkeypatch.setattr(main.yt, "set_playlist_thumbnail", fake_thumbnail)
 
@@ -211,6 +211,7 @@ def test_playlist_thumbnail_validates_type_and_forwards_bytes(client, test_datab
     assert accepted.status_code == 200
     assert captured["data"] == b"\x89PNG\r\n\x1a\npng-data"
     assert captured["content_type"] == "image/png"
+    assert accepted.json()["playlist"]["thumb"] == "https://new.example/playlist.jpg"
 
 
 def test_playlist_thumbnail_rejects_spoofed_image_content(client, test_database, monkeypatch):
@@ -277,12 +278,13 @@ def test_youtube_playlist_thumbnail_insert_is_owned_and_uses_custom_image(monkey
             return Resource("playlistImages")
 
     monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
-    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: [])
+    playlist_image_reads = iter([[], [{"id": "image-one", "snippet": {"playlistId": "playlist-one", "type": "custom"}}]])
+    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: next(playlist_image_reads))
     result = youtube.set_playlist_thumbnail(
         "refresh", "playlist-channel", "playlist-one", b"png", "image/png"
     )
 
-    assert result == {"ok": True, "id": "image-one", "playlistId": "playlist-one"}
+    assert result == {"ok": True, "id": "image-one", "playlistId": "playlist-one", "verified": True}
     image_insert = next(call for call in calls if call[0:2] == ("playlistImages", "insert"))
     assert image_insert[2]["body"] == {
         "snippet": {"playlistId": "playlist-one", "type": "custom"}
@@ -448,7 +450,8 @@ def test_youtube_playlist_thumbnail_update_existing_image(monkeypatch):
             return Resource("playlistImages")
 
     monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
-    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: [{"id": "existing-image"}])
+    playlist_image_reads = iter([[{"id": "existing-image", "snippet": {"playlistId": "playlist-one", "type": "custom"}}], [{"id": "existing-image", "snippet": {"playlistId": "playlist-one", "type": "custom"}}]])
+    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: next(playlist_image_reads))
     result = youtube.set_playlist_thumbnail(
         "refresh", "playlist-channel", "playlist-one", b"png", "image/png"
     )
