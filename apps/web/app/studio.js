@@ -1390,7 +1390,16 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
         const code = typeof detail === "object" && detail ? detail.code : detail;
         throw new Error(code ? t(uiLang, code) : t(uiLang, "playlistThumbnailError"));
       }
-      setPlaylistState((current) => ({ ...current, items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, thumb: draft.preview } : playlist) }));
+      const refreshed = data?.playlist ? mapPlaylistForStudio(data.playlist) : null;
+      if (refreshed) {
+        setPlaylistState((current) => ({
+          ...current,
+          items: current.items.map((playlist) => playlist.id === selectedPlaylist.id ? { ...playlist, ...refreshed } : playlist),
+        }));
+      } else {
+        setPlaylistRetry((current) => current + 1);
+      }
+      if (draft.preview) URL.revokeObjectURL(draft.preview);
       setPlaylistThumbnailDraft(null);
       setPlaylistIdCopyStatus(t(uiLang, "playlistThumbnailSuccess"));
     } catch (error) {
@@ -2615,7 +2624,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             {selectedPlaylist ? (
               <header className="playlist-summary">
                 <div className="playlist-summary-media">
-                  {(playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb) ? <img src={playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
+                  {(playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb) ? <img src={playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : selectedPlaylist.customThumbnail ? t(uiLang, "playlistCustomThumbnailNoPreview") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
                   {!selectedPlaylist.localOnly && playlistEditing ? (
                     <label className="btn ghost playlist-thumbnail-action" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistThumbnailHint")}>
                       {t(uiLang, "changeThumbnail")}

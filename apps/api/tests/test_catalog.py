@@ -687,7 +687,10 @@ def test_channel_playlists_are_scoped_to_selected_channel(
     response = client.get(f"/channels/{channel_id}/playlists")
 
     assert response.status_code == 200
-    assert response.json() == [
+    payload = response.json()
+    assert payload[0]["thumb"].startswith("https://img.example.test/selected.jpg?moyastudia_v=")
+    payload[0]["thumb"] = "https://img.example.test/selected.jpg"
+    assert payload == [
         {
             "id": "selected-playlist",
             "title": "Selected",
@@ -1367,7 +1370,21 @@ def test_incremental_sync_refreshes_known_videos_across_all_pages(
             .one()
         )
         assert changed.youtube_visibility == "unlisted"
+        assert changed.youtube_thumbnail_url == "https://img.example.test/known-later.jpg"
         assert changed.youtube_scheduled_at.isoformat() == "2026-10-16T05:00:00"
+
+
+def test_thumbnail_cache_bust_changes_display_url_without_mutating_canonical_url():
+    canonical = "https://i.ytimg.com/vi/example/hqdefault.jpg"
+    refreshed_at = datetime(2026, 10, 22, 18, 0, tzinfo=timezone.utc)
+    displayed = main._thumbnail_cache_bust(canonical, refreshed_at)
+    assert displayed.startswith(canonical + "?moyastudia_v=")
+    assert canonical == "https://i.ytimg.com/vi/example/hqdefault.jpg"
+
+
+def test_thumbnail_cache_bust_preserves_existing_query_string():
+    displayed = main._thumbnail_cache_bust("https://example.test/thumb.jpg?foo=1", 123)
+    assert displayed == "https://example.test/thumb.jpg?foo=1&moyastudia_v=123"
 
 
 def test_catalog_timestamps_always_include_utc_offset():

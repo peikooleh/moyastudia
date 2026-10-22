@@ -49,7 +49,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 alembic upgrade head
 ```
 
-Текущий migration head — `0012_channel_working_language`. В актуальную цепочку также входят:
+Текущий migration head — `0016_drop_realtime_statistics`. В актуальную цепочку также входят:
 
 - `0006_youtube_quota_usage` — server-side YouTube API usage ledger для `/quota/today`;
 - `0007_user_write_mode` — server-authoritative Write Mode, default OFF;
@@ -57,7 +57,8 @@ alembic upgrade head
 - `0009_local_playlist_drafts` — persistent local playlist drafts/membership;
 - `0010_video_working_settings` — дополнительные video working settings;
 - `0011_ai_connections` — encrypted per-user AI provider/model credentials и prompts;
-- `0012_channel_working_language` — постоянный server-side язык канала.
+- `0012_channel_working_language` — постоянный server-side язык канала;
+- `0016_drop_realtime_statistics` — удаление синтетических realtime snapshots после отказа от недостоверных периодов 60m/48h.
 
 Приложение не создаёт эти schema changes автоматически, поэтому перед запуском актуального кода выполняйте `alembic upgrade head`.
 

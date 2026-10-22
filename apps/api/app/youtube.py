@@ -585,15 +585,18 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             snippet = item.get("snippet") or {}
             if snippet.get("channelId") != youtube_channel_id:
                 continue
+            content_details = item.get("contentDetails") or {}
             out.append(
                 {
                     "id": item["id"],
                     "title": snippet.get("title") or "",
                     "description": snippet.get("description") or "",
+                    # playlists.snippet.thumbnails is YouTube's documented display
+                    # URL source for playlist thumbnails, including refreshed reads.
                     "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
-                    "itemCount": (item.get("contentDetails") or {}).get("itemCount"),
+                    "itemCount": content_details.get("itemCount"),
                 }
             )
         next_token = resp.get("nextPageToken")
@@ -1134,7 +1137,7 @@ def set_playlist_thumbnail(
     _owned_playlist(service, youtube_channel_id, playlist_id, recorder)
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=content_type, resumable=False)
     existing = _playlist_images_list(service, playlist_id, recorder)
-    body = {"snippet": {"playlistId": playlist_id, "type": "custom"}}
+    body = {"snippet": {"playlistId": playlist_id, "type": "hero"}}
     if existing:
         # YouTube requires the playlistImage resource ID for updates.
         body["id"] = existing[0]["id"]
@@ -1149,7 +1152,19 @@ def set_playlist_thumbnail(
             "playlistImages.insert",
             recorder,
         )
-    return {"ok": True, "id": response.get("id") or "", "playlistId": playlist_id}
+
+    expected_id = response.get("id") or (existing[0].get("id") if existing else "")
+    verified = _playlist_images_list(service, playlist_id, recorder)
+    verified_custom = [
+        item for item in verified
+        if (item.get("snippet") or {}).get("playlistId") == playlist_id
+        and (item.get("snippet") or {}).get("type") == "hero"
+    ]
+    if expected_id:
+        verified_custom = [item for item in verified_custom if item.get("id") == expected_id]
+    if not verified_custom:
+        raise RuntimeError("YouTube did not confirm the custom playlist image")
+    return {"ok": True, "id": expected_id or verified_custom[0].get("id") or "", "playlistId": playlist_id, "verified": True}
 
 
 def update_playlist_item_position(

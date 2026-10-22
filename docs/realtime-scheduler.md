@@ -1,28 +1,24 @@
-# Background synchronization and realtime statistics
+# Scheduled YouTube catalog refresh (Vercel Hobby)
 
-MoyaStudia Production runs on Vercel Hobby, so persistent in-process background workers are not used in Production. GitHub Actions calls protected internal API endpoints instead. Local development keeps the in-process realtime collector.
+MoyaStudia Production runs on Vercel Hobby, so persistent in-process background workers are not used in Production. GitHub Actions calls the protected catalog-refresh endpoint instead.
 
-## Realtime statistics
+The synthetic realtime statistics collector was removed because current public counters cannot reconstruct reliable 60-minute or 48-hour YouTube Analytics.
 
-The workflow `Realtime statistics collection` calls `POST /api/internal/realtime-collect` on a best-effort five-minute schedule.
+The protected scheduler secret is intentionally still named `REALTIME_COLLECTOR_SECRET` for deployment compatibility. It remains in use by the independent catalog refresh endpoint and workflow; renaming it should be a separate configuration migration.
 
-Authentication uses `Authorization: Bearer <REALTIME_COLLECTOR_SECRET>`. The same secret is configured in Vercel Production and GitHub Actions. The endpoint requires no browser session and must never be exposed from frontend code.
+## Current scheduled refresh
 
-Each successful collector pass stores a regular counter snapshot when the previous sample is at least about four minutes old, even when the YouTube view count did not change. This produces a usable time series such as `38680 → 38680 → 38687 → 38692`. Realtime views for a window are derived from differences between adjacent stored counters.
-
-Opening the Statistics page is not required for collection. The page reads the accumulated snapshots and may also obtain the current YouTube counter. A 60-minute window needs roughly one hour of accumulated history before coverage is complete. GitHub Actions scheduling is best-effort, so individual samples may be delayed or skipped.
-
-These counters are operational estimates from current YouTube Data API values. They do not replace delayed YouTube Analytics data and cannot reconstruct exact minute-by-minute YouTube history.
-
-## YouTube catalog refresh
-
-The workflow `Scheduled YouTube catalog refresh` calls `POST /api/internal/catalog-refresh` every 12 hours (currently at 00:17 and 12:17 UTC, best-effort).
-
-Each request advances every active connected channel by one bounded catalog page. The workflow repeats requests until every channel reports complete or the bounded round limit is reached. This mirrors the browser refresh loop without requiring MoyaStudia to remain open.
+- GitHub Actions workflow: `.github/workflows/catalog-refresh.yml`.
+- Schedule: every 12 hours at minute 17 (currently 00:17 and 12:17 UTC, best-effort).
+- Endpoint: `POST /api/internal/catalog-refresh`.
+- Authentication: `Authorization: Bearer <REALTIME_COLLECTOR_SECRET>`.
+- The endpoint advances each active connected channel through one bounded catalog page per call.
+- The workflow repeats bounded calls until no channel reports pending work.
+- Incremental catalog sync walks the complete uploads catalog so mutable YouTube state, including video metadata, visibility, scheduling, counters, and thumbnail URLs, can converge without the browser being open.
+- The existing catalog synchronization timestamp remains the user-facing indication of freshness.
+- Manual catalog refresh/reconcile remains available as a fallback when the user believes cached data is stale.
 
 The first Production manual validation completed three connected channels successfully in three rounds with `pending: 0` and no channel errors.
-
-The scheduled catalog refresh updates cached YouTube content metadata. The manual refresh/full-reconcile controls remain available for on-demand or diagnostic synchronization.
 
 ## Production configuration
 
@@ -33,16 +29,15 @@ Required secret:
 
 Both values must be identical. Never commit the value or print it in logs.
 
-In Production, the FastAPI realtime background thread is disabled because Vercel serverless execution is not persistent. GitHub Actions owns scheduled execution. In local development the background realtime collector runs approximately every five minutes.
+Scheduled workflows run from the default branch, so scheduler changes are not considered released until explicitly merged into `main`.
 
-## Validation
+## Release checklist
 
-After scheduler-related changes, verify:
+1. Keep the existing Vercel Production `REALTIME_COLLECTOR_SECRET`.
+2. Keep the matching GitHub Actions repository secret.
+3. After explicit owner approval and merge to the default branch, run `Scheduled YouTube catalog refresh` manually once.
+4. Confirm the workflow reaches `pending: 0` with no channel errors and the catalog synchronization timestamp advances.
+5. Confirm a video thumbnail changed directly in YouTube is replaced in the cached catalog after a scheduled or manual incremental refresh.
+6. Confirm API/web CI and the Production deployment are healthy.
 
-1. API and web CI are green on `main`.
-2. Vercel Production deployment is healthy.
-3. A manual `Realtime statistics collection` run succeeds.
-4. A manual `Scheduled YouTube catalog refresh` run reaches `pending: 0` with no errors.
-5. Realtime snapshots accumulate over time even across intervals with no view-count change.
-
-Scheduled workflows run from the default branch, so changes to scheduler behavior are not considered released until explicitly merged into `main`.
+The removed five-minute realtime workflow and `/api/internal/realtime-collect` endpoint must not be restored unless YouTube exposes an authoritative source suitable for those time windows.
