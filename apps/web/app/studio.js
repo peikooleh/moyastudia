@@ -2624,7 +2624,7 @@ export function Studio({ view = "videos", onViewChange = () => {}, writeMode = {
             {selectedPlaylist ? (
               <header className="playlist-summary">
                 <div className="playlist-summary-media">
-                  {(playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb) ? <img src={playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
+                  {(playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb) ? <img src={playlistThumbnailDraft?.playlistId === selectedPlaylist.id ? playlistThumbnailDraft.preview : selectedPlaylist.thumb} alt={t(uiLang, "playlistThumbnailAlt")} /> : <span className="playlist-summary-placeholder"><span>{selectedPlaylist.localOnly ? t(uiLang, "playlistLocalBadge") : selectedPlaylist.customThumbnail ? t(uiLang, "playlistCustomThumbnailNoPreview") : t(uiLang, "playlistThumbnailAlt")}</span></span>}
                   {!selectedPlaylist.localOnly && playlistEditing ? (
                     <label className="btn ghost playlist-thumbnail-action" title={!writeMode?.enabled ? t(uiLang, "saveToYoutubeWriteModeHint") : t(uiLang, "playlistThumbnailHint")}>
                       {t(uiLang, "changeThumbnail")}
