@@ -54,3 +54,29 @@ Branch: `fix/analytics-playlist-thumbnails-audit`
 - Production build.
 - Review the branch diff for unrelated changes.
 - Keep Statistics and thumbnail work separable in commits where practical.
+
+
+## Implementation status — 2026-10-22
+
+Implemented in this branch:
+
+- synthetic 60m/48h Statistics UI and API removed;
+- realtime snapshot model, collector module, endpoint, workflow, translations and obsolete tests removed;
+- forward migration `0016_drop_realtime_statistics` added;
+- 12-hour catalog refresh workflow and protected endpoint preserved unchanged;
+- scheduled catalog refresh tests preserved;
+- playlist thumbnail writes now require post-write custom-image verification;
+- playlist thumbnail endpoint rereads the remote playlist state after a verified write;
+- frontend no longer promotes a local `blob:` URL to remote truth after upload;
+- incremental catalog regression coverage now asserts replacement of an existing video's cached thumbnail URL;
+- scheduler and thumbnail behavior documented.
+
+Validation:
+
+- API pytest: passed in CI.
+- API dependency audit: passed in CI.
+- Web catalog tests: passed in CI.
+- i18n parity: passed in CI.
+- Web lint: passed in CI (existing `<img>` warnings only).
+- Web dependency audit currently blocks the final build because repository baseline Next.js 15.5.27 received a new critical advisory; the security release is 15.5.28. That dependency upgrade is intentionally not mixed into this focused branch without a regenerated lockfile and its own validation.
+- No merge performed.
