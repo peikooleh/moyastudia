@@ -195,6 +195,7 @@ def test_playlist_thumbnail_validates_type_and_forwards_bytes(client, test_datab
         return {"ok": True, "id": "image-one", "playlistId": playlist_id, "verified": True, "playlist": {"id": playlist_id, "thumb": "https://new.example/playlist.jpg"}}
 
     monkeypatch.setattr(main.yt, "set_playlist_thumbnail", fake_thumbnail)
+    monkeypatch.setattr(main.yt, "list_playlists", lambda *args, **kwargs: [{"id": "playlist-one", "thumb": "https://new.example/playlist.jpg"}])
 
     rejected = client.put(
         f"/channels/{channel_id}/playlists/playlist-one/thumbnail",
