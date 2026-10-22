@@ -1388,6 +1388,34 @@ def _catalog_datetime_iso(value: datetime | None) -> str:
     return value.astimezone(timezone.utc).isoformat(timespec="minutes")
 
 
+def _thumbnail_cache_bust(url: str, version: datetime | int | str | None) -> str:
+    """Return a display URL that invalidates browser/CDN cache after a known refresh.
+
+    Keep the canonical YouTube URL in the database.  YouTube commonly reuses the
+    same thumbnail URL when the image bytes change, so URL equality is not proof
+    that the thumbnail itself is unchanged.
+    """
+    if not url or version is None:
+        return url or ""
+    if isinstance(version, datetime):
+        if version.tzinfo is None:
+            version = version.replace(tzinfo=timezone.utc)
+        token = str(int(version.timestamp()))
+    else:
+        token = str(version)
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}moyastudia_v={token}"
+
+
+def _cache_bust_playlist_thumbnails(playlists: list[dict], version: int) -> list[dict]:
+    refreshed = []
+    for playlist in playlists:
+        item = dict(playlist)
+        item["thumb"] = _thumbnail_cache_bust(item.get("thumb") or "", version)
+        refreshed.append(item)
+    return refreshed
+
+
 def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
@@ -1429,7 +1457,7 @@ def _video_catalog_item(video: Video) -> dict:
         "remoteMissing": video.availability_status == "remote_missing",
         "dirty": any(dirty_fields.values()),
         "dirtyFields": dirty_fields,
-        "thumb": video.youtube_thumbnail_url or "",
+        "thumb": _thumbnail_cache_bust(video.youtube_thumbnail_url or "", video.last_synced_at),
         "publishedAt": _catalog_datetime_iso(published_at),
         "previouslyPublished": bool(
             video.youtube_visibility == "private"
@@ -2611,7 +2639,8 @@ def channel_playlists(
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
-            return yt.list_playlists(token, row.youtube_channel_id)
+            playlists = yt.list_playlists(token, row.youtube_channel_id)
+        return _cache_bust_playlist_thumbnails(playlists, int(_utcnow().timestamp()))
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -2680,6 +2709,7 @@ async def upload_channel_playlist_thumbnail(
         refreshed = next((item for item in playlists if item.get("id") == playlist_id), None)
         if refreshed is None:
             raise LookupError("playlist not found after thumbnail update")
+        refreshed = _cache_bust_playlist_thumbnails([refreshed], int(_utcnow().timestamp()))[0]
         return {**result, "playlist": refreshed}
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
