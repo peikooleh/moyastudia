@@ -212,7 +212,7 @@ def test_playlist_thumbnail_validates_type_and_forwards_bytes(client, test_datab
     assert accepted.status_code == 200
     assert captured["data"] == b"\x89PNG\r\n\x1a\npng-data"
     assert captured["content_type"] == "image/png"
-    assert accepted.json()["playlist"]["thumb"] == "https://new.example/playlist.jpg"
+    assert accepted.json()["playlist"]["thumb"].startswith("https://new.example/playlist.jpg?moyastudia_v=")
 
 
 def test_playlist_thumbnail_rejects_spoofed_image_content(client, test_database, monkeypatch):
