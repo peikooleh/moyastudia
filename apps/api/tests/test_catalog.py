@@ -1371,6 +1371,19 @@ def test_incremental_sync_refreshes_known_videos_across_all_pages(
         assert changed.youtube_scheduled_at.isoformat() == "2026-10-16T05:00:00"
 
 
+def test_thumbnail_cache_bust_changes_display_url_without_mutating_canonical_url():
+    canonical = "https://i.ytimg.com/vi/example/hqdefault.jpg"
+    refreshed_at = datetime(2026, 10, 22, 18, 0, tzinfo=timezone.utc)
+    displayed = main._thumbnail_cache_bust(canonical, refreshed_at)
+    assert displayed.startswith(canonical + "?moyastudia_v=")
+    assert canonical == "https://i.ytimg.com/vi/example/hqdefault.jpg"
+
+
+def test_thumbnail_cache_bust_preserves_existing_query_string():
+    displayed = main._thumbnail_cache_bust("https://example.test/thumb.jpg?foo=1", 123)
+    assert displayed == "https://example.test/thumb.jpg?foo=1&moyastudia_v=123"
+
+
 def test_catalog_timestamps_always_include_utc_offset():
     # SQLite drops tzinfo, but browser dates must still represent UTC instants.
     naive_utc = datetime(2026, 10, 16, 5, 0)
