@@ -96,16 +96,14 @@ Validated on the isolated branch after implementation:
 
 The Next.js update is intentionally limited to the runtime `next` package and lockfile entries required by that patch. React and unrelated dependencies were not changed. No merge is performed as part of this work; the branch remains the manual verification point before owner approval.
 
-
 ## Follow-up findings — 2026-10-22
 
-Playlist image contract was rechecked against the current YouTube discovery/API documentation after manual testing:
+Playlist image contract was rechecked against the current official YouTube Data API documentation after manual testing:
 
-- `playlistImages.list` uses `parent=<playlistId>`; the previous manual request used the wrong `playlistId` query key;
-- the documented primary playlist image type is `hero`; the previous implementation used `custom`;
-- both write verification and regression tests now use the current contract;
-- playlist custom-image state is propagated to Studio;
-- when YouTube reports a custom playlist image but exposes no image URL, Studio no longer displays the stale video-based playlist thumbnail as current.
+- `playlistImages.list` uses the documented `playlistId=<playlistId>` filter;
+- `playlists.snippet.thumbnails` is the documented source of playlist thumbnail URLs used for rendering;
+- the current `playlists.contentDetails` resource documents `itemCount` and does not expose a `thumbnailVideoId` field, so MoyaStudia must not infer custom-thumbnail state from that absent property;
+- the frontend again renders the URLs returned by YouTube and keeps cache-busting on display URLs so unchanged CDN URLs do not leave stale browser images.
 
 Dependency audit follow-up:
 
