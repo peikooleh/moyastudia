@@ -548,7 +548,7 @@ def _playlist_images_list(service, playlist_id: str, recorder: QuotaRecorder | N
     request is made. Use the same authorized HTTP transport as the service.
     """
     url = "https://www.googleapis.com/youtube/v3/playlistImages?" + urlencode({
-        "part": "snippet", "parent": playlist_id, "maxResults": 50,
+        "part": "snippet", "playlistId": playlist_id, "maxResults": 50,
     })
 
     class _Request:
@@ -586,21 +586,14 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
             if snippet.get("channelId") != youtube_channel_id:
                 continue
             content_details = item.get("contentDetails") or {}
-            thumbnail_video_id = content_details.get("thumbnailVideoId") or ""
-            # YouTube documents thumbnailVideoId as absent when a custom playlist
-            # image is set. A non-empty snippet thumbnail with no backing video ID
-            # must therefore not be treated as a current video-based preview.
-            custom_thumbnail = bool(snippet.get("thumbnails")) and not thumbnail_video_id
             out.append(
                 {
                     "id": item["id"],
                     "title": snippet.get("title") or "",
                     "description": snippet.get("description") or "",
-                    # playlistImages confirms a custom image but does not expose its URL.
-                    # Do not present the stale video-based snippet thumbnail as current.
-                    "thumb": "" if custom_thumbnail else _pick_thumb(snippet.get("thumbnails") or {}),
-                    "customThumbnail": custom_thumbnail,
-                    "thumbnailPreviewAvailable": not custom_thumbnail,
+                    # playlists.snippet.thumbnails is YouTube's documented display
+                    # URL source for playlist thumbnails, including refreshed reads.
+                    "thumb": _pick_thumb(snippet.get("thumbnails") or {}),
                     "publishedAt": snippet.get("publishedAt") or "",
                     "privacy": (item.get("status") or {}).get("privacyStatus") or "",
                     "itemCount": content_details.get("itemCount"),
