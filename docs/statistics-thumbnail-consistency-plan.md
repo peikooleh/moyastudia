@@ -95,3 +95,21 @@ Validated on the isolated branch after implementation:
 - deployment build passes on Next.js 15.5.28.
 
 The Next.js update is intentionally limited to the runtime `next` package and lockfile entries required by that patch. React and unrelated dependencies were not changed. No merge is performed as part of this work; the branch remains the manual verification point before owner approval.
+
+
+## Follow-up findings — 2026-10-22
+
+Playlist image contract was rechecked against the current YouTube discovery/API documentation after manual testing:
+
+- `playlistImages.list` uses `parent=<playlistId>`; the previous manual request used the wrong `playlistId` query key;
+- the documented primary playlist image type is `hero`; the previous implementation used `custom`;
+- both write verification and regression tests now use the current contract;
+- playlist custom-image state is propagated to Studio;
+- when YouTube reports a custom playlist image but exposes no image URL, Studio no longer displays the stale video-based playlist thumbnail as current.
+
+Dependency audit follow-up:
+
+- production `npm audit --omit=dev` passes;
+- full local `npm audit` reports GHSA-vfj7-8cjw-p6xm through the ESLint-only chain `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces`;
+- as of 2026-10-22 the advisory has no published patched `braces` release, so `npm audit fix --force` would only perform an unrelated breaking downgrade and is not an accepted remediation;
+- do not hide this advisory with an unreviewed override. Replace the lint toolchain in a separate infrastructure change only after proving equivalent Next.js, React and accessibility coverage, or update normally when upstream publishes a patched dependency path.
