@@ -587,14 +587,10 @@ def list_playlists(refresh_token: str, youtube_channel_id: str, recorder: QuotaR
                 continue
             content_details = item.get("contentDetails") or {}
             thumbnail_video_id = content_details.get("thumbnailVideoId") or ""
-            custom_thumbnail = False
-            if not thumbnail_video_id:
-                playlist_images = _playlist_images_list(service, item["id"], recorder)
-                custom_thumbnail = any(
-                    (image.get("snippet") or {}).get("playlistId") == item["id"]
-                    and (image.get("snippet") or {}).get("type") == "hero"
-                    for image in playlist_images
-                )
+            # YouTube documents thumbnailVideoId as absent when a custom playlist
+            # image is set. A non-empty snippet thumbnail with no backing video ID
+            # must therefore not be treated as a current video-based preview.
+            custom_thumbnail = bool(snippet.get("thumbnails")) and not thumbnail_video_id
             out.append(
                 {
                     "id": item["id"],
