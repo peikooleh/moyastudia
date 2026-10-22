@@ -293,6 +293,38 @@ def test_youtube_playlist_thumbnail_insert_is_owned_and_uses_custom_image(monkey
     assert image_insert[2]["media_body"].mimetype() == "image/png"
 
 
+
+def test_youtube_playlist_thumbnail_fails_when_custom_image_is_not_verified(monkeypatch):
+    class Request:
+        def __init__(self, response):
+            self.response = response
+        def execute(self):
+            return self.response
+
+    class Resource:
+        def __init__(self, name):
+            self.name = name
+        def list(self, **kwargs):
+            if self.name == "playlists":
+                return Request({"items": [{"snippet": {"channelId": "playlist-channel"}}]})
+            return Request({"items": []})
+        def insert(self, **kwargs):
+            return Request({"id": "image-one"})
+
+    class Service:
+        def playlists(self):
+            return Resource("playlists")
+        def playlistImages(self):
+            return Resource("playlistImages")
+
+    monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
+    monkeypatch.setattr(youtube, "_playlist_images_list", lambda service, playlist_id, recorder=None: [])
+
+    with pytest.raises(RuntimeError, match="did not confirm"):
+        youtube.set_playlist_thumbnail(
+            "refresh", "playlist-channel", "playlist-one", b"png", "image/png"
+        )
+
 def test_youtube_playlist_reorder_verifies_item_membership(monkeypatch):
     update_calls = []
 
