@@ -644,7 +644,7 @@ def test_channel_playlists_are_scoped_to_selected_channel(
                         "thumbnails": {"high": {"url": "https://img.example.test/selected.jpg"}},
                     },
                     "status": {"privacyStatus": "private"},
-                    "contentDetails": {"itemCount": 12, "thumbnailVideoId": "video-thumb"},
+                    "contentDetails": {"itemCount": 12},
                 },
                 {
                     "id": "other-playlist",
@@ -690,11 +690,6 @@ def test_channel_playlists_are_scoped_to_selected_channel(
     payload = response.json()
     assert payload[0]["thumb"].startswith("https://img.example.test/selected.jpg?moyastudia_v=")
     payload[0]["thumb"] = "https://img.example.test/selected.jpg"
-    assert payload[0]["customThumbnail"] is False
-    assert payload[0]["thumbnailPreviewAvailable"] is True
-    for item in payload:
-        item.pop("customThumbnail", None)
-        item.pop("thumbnailPreviewAvailable", None)
     assert payload == [
         {
             "id": "selected-playlist",
