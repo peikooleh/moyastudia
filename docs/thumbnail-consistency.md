@@ -32,3 +32,14 @@ Regression coverage explicitly asserts that an incremental sync updates the cach
 ## Known provider boundary
 
 The playlist write can be verified through `playlistImages`, but the image URL displayed by the UI still comes from `playlists.snippet.thumbnails`. If YouTube confirms the custom image resource while its playlist snippet temporarily returns an older CDN URL, MoyaStudia will show the provider-returned snippet state rather than pretending the browser preview is authoritative.
+
+## Browser/CDN cache invalidation
+
+YouTube can replace thumbnail bytes while keeping the same CDN URL. URL equality therefore does not prove that an image is unchanged.
+
+MoyaStudia keeps the canonical YouTube thumbnail URL unchanged in storage, but appends a MoyaStudia-only version query parameter when returning a thumbnail for display:
+
+- video thumbnails use the video's `last_synced_at` value, so every successful catalog refresh invalidates the browser image cache even when YouTube reused the URL;
+- playlist thumbnails are read live rather than stored, so each playlist read gets a fresh display version; after a playlist thumbnail write the reread response is versioned the same way.
+
+This query parameter is only a display cache key. It is never written back to YouTube and never replaces the canonical URL in the database.
