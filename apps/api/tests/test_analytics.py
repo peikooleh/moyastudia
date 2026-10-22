@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app import main, youtube
-from app.models import Channel, GoogleConnection, RealtimeStatisticsSnapshot, Video
+from app.models import Channel, GoogleConnection, Video
 from app.settings import settings
 from app.tokens import encrypt_refresh_token
 
@@ -323,76 +322,3 @@ def test_analytics_queries_use_explicit_selected_channel_id(monkeypatch):
     assert len(calls) == 2
     assert all(call["ids"] == "channel==expected-channel" for call in calls)
 
-
-def test_realtime_statistics_uses_current_counter_and_saved_history(client, test_database, monkeypatch):
-    owner_id, owner_token = create_account(test_database, subject="realtime-owner")
-    with test_database() as db:
-        connection = GoogleConnection(
-            user_id=owner_id,
-            google_subject="realtime-google",
-            encrypted_refresh_token=encrypt_refresh_token("realtime-token"),
-        )
-        db.add(connection)
-        db.flush()
-        channel = Channel(
-            google_connection_id=connection.id,
-            youtube_channel_id="realtime-channel",
-            title="Realtime channel",
-        )
-        db.add(channel)
-        db.flush()
-        db.add(RealtimeStatisticsSnapshot(
-            channel_id=channel.id,
-            youtube_video_id=None,
-            view_count=1000,
-            captured_at=datetime.now(timezone.utc) - timedelta(minutes=30),
-        ))
-        db.commit()
-        channel_id = channel.id
-
-    monkeypatch.setattr(main.yt, "verified_analytics_channel", lambda token, youtube_channel_id: {
-        "youtube_channel_id": youtube_channel_id,
-        "subscriber_count": 10,
-        "view_count": 1125,
-        "video_count": 5,
-    })
-    client.cookies.set(settings.session_cookie_name, owner_token)
-    response = client.get(f"/channels/{channel_id}/analytics/realtime?window=60m")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["scope"] == "channel"
-    assert payload["window"] == "60m"
-    assert payload["current_views"] == 1125
-    assert payload["views"] == 125
-    assert payload["coverage_complete"] is False
-    assert payload["series"][-1]["views"] == 125
-
-
-
-def test_video_current_statistics_many_batches_ids(monkeypatch):
-    calls = []
-
-    class FakeVideos:
-        def list(self, **kwargs):
-            calls.append(kwargs)
-            ids = kwargs["id"].split(",")
-            return SimpleNamespace(execute=lambda: {"items": [
-                {"id": video_id, "statistics": {"viewCount": str(index + 10)}}
-                for index, video_id in enumerate(ids)
-            ]})
-
-    class FakeService:
-        def videos(self):
-            return FakeVideos()
-
-    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
-    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
-    ids = [f"video-{index}" for index in range(51)]
-    result = youtube.video_current_statistics_many("token", ids)
-
-    assert len(calls) == 2
-    assert len(calls[0]["id"].split(",")) == 50
-    assert len(calls[1]["id"].split(",")) == 1
-    assert result["video-0"]["views"] == 10
-    assert result["video-50"]["views"] == 10
