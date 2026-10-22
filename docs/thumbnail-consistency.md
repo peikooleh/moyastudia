@@ -4,24 +4,22 @@
 
 YouTube exposes two relevant resources with different roles:
 
-- `playlistImages` is used to create/update a custom playlist image and to verify that the custom image resource exists.
-- `playlists.snippet.thumbnails` is used for the displayable thumbnail URLs returned to MoyaStudia.
+- `playlistImages` is used to create/update a custom playlist image and to verify that the playlist image resource exists.
+- `playlists.snippet.thumbnails` is the documented source of displayable playlist thumbnail URLs returned to MoyaStudia.
 
 MoyaStudia therefore does not treat the upload response or a browser `blob:` preview as remote truth.
 
-After a playlist thumbnail write the backend now:
+After a playlist thumbnail write the backend:
 
 1. verifies playlist ownership;
 2. performs `playlistImages.insert` or `playlistImages.update`;
-3. rereads `playlistImages.list` and requires the expected custom resource to be present;
+3. rereads `playlistImages.list` using the documented `playlistId` filter and requires the expected image resource to be present;
 4. rereads the channel playlist list from YouTube;
 5. returns that fresh playlist state to the frontend.
 
 The frontend replaces its playlist row from that reread state. The local file preview is only a draft before the write and is revoked after the request.
 
-The playlist-image API contract is asymmetric: `playlistImages.list` can confirm that a custom `hero` image exists, but the resource does not expose a display URL. The current Google discovery schema also states that `contentDetails.thumbnailVideoId` is absent when a custom playlist thumbnail is set. MoyaStudia uses that signal to avoid presenting an older video-based `snippet.thumbnails` URL as if it were the current custom image.
-
-A thumbnail changed directly in YouTube Studio is therefore detected as custom on the next remote playlist read, but its pixels cannot be fetched through the official Data API. In that state Studio shows an explicit “custom image set on YouTube; preview unavailable through the API” placeholder instead of a stale image. There is no separate playlist-thumbnail database cache.
+A thumbnail changed directly in YouTube Studio is read again from `playlists.snippet.thumbnails` whenever MoyaStudia reloads the remote playlist list. There is no separate playlist-thumbnail database cache.
 
 ## Video thumbnails
 
@@ -31,9 +29,11 @@ The 12-hour incremental scheduler walks the complete uploads catalog, so changes
 
 Regression coverage explicitly asserts that an incremental sync updates the cached video thumbnail URL for an existing video.
 
-## Known provider boundary
+## Provider boundary
 
-Playlist image writes use the current YouTube contract: `playlistImages.list` is filtered with `parent=<playlistId>`, and the main custom image type is `hero`. A verified custom image is never represented by a stale video-derived playlist thumbnail. Because `playlistImages` exposes metadata but no image URL, MoyaStudia cannot reconstruct the custom image preview after reload without using a non-official scraping/storage workaround; this branch intentionally does neither.
+`playlistImages` exposes playlist-image metadata but does not expose a display URL. MoyaStudia therefore uses `playlists.snippet.thumbnails` for rendering rather than inventing a URL or persisting a browser-local preview as remote state.
+
+If a manual synchronization still shows an old image, the next diagnostic step is to compare the exact `playlists.list` thumbnail URL returned by YouTube for that playlist with the URL currently rendered by MoyaStudia.
 
 ## Browser/CDN cache invalidation
 
