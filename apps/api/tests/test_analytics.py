@@ -322,3 +322,31 @@ def test_analytics_queries_use_explicit_selected_channel_id(monkeypatch):
     assert len(calls) == 2
     assert all(call["ids"] == "channel==expected-channel" for call in calls)
 
+
+
+def test_video_current_statistics_many_batches_ids(monkeypatch):
+    calls = []
+
+    class FakeVideos:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            ids = kwargs["id"].split(",")
+            return SimpleNamespace(execute=lambda: {"items": [
+                {"id": video_id, "statistics": {"viewCount": str(index + 10)}}
+                for index, video_id in enumerate(ids)
+            ]})
+
+    class FakeService:
+        def videos(self):
+            return FakeVideos()
+
+    monkeypatch.setattr(youtube, "creds_from_refresh", lambda token: object())
+    monkeypatch.setattr(youtube, "build", lambda *args, **kwargs: FakeService())
+    ids = [f"video-{index}" for index in range(51)]
+    result = youtube.video_current_statistics_many("token", ids)
+
+    assert len(calls) == 2
+    assert len(calls[0]["id"].split(",")) == 50
+    assert len(calls[1]["id"].split(",")) == 1
+    assert result["video-0"]["views"] == 10
+    assert result["video-50"]["views"] == 10
