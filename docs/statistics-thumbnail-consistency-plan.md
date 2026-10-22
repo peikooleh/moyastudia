@@ -81,3 +81,17 @@ Validation:
 - Web lint: passed in CI (existing `<img>` warnings only).
 - Web dependency audit currently blocks the final build because repository baseline Next.js 15.5.27 received a new critical advisory; the security release is 15.5.28. That dependency upgrade is intentionally not mixed into this focused branch without a regenerated lockfile and its own validation.
 - No merge performed.
+
+## Final validation
+
+Validated on the isolated branch after implementation:
+
+- API pytest suite passes;
+- Python dependency audit passes;
+- Studio web tests pass;
+- i18n parity check passes;
+- Next.js lint passes (existing non-blocking warnings remain);
+- production dependency audit passes after updating Next.js from 15.5.27 to the security-fixed 15.5.28 patch release;
+- deployment build passes on Next.js 15.5.28.
+
+The Next.js update is intentionally limited to the runtime `next` package and lockfile entries required by that patch. React and unrelated dependencies were not changed. No merge is performed as part of this work; the branch remains the manual verification point before owner approval.
