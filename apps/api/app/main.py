@@ -2675,7 +2675,12 @@ async def upload_channel_playlist_thumbnail(
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
-            return yt.set_playlist_thumbnail(token, channel.youtube_channel_id, playlist_id, data, content_type)
+            result = yt.set_playlist_thumbnail(token, channel.youtube_channel_id, playlist_id, data, content_type)
+            playlists = yt.list_playlists(token, channel.youtube_channel_id)
+        refreshed = next((item for item in playlists if item.get("id") == playlist_id), None)
+        if refreshed is None:
+            raise LookupError("playlist not found after thumbnail update")
+        return {**result, "playlist": refreshed}
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
     except TokenEncryptionError as exc:
