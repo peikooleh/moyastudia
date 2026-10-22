@@ -19,7 +19,9 @@ After a playlist thumbnail write the backend now:
 
 The frontend replaces its playlist row from that reread state. The local file preview is only a draft before the write and is revoked after the request.
 
-A thumbnail changed directly in YouTube Studio is read again whenever MoyaStudia reloads the remote playlist list. There is no separate playlist-thumbnail database cache.
+The playlist-image API contract is asymmetric: `playlistImages.list` can confirm that a custom `hero` image exists, but the resource does not expose a display URL. The current Google discovery schema also states that `contentDetails.thumbnailVideoId` is absent when a custom playlist thumbnail is set. MoyaStudia uses that signal to avoid presenting an older video-based `snippet.thumbnails` URL as if it were the current custom image.
+
+A thumbnail changed directly in YouTube Studio is therefore detected as custom on the next remote playlist read, but its pixels cannot be fetched through the official Data API. In that state Studio shows an explicit “custom image set on YouTube; preview unavailable through the API” placeholder instead of a stale image. There is no separate playlist-thumbnail database cache.
 
 ## Video thumbnails
 
@@ -31,7 +33,7 @@ Regression coverage explicitly asserts that an incremental sync updates the cach
 
 ## Known provider boundary
 
-The playlist write can be verified through `playlistImages`, but the image URL displayed by the UI still comes from `playlists.snippet.thumbnails`. If YouTube confirms the custom image resource while its playlist snippet temporarily returns an older CDN URL, MoyaStudia will show the provider-returned snippet state rather than pretending the browser preview is authoritative.
+Playlist image writes use the current YouTube contract: `playlistImages.list` is filtered with `parent=<playlistId>`, and the main custom image type is `hero`. A verified custom image is never represented by a stale video-derived playlist thumbnail. Because `playlistImages` exposes metadata but no image URL, MoyaStudia cannot reconstruct the custom image preview after reload without using a non-official scraping/storage workaround; this branch intentionally does neither.
 
 ## Browser/CDN cache invalidation
 
