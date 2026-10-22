@@ -69,7 +69,8 @@ Implemented in this branch:
 - playlist thumbnail endpoint rereads the remote playlist state after a verified write;
 - frontend no longer promotes a local `blob:` URL to remote truth after upload;
 - incremental catalog regression coverage now asserts replacement of an existing video's cached thumbnail URL;
-- scheduler and thumbnail behavior documented.
+- scheduler and thumbnail behavior documented;
+- display URLs now receive cache-busting versions so a YouTube thumbnail replacement is visible even when YouTube reuses the same CDN URL; canonical YouTube URLs remain unchanged in storage.
 
 Validation:
 
