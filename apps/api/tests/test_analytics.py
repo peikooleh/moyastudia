@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app import main, youtube
-from app.models import Channel, GoogleConnection, RealtimeStatisticsSnapshot, Video
+from app.models import Channel, GoogleConnection, Video
 from app.settings import settings
 from app.tokens import encrypt_refresh_token
 
@@ -322,51 +321,6 @@ def test_analytics_queries_use_explicit_selected_channel_id(monkeypatch):
     youtube.channel_analytics_timeseries("token", "2026-10-01", "2026-10-10", channel_id="expected-channel")
     assert len(calls) == 2
     assert all(call["ids"] == "channel==expected-channel" for call in calls)
-
-
-def test_realtime_statistics_uses_current_counter_and_saved_history(client, test_database, monkeypatch):
-    owner_id, owner_token = create_account(test_database, subject="realtime-owner")
-    with test_database() as db:
-        connection = GoogleConnection(
-            user_id=owner_id,
-            google_subject="realtime-google",
-            encrypted_refresh_token=encrypt_refresh_token("realtime-token"),
-        )
-        db.add(connection)
-        db.flush()
-        channel = Channel(
-            google_connection_id=connection.id,
-            youtube_channel_id="realtime-channel",
-            title="Realtime channel",
-        )
-        db.add(channel)
-        db.flush()
-        db.add(RealtimeStatisticsSnapshot(
-            channel_id=channel.id,
-            youtube_video_id=None,
-            view_count=1000,
-            captured_at=datetime.now(timezone.utc) - timedelta(minutes=30),
-        ))
-        db.commit()
-        channel_id = channel.id
-
-    monkeypatch.setattr(main.yt, "verified_analytics_channel", lambda token, youtube_channel_id: {
-        "youtube_channel_id": youtube_channel_id,
-        "subscriber_count": 10,
-        "view_count": 1125,
-        "video_count": 5,
-    })
-    client.cookies.set(settings.session_cookie_name, owner_token)
-    response = client.get(f"/channels/{channel_id}/analytics/realtime?window=60m")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["scope"] == "channel"
-    assert payload["window"] == "60m"
-    assert payload["current_views"] == 1125
-    assert payload["views"] == 125
-    assert payload["coverage_complete"] is False
-    assert payload["series"][-1]["views"] == 125
 
 
 

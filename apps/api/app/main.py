@@ -23,7 +23,6 @@ from .models import (
     GoogleConnection,
     Identity,
     LocalPlaylist,
-    RealtimeStatisticsSnapshot,
     User,
     UserSession,
     Video,
@@ -54,7 +53,6 @@ from .tokens import (
 from . import quota as quota_service
 from . import youtube as yt
 from . import ai_metadata
-from . import realtime_stats
 
 app = FastAPI(title="MoyaStudia API")
 app.add_middleware(AbuseRateLimitMiddleware, session_cookie_name=settings.session_cookie_name)
@@ -245,26 +243,10 @@ app.add_middleware(
 def on_startup():
     settings.validate_runtime_security()
     database.init_engine()
-    if not settings.is_production:
-        realtime_stats.start_background_collector()
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    if not settings.is_production:
-        realtime_stats.stop_background_collector()
 
 
 
 
-@app.post("/internal/realtime-collect")
-def collect_realtime_scheduled(request: Request):
-    """One bounded collector pass for an external scheduler; no browser session required."""
-    secret = settings.realtime_collector_secret
-    authorization = request.headers.get("authorization", "")
-    if not secret or not hmac.compare_digest(authorization, "Bearer " + secret):
-        raise HTTPException(status_code=401, detail={"code": "unauthorized"})
-    return {"ok": True, "stored": realtime_stats.collect_once()}
 
 def _run_scheduled_catalog_page(db: Session) -> dict:
     """Advance every connected channel by one catalog page.
@@ -1406,6 +1388,34 @@ def _catalog_datetime_iso(value: datetime | None) -> str:
     return value.astimezone(timezone.utc).isoformat(timespec="minutes")
 
 
+def _thumbnail_cache_bust(url: str, version: datetime | int | str | None) -> str:
+    """Return a display URL that invalidates browser/CDN cache after a known refresh.
+
+    Keep the canonical YouTube URL in the database.  YouTube commonly reuses the
+    same thumbnail URL when the image bytes change, so URL equality is not proof
+    that the thumbnail itself is unchanged.
+    """
+    if not url or version is None:
+        return url or ""
+    if isinstance(version, datetime):
+        if version.tzinfo is None:
+            version = version.replace(tzinfo=timezone.utc)
+        token = str(int(version.timestamp()))
+    else:
+        token = str(version)
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}moyastudia_v={token}"
+
+
+def _cache_bust_playlist_thumbnails(playlists: list[dict], version: int) -> list[dict]:
+    refreshed = []
+    for playlist in playlists:
+        item = dict(playlist)
+        item["thumb"] = _thumbnail_cache_bust(item.get("thumb") or "", version)
+        refreshed.append(item)
+    return refreshed
+
+
 def _video_catalog_item(video: Video) -> dict:
     scheduled_at = video.youtube_scheduled_at
     published_at = video.youtube_published_at
@@ -1447,7 +1457,7 @@ def _video_catalog_item(video: Video) -> dict:
         "remoteMissing": video.availability_status == "remote_missing",
         "dirty": any(dirty_fields.values()),
         "dirtyFields": dirty_fields,
-        "thumb": video.youtube_thumbnail_url or "",
+        "thumb": _thumbnail_cache_bust(video.youtube_thumbnail_url or "", video.last_synced_at),
         "publishedAt": _catalog_datetime_iso(published_at),
         "previouslyPublished": bool(
             video.youtube_visibility == "private"
@@ -2190,125 +2200,6 @@ def channel_analytics_summary(
         raise HTTPException(502, detail={"code": "youtube_analytics_unavailable"}) from exc
 
 
-@app.get("/channels/{channel_id}/analytics/realtime")
-def channel_realtime_statistics(
-    channel_id: int,
-    window: Literal["60m", "48h"] = Query(default="60m"),
-    video_id: int | None = Query(default=None, ge=1),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    channel = _channel_or_404(db, user, channel_id)
-    youtube_video_id = None
-    if video_id is not None:
-        video = db.get(Video, video_id)
-        if video is None or video.channel_id != channel.id or not video.youtube_video_id:
-            raise HTTPException(404, detail={"code": "analytics_video_not_found"})
-        youtube_video_id = video.youtube_video_id
-
-    try:
-        token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
-        if youtube_video_id:
-            counters = yt.video_current_statistics(token, youtube_video_id)
-        else:
-            channel_counters = yt.verified_analytics_channel(token, channel.youtube_channel_id)
-            counters = {
-                "views": channel_counters.get("view_count"),
-                "likes": None,
-                "comments": None,
-            }
-        if counters.get("views") is None:
-            raise LookupError("current YouTube view count unavailable")
-
-        now = _utcnow()
-        latest = (
-            db.query(RealtimeStatisticsSnapshot)
-            .filter(
-                RealtimeStatisticsSnapshot.channel_id == channel.id,
-                RealtimeStatisticsSnapshot.youtube_video_id == youtube_video_id,
-            )
-            .order_by(RealtimeStatisticsSnapshot.captured_at.desc())
-            .first()
-        )
-        latest_at = latest.captured_at if latest else None
-        if latest_at is not None and latest_at.tzinfo is None:
-            latest_at = latest_at.replace(tzinfo=timezone.utc)
-        if latest_at is None or now - latest_at >= timedelta(minutes=4):
-            db.add(RealtimeStatisticsSnapshot(
-                channel_id=channel.id,
-                youtube_video_id=youtube_video_id,
-                view_count=int(counters["views"]),
-                like_count=counters.get("likes"),
-                comment_count=counters.get("comments"),
-                captured_at=now,
-            ))
-            db.commit()
-
-        duration = timedelta(minutes=60) if window == "60m" else timedelta(hours=48)
-        cutoff = now - duration
-        scope_filter = (
-            RealtimeStatisticsSnapshot.channel_id == channel.id,
-            RealtimeStatisticsSnapshot.youtube_video_id == youtube_video_id,
-        )
-        baseline = (
-            db.query(RealtimeStatisticsSnapshot)
-            .filter(*scope_filter, RealtimeStatisticsSnapshot.captured_at < cutoff)
-            .order_by(RealtimeStatisticsSnapshot.captured_at.desc())
-            .first()
-        )
-        rows = (
-            db.query(RealtimeStatisticsSnapshot)
-            .filter(*scope_filter, RealtimeStatisticsSnapshot.captured_at >= cutoff)
-            .order_by(RealtimeStatisticsSnapshot.captured_at.asc())
-            .all()
-        )
-        if baseline is not None:
-            rows.insert(0, baseline)
-        if not rows:
-            rows = [latest] if latest else []
-
-        series = []
-        previous = None
-        for row in rows:
-            captured = row.captured_at
-            if captured.tzinfo is None:
-                captured = captured.replace(tzinfo=timezone.utc)
-            if previous is not None:
-                series.append({
-                    "date": captured.isoformat(),
-                    "views": max(0, int(row.view_count) - int(previous.view_count)),
-                })
-            previous = row
-
-        first = rows[0] if rows else None
-        last = rows[-1] if rows else None
-        first_at = first.captured_at if first else None
-        if first_at is not None and first_at.tzinfo is None:
-            first_at = first_at.replace(tzinfo=timezone.utc)
-        covered_seconds = max(0, int((now - first_at).total_seconds())) if first_at else 0
-        views_delta = max(0, int(last.view_count) - int(first.view_count)) if first and last else 0
-        return {
-            "scope": "video" if youtube_video_id else "channel",
-            "window": window,
-            "current_views": int(counters["views"]),
-            "views": views_delta,
-            "current_likes": counters.get("likes"),
-            "current_comments": counters.get("comments"),
-            "coverage_seconds": min(covered_seconds, int(duration.total_seconds())),
-            "coverage_complete": covered_seconds >= int(duration.total_seconds()) - 300,
-            "captured_at": now.isoformat(),
-            "series": series,
-        }
-    except TokenEncryptionError as exc:
-        raise HTTPException(500, detail={"code": "stored_credentials_unavailable"}) from exc
-    except LookupError as exc:
-        raise HTTPException(403, detail={"code": "youtube_analytics_channel_mismatch"}) from exc
-    except Exception as exc:
-        status, reasons = _youtube_error_facts(exc)
-        if status in {401, 403} or reasons.intersection({"insufficientPermissions", "forbidden"}):
-            raise HTTPException(403, detail={"code": "youtube_analytics_permission_required"}) from exc
-        raise HTTPException(502, detail={"code": "youtube_realtime_unavailable"}) from exc
-
 
 @app.get("/channels/{channel_id}/catalog/status")
 def catalog_status(
@@ -2748,7 +2639,8 @@ def channel_playlists(
     try:
         token = decrypt_refresh_token(row.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, row.google_connection, row)):
-            return yt.list_playlists(token, row.youtube_channel_id)
+            playlists = yt.list_playlists(token, row.youtube_channel_id)
+        return _cache_bust_playlist_thumbnails(playlists, int(_utcnow().timestamp()))
     except TokenEncryptionError as exc:
         raise HTTPException(503, "Google token encryption configuration is invalid") from exc
     except Exception as exc:
@@ -2812,7 +2704,13 @@ async def upload_channel_playlist_thumbnail(
     try:
         token = decrypt_refresh_token(channel.google_connection.encrypted_refresh_token)
         with yt.quota_recording(_quota_recorder(db, user, channel.google_connection, channel)):
-            return yt.set_playlist_thumbnail(token, channel.youtube_channel_id, playlist_id, data, content_type)
+            result = yt.set_playlist_thumbnail(token, channel.youtube_channel_id, playlist_id, data, content_type)
+            playlists = yt.list_playlists(token, channel.youtube_channel_id)
+        refreshed = next((item for item in playlists if item.get("id") == playlist_id), None)
+        if refreshed is None:
+            raise LookupError("playlist not found after thumbnail update")
+        refreshed = _cache_bust_playlist_thumbnails([refreshed], int(_utcnow().timestamp()))[0]
+        return {**result, "playlist": refreshed}
     except LookupError as exc:
         raise HTTPException(404, "playlist not found for selected channel") from exc
     except TokenEncryptionError as exc:

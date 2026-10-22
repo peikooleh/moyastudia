@@ -1,0 +1,47 @@
+# Playlist and video thumbnail consistency
+
+## Playlist thumbnails
+
+YouTube exposes two relevant resources with different roles:
+
+- `playlistImages` is used to create/update a custom playlist image and to verify that the playlist image resource exists.
+- `playlists.snippet.thumbnails` is the documented source of displayable playlist thumbnail URLs returned to MoyaStudia.
+
+MoyaStudia therefore does not treat the upload response or a browser `blob:` preview as remote truth.
+
+After a playlist thumbnail write the backend:
+
+1. verifies playlist ownership;
+2. performs `playlistImages.insert` or `playlistImages.update`;
+3. rereads `playlistImages.list` using the documented `playlistId` filter and requires the expected image resource to be present;
+4. rereads the channel playlist list from YouTube;
+5. returns that fresh playlist state to the frontend.
+
+The frontend replaces its playlist row from that reread state. The local file preview is only a draft before the write and is revoked after the request.
+
+A thumbnail changed directly in YouTube Studio is read again from `playlists.snippet.thumbnails` whenever MoyaStudia reloads the remote playlist list. There is no separate playlist-thumbnail database cache.
+
+## Video thumbnails
+
+Video thumbnail URLs are stored in the local catalog because the video catalog itself is cached. The catalog sync maps the current `videos.list` thumbnail URL to `youtube_thumbnail_url` on every processed video, including already-known videos.
+
+The 12-hour incremental scheduler walks the complete uploads catalog, so changes made directly in YouTube — including thumbnail URLs — are expected to replace the cached value without opening MoyaStudia. Manual refresh/reconcile remains the fallback.
+
+Regression coverage explicitly asserts that an incremental sync updates the cached video thumbnail URL for an existing video.
+
+## Provider boundary
+
+`playlistImages` exposes playlist-image metadata but does not expose a display URL. MoyaStudia therefore uses `playlists.snippet.thumbnails` for rendering rather than inventing a URL or persisting a browser-local preview as remote state.
+
+If a manual synchronization still shows an old image, the next diagnostic step is to compare the exact `playlists.list` thumbnail URL returned by YouTube for that playlist with the URL currently rendered by MoyaStudia.
+
+## Browser/CDN cache invalidation
+
+YouTube can replace thumbnail bytes while keeping the same CDN URL. URL equality therefore does not prove that an image is unchanged.
+
+MoyaStudia keeps the canonical YouTube thumbnail URL unchanged in storage, but appends a MoyaStudia-only version query parameter when returning a thumbnail for display:
+
+- video thumbnails use the video's `last_synced_at` value, so every successful catalog refresh invalidates the browser image cache even when YouTube reused the URL;
+- playlist thumbnails are read live rather than stored, so each playlist read gets a fresh display version; after a playlist thumbnail write the reread response is versioned the same way.
+
+This query parameter is only a display cache key. It is never written back to YouTube and never replaces the canonical URL in the database.

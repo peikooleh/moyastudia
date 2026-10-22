@@ -11,7 +11,7 @@
     "build:deployment": "npm run check:deployment && next build"
   },
   "dependencies": {
-    "next": "15.5.27",
+    "next": "15.5.28",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^2.15.1"
