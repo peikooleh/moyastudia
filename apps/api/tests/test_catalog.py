@@ -644,7 +644,7 @@ def test_channel_playlists_are_scoped_to_selected_channel(
                         "thumbnails": {"high": {"url": "https://img.example.test/selected.jpg"}},
                     },
                     "status": {"privacyStatus": "private"},
-                    "contentDetails": {"itemCount": 12},
+                    "contentDetails": {"itemCount": 12, "thumbnailVideoId": "video-thumb"},
                 },
                 {
                     "id": "other-playlist",
