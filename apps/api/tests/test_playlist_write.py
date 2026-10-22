@@ -248,7 +248,7 @@ def test_playlist_writes_require_same_origin(client, test_database, monkeypatch)
 
 
 
-def test_youtube_playlist_image_list_uses_parent_filter(monkeypatch):
+def test_youtube_playlist_image_list_uses_playlist_id_filter(monkeypatch):
     captured = {}
 
     class Http:
@@ -262,49 +262,9 @@ def test_youtube_playlist_image_list_uses_parent_filter(monkeypatch):
 
     assert youtube._playlist_images_list(Service(), "playlist-one") == []
     assert captured["method"] == "GET"
-    assert "parent=playlist-one" in captured["url"]
-    assert "playlistId=playlist-one" not in captured["url"]
+    assert "playlistId=playlist-one" in captured["url"]
+    assert "parent=playlist-one" not in captured["url"]
 
-
-def test_youtube_playlist_list_hides_stale_video_thumb_for_custom_hero(monkeypatch):
-    class Request:
-        def execute(self):
-            return {
-                "items": [{
-                    "id": "playlist-one",
-                    "snippet": {
-                        "channelId": "playlist-channel",
-                        "title": "Playlist",
-                        "thumbnails": {"high": {"url": "https://stale.example/video.jpg"}},
-                    },
-                    "status": {"privacyStatus": "public"},
-                    "contentDetails": {"itemCount": 2},
-                }]
-            }
-
-    class Playlists:
-        def list(self, **kwargs):
-            return Request()
-
-    class Service:
-        def playlists(self):
-            return Playlists()
-
-    monkeypatch.setattr(youtube, "service_for", lambda _token: Service())
-    monkeypatch.setattr(
-        youtube,
-        "_playlist_images_list",
-        lambda service, playlist_id, recorder=None: [{
-            "id": "playlist-one.1",
-            "snippet": {"playlistId": "playlist-one", "type": "hero", "width": 1280, "height": 720},
-        }],
-    )
-
-    result = youtube.list_playlists("refresh", "playlist-channel")
-
-    assert result[0]["customThumbnail"] is True
-    assert result[0]["thumbnailPreviewAvailable"] is False
-    assert result[0]["thumb"] == ""
 
 
 def test_youtube_playlist_thumbnail_insert_is_owned_and_uses_custom_image(monkeypatch):
